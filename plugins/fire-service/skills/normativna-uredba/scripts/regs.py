@@ -12,6 +12,7 @@ regs.py — нормативната база (Fire Safety Regulatory Documents)
     python3 scripts/regs.py index                      # сваля текущия индекс (_INDEX_*.md, най-новия)
     python3 scripts/regs.py get _MAP_pg_sd.md          # сваля файл по име, път, част от името или Drive ID
     python3 scripts/regs.py get tier-a/…_2026_ed2026-02-27.md -o work
+    python3 scripts/regs.py katalog --q 8121з-1006            # статусът от index.json: in_force, superseded_by, map …
 
 Свалените файлове отиват в папката от -o (по подразбиране `regs/` в текущата папка). Скриптът
 отпечатва JSON {"file", "path", "id", "modified_at", "bytes", "link"} – после четеш файла `file`
@@ -94,6 +95,31 @@ def download(f, out_dir):
                      ensure_ascii=False))
 
 
+def katalog(files, q, out_dir):
+    """Records of index.json (the generated catalogue in the root) whose path, title, act_id, subject or
+    keywords contain q; without q – all of them."""
+    hit = [f for f in files if f.get("folder", "") == "" and f.get("name") == "index.json"]
+    if not hit:
+        sys.exit("NOT_FOUND: в корена на базата няма index.json")
+    res = call({"action": "download", "id": hit[0]["id"]})
+    try:
+        records = json.loads(res["content"])["files"]
+    except (KeyError, TypeError, ValueError):
+        sys.exit("N8N_UNAVAILABLE: index.json не е във формата на каталога")
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, "index.json"), "w", encoding="utf-8") as fh:
+        fh.write(res["content"])
+    if q:
+        needle = norm(q).replace("з", "z")
+        def text(r):
+            parts = [r.get("path"), r.get("title"), r.get("act_id"), r.get("subject")] + list(r.get("keywords") or [])
+            return norm(" ".join(str(x) for x in parts if x))
+        records = [r for r in records if norm(q) in text(r) or needle in text(r).replace("з", "z")]
+    keep = ("path", "in_force", "in_force_note", "superseded_by", "act_id", "subject", "articles", "map")
+    print(json.dumps({"count": len(records), "files": [{k: r.get(k) for k in keep} for r in records]},
+                     ensure_ascii=False, indent=1))
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -102,6 +128,9 @@ def main():
     p.add_argument("--name", help="името съдържа този текст")
     p = sub.add_parser("index", help="сваля текущия индекс (_INDEX_*.md)")
     p.add_argument("-o", "--output", default="regs", help="папка за свалените файлове (по подразбиране regs)")
+    p = sub.add_parser("katalog", help="записите от index.json – статус, заменена редакция, карта")
+    p.add_argument("--q", help="търси в пътя, заглавието, act_id, subject и keywords")
+    p.add_argument("-o", "--output", default="regs", help="папка за index.json (по подразбиране regs)")
     p = sub.add_parser("get", help="сваля един файл")
     p.add_argument("what", help="име, път, част от името или Drive ID")
     p.add_argument("-o", "--output", default="regs", help="папка за свалените файлове (по подразбиране regs)")
@@ -116,6 +145,8 @@ def main():
         rows = [{"path": f["path"], "id": f["id"], "modified_at": f.get("modified_at"), "size": f.get("size")}
                 for f in files]
         print(json.dumps({"count": len(rows), "files": rows}, ensure_ascii=False, indent=1))
+    elif a.cmd == "katalog":
+        katalog(files, a.q, a.output)
     elif a.cmd == "index":
         idx = [f for f in files if f.get("folder", "") == "" and f.get("name", "").startswith("_INDEX_")]
         if not idx:

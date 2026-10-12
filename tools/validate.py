@@ -22,7 +22,8 @@ validate.py — проверява репозиторито преди push (и 
   • шапката в шаблоните е еднаква (shared/conventions.md, „Шапката“);
   • версията е една и съща в plugin.json, marketplace.json и най-горния запис на CHANGELOG.md;
   • библиотеките за проверката са с точни версии (requirements-dev.txt), същите като в CI;
-  • тестовете в skills/*/tests/ и в tests/ минават.
+  • тестовете в skills/*/tests/ и в tests/ минават;
+  • с --live: и нормативната база в Drive – сваля я и я проверява с tools/kb_lint.py (tools/kb_schema.md).
 """
 import argparse
 import glob
@@ -262,10 +263,25 @@ def run_tests():
             print(f"✓ {rel}")
 
 
+def check_kb(env):
+    """The regulations base in Drive: pull it into a temporary folder and run tools/kb_lint.py on it."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "admin.py"), "regs", "pull", tmp],
+                           capture_output=True, text=True, env=env)
+        if r.returncode:
+            return err("regulations base: pull failed\n" + (r.stdout + r.stderr)[-1500:])
+        r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "kb_lint.py"), tmp],
+                           capture_output=True, text=True, env=env)
+        (print("✓ " + r.stdout.strip().splitlines()[-1]) if r.returncode == 0
+         else err("regulations base:\n" + r.stdout.strip()[-3000:]))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-tests", action="store_true")
-    ap.add_argument("--live", action="store_true", help="сверка и със списъка на служителите от n8n (иска личен ключ)")
+    ap.add_argument("--live", action="store_true",
+                    help="сверка и със списъка на служителите от n8n и проверка на нормативната база (иска личен ключ)")
     a = ap.parse_args()
     env = dict(os.environ) if a.live else dict(os.environ, FIRE_SERVICE_NO_KEY="1")
     check_manifests()
@@ -286,6 +302,8 @@ def main():
     check_letterhead()
     if not a.no_tests:
         run_tests()
+    if a.live:
+        check_kb(env)
     print()
     if errors:
         print(f"FAILED — {len(errors)} problem(s)")

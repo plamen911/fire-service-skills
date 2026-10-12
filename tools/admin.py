@@ -20,13 +20,16 @@ Fire Service: инструментите `keys`, `staff_update` и `samples_save
     python3 tools/admin.py staff add zveno="РСПБЗН – Кнежа" zaemana_dlazhnost="ПОЖАРНИКАР" \
         zvanie="Младши инспектор" ime="Иван Георгиев Петров" ime_kratko="Иван Петров"
 
-Нормативната база (Google Drive през n8n) – файлът се заменя на място, със същото име и номер
-    python3 tools/admin.py regs put Weber_Equipment_X_2026.md --tier c   # нов или заменен файл в tier-a|b|c
+Нормативната база (Google Drive през n8n) – правилата са в tools/kb_schema.md; файлът се заменя на място,
+със същото име и номер
+    python3 tools/admin.py regs pull kb                                 # сваля цялата база в kb/ (+ listing.json)
+    python3 tools/kb_lint.py kb --catalog                               # проверка, броеве и index.json – преди всяко качване
+    python3 tools/admin.py regs put Weber_Equipment_X_2026.md --tier c   # нов или заменен файл в tier-a|b|c|r (r = tier-a-repealed)
     python3 tools/admin.py regs index _INDEX_pozharna_bezopasnost_2026-10-08v.md   # новата редакция на индекса:
                                                  # съдържанието отива в текущия _INDEX_ файл и той се преименува
     python3 tools/admin.py regs list --tier c
 
-Файлове (Google Drive през n8n): видове spravka, eptz, raioni, admin, regs, regs-a, regs-b, regs-c
+Файлове (Google Drive през n8n): видове spravka, eptz, raioni, admin, regs, regs-a, regs-b, regs-c, regs-r
     python3 tools/admin.py files rename regs СТАРО_ИМЕ.md НОВО_ИМЕ.md
     python3 tools/admin.py files list raioni
     python3 tools/admin.py files get raioni naseleni_mesta.csv -o .
@@ -71,6 +74,27 @@ def put(kind, path, name=None):
                                 "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest()})
 
 
+def pull(folder):
+    """Every text file of the regulations base into FOLDER/<path>, and the listing as FOLDER/listing.json
+    (kb_lint.py counts the PDF originals from it – n8n does not hand them out as text)."""
+    files = call("regs_url", {"action": "list"})["files"]
+    os.makedirs(folder, exist_ok=True)
+    with open(os.path.join(folder, "listing.json"), "w", encoding="utf-8") as f:
+        json.dump(files, f, ensure_ascii=False, indent=1)
+    got, skipped = 0, []
+    for item in files:
+        if not item["name"].lower().endswith((".md", ".json", ".csv", ".txt")):
+            skipped.append(item["path"])
+            continue
+        res = call("regs_url", {"action": "download", "id": item["id"]})
+        path = os.path.join(folder, item["path"])
+        os.makedirs(os.path.dirname(path) or folder, exist_ok=True)
+        with open(path, "w", encoding="utf-8", newline="") as f:
+            f.write(res["content"])
+        got += 1
+    return {"folder": folder, "files": got, "not_text": skipped}
+
+
 def pairs(items):
     out = {}
     for item in items:
@@ -104,10 +128,11 @@ def main():
     p = files.add_parser("rename"); p.add_argument("kind"); p.add_argument("name"); p.add_argument("new_name")
 
     regs = sub.add_parser("regs").add_subparsers(dest="cmd", required=True)
-    p = regs.add_parser("put"); p.add_argument("file"); p.add_argument("--tier", choices=["a", "b", "c"], required=True)
+    p = regs.add_parser("put"); p.add_argument("file"); p.add_argument("--tier", choices=["a", "b", "c", "r"], required=True)
     p.add_argument("--name")
     p = regs.add_parser("index"); p.add_argument("file")
-    p = regs.add_parser("list"); p.add_argument("--tier", choices=["a", "b", "c"])
+    p = regs.add_parser("list"); p.add_argument("--tier", choices=["a", "b", "c", "r"])
+    p = regs.add_parser("pull"); p.add_argument("folder", help="папка за копието (създава се)")
     a = ap.parse_args()
 
     if a.area == "key":
@@ -140,6 +165,8 @@ def main():
             show(call("samples_url", {"action": "list", "kind": "regs-" + a.tier if a.tier else "regs"}))
         elif a.cmd == "put":
             show(put("regs-" + a.tier, a.file, a.name))
+        elif a.cmd == "pull":
+            show(pull(a.folder))
         else:
             new = os.path.basename(a.file)
             if not new.startswith("_INDEX_") or not new.endswith(".md"):
