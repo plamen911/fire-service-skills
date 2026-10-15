@@ -74,6 +74,15 @@ def test_full():
                  "за разполагане на силите и средствата при провеждане на ПТЗ в склад"):
         check(want in text, f"has „{want}“")
     check(len(doc.inline_shapes) == 1, "the scheme is in the document")
+    from docx.enum.section import WD_ORIENT
+    check(len(doc.sections) == 2 and doc.sections[-1].orientation == WD_ORIENT.LANDSCAPE
+          and doc.sections[-1].page_width > doc.sections[-1].page_height, "the scheme is on a landscape page")
+    check(doc.sections[0].orientation == WD_ORIENT.PORTRAIT, "the plan itself stays portrait")
+    sys.path.insert(0, os.path.join(SKILL, "scripts"))
+    import build_ptz
+    check(build_ptz.orientation(110, 82) == "landscape", "a wide site – a landscape page")
+    check(build_ptz.orientation(40, 90) == "portrait", "a tall site – a portrait page")
+    check(build_ptz.orientation(40, 90, "landscape") == "landscape", "\"orientatsiya\" overrides the choice")
     for old in ("РСПАБ", "РОД", "диспечер", "бойна готовност", "ДБС", "полк."):
         check(old not in text, f"no old term „{old}“")
 

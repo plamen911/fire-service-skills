@@ -38,6 +38,7 @@ def run(data, *extra):
 def test_fixture():
     print("shema.py – the full test site")
     data = json.load(open(FIXTURE, encoding="utf-8"))
+    data["legenda"] = True                               # the legend only on request
     r, out = run(data, "--svg", os.path.join(tempfile.mkdtemp(), "out.svg"))
     check(r.returncode == 0, "renders without an error" + (": " + r.stderr[:200] if r.returncode else ""))
     if r.returncode:
@@ -68,6 +69,21 @@ def test_library():
     check(all(k in znatsi.LEGEND_TEXT for k in znatsi.LEGEND_ORDER), "every symbol in the order has a name")
     import shema as sh
     check(sh.draw_truck is znatsi.draw_truck and sh.obrazets is znatsi.obrazets, "the scheme draws with the library itself")
+
+
+def test_defaults():
+    print("shema.py – by default: in colour, nothing under the drawing")
+    data = json.load(open(FIXTURE, encoding="utf-8"))
+    tmp = tempfile.mkdtemp()
+    r, _ = run(data, "--svg", os.path.join(tmp, "d.svg"), "--shirina-cm", "25.2", "--visochina-cm", "14.7")
+    check(r.returncode == 0, "renders at the landscape width")
+    if r.returncode:
+        return
+    svg = open(os.path.join(tmp, "d.svg"), encoding="utf-8").read()
+    for word in ("Условни знаци", "Мащаб", "Вятър"):
+        check(word not in svg, f"no „{word}“ under the drawing")
+    check("#d0021b" in svg.lower() and "#1f4fd8" in svg.lower(), "red and blue as in Приложение № 6")
+    check('width="714' in svg or 'width="714.' in svg, "the drawing is as wide as the landscape text (25.2 cm)")
 
 
 def test_minimal_and_colour():
@@ -112,6 +128,7 @@ def test_label_avoids_fire():
 
 if __name__ == "__main__":
     test_fixture()
+    test_defaults()
     test_minimal_and_colour()
     test_warnings()
     test_bad_input()

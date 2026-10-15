@@ -5,7 +5,9 @@ build_ptz.py — изгражда ПЛАН-КОНСПЕКТ за провежд�
 смяна като .docx на бланката на РДПБЗН – Плевен: шапка, „УТВЪРЖДАВАМ“ (началникът на РСПБЗН или
 УПБЗН), полета I–VII (тема, цел, метод, място, време, участващи, материално осигуряване), таблица
 „Обстановка – време – очаквани действия“ с общото време, „РАЗРАБОТИЛ“ и на нова страница СХЕМА за
-разполагане на силите и средствата (чертае я скилът shemi).
+разполагане на силите и средствата (чертае я скилът shemi, цветна). Страницата на схемата се завърта
+сама – легнала (landscape) за широк терен, изправена (portrait) за тесен или висок: така, че чертежът
+да излезе най-голям; "orientatsiya": "landscape" / "portrait" я задава изрично.
 
     python3 scripts/build_ptz.py data.json -o /mnt/user-data/outputs/Plan-konspekt-PTZ_....docx
 
@@ -33,8 +35,9 @@ data.json (задължителни: "zveno", "obekt", "hod"; останалот
   "razrabotil": {"date": "20.10.2026 г.", "lines": ["ИНСПЕКТОР"], "name": "Име Фамилия"},
   "shema": "shema.json",                       // JSON за скилът shemi (чертае се тук) или готов .png;
                                                //   пътят е спрямо папката на data.json; без него – без схема
-  "shema_zaglavie": "…"                        // по подразбиране – „за разполагане на силите и средствата
+  "shema_zaglavie": "…",                       // по подразбиране – „за разполагане на силите и средствата
                                                //   при провеждане на ПТЗ в {obekt}“
+  "orientatsiya": "landscape"                  // страницата на схемата; по подразбиране – по пропорциите на терена
 }
 
 Времето в таблицата: число – минути („10′“); текст се пише както е („45″“, „15′ + 10′ движение до
@@ -58,7 +61,8 @@ import re
 import subprocess
 import sys
 
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
+from docx.enum.section import WD_ORIENT, WD_SECTION
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Cm
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -67,6 +71,9 @@ sys.path.insert(0, os.path.join(SKILLS, "plan-konspekti", "scripts"))
 import blanka as B  # noqa: E402  (the common blank of the training documents)
 
 SHEMA_SCRIPT = os.path.join(SKILLS, "shemi", "scripts", "shema.py")
+# The page of the scheme: (page width, page height, text width, height left for the picture under the title), cm;
+# margins 2.5 / 2.0 cm left / right and 1.5 cm top / bottom.
+PAGES = {"landscape": (29.7, 21.0, 25.2, 15.0), "portrait": (21.0, 29.7, 16.5, 22.5)}
 
 TSEL = ["Изучаване на оперативно-тактическите особености на обекта.",
         "Трениране на КЕ за ръководство на екипите.",
@@ -160,24 +167,50 @@ def field(doc, roman, label, value):
     B.para(doc, f"{roman}. {label}: {value}", indent=False, keep=False)
 
 
-def draw_scheme(path, base, out, warnings):
-    """A .png as it is, or a .json drawn by the skill shemi next to the output."""
-    src = path if os.path.isabs(path) else os.path.join(base, path)
-    if not os.path.exists(src):
-        bad(f"няма го файлът на схемата: {src}")
-    if not src.lower().endswith(".json"):
-        return src
-    png = os.path.splitext(out)[0] + "_shema.png"
-    r = subprocess.run([sys.executable, SHEMA_SCRIPT, src, "-o", png], capture_output=True, text=True)
+def orientation(width, height, forced=None):
+    """The page on which a drawing of these proportions comes out bigger – landscape for a wide site,
+    portrait for a narrow or tall one."""
+    if forced in PAGES:
+        return forced
+    scale = {k: min(tw / width, ph / height) for k, (_, _, tw, ph) in PAGES.items()}
+    return "landscape" if scale["landscape"] >= scale["portrait"] else "portrait"
+
+
+def run_shema(src, png, page):
+    _, _, tw, ph = PAGES[page]
+    r = subprocess.run([sys.executable, SHEMA_SCRIPT, src, "-o", png, "--shirina-cm", str(tw),
+                        "--visochina-cm", str(ph - 0.3)], capture_output=True, text=True)
     if r.returncode != 0:
         sys.stderr.write("SHEMA_FAILED: " + (r.stderr.strip() or "без съобщение") + "\n")
         sys.exit(4)
     try:
-        res = json.loads(r.stdout)
-        warnings += ["схема: " + w for w in res.get("preduprezhdeniya") or []]
+        return json.loads(r.stdout)
     except json.JSONDecodeError:
-        pass
-    return png
+        return {}
+
+
+def draw_scheme(path, base, out, warnings, forced=None):
+    """(the picture, the page orientation): a .png as it is, or a .json drawn by the skill shemi next to the
+    output – first for a landscape page; when the site fits a portrait page better, again for it."""
+    src = path if os.path.isabs(path) else os.path.join(base, path)
+    if not os.path.exists(src):
+        bad(f"няма го файлът на схемата: {src}")
+    if not src.lower().endswith(".json"):
+        try:
+            from PIL import Image
+            with Image.open(src) as im:
+                w, h = im.size
+        except Exception:  # noqa: BLE001
+            w, h = 3, 2
+        return src, orientation(w, h, forced)
+    png = os.path.splitext(out)[0] + "_shema.png"
+    res = run_shema(src, png, "landscape")
+    wu, hu = (res.get("elementi") or {}).get("razmer_m") or [3, 2]
+    page = orientation(wu, hu, forced)
+    if page != "landscape":
+        res = run_shema(src, png, page)
+    warnings += ["схема: " + w for w in res.get("preduprezhdeniya") or []]
+    return png, page
 
 
 def old_terms(texts, warnings):
@@ -269,24 +302,28 @@ def build(d, out, base):
     B.signature(doc, sign.get("date") or "", sign.get("lines") or [], sign.get("name") or B.PLACEHOLDER_NAME,
                 label="РАЗРАБОТИЛ:")
 
-    shema = None
+    shema, page = None, None
     if d.get("shema"):
-        shema = draw_scheme(str(d["shema"]), base, out, warnings)
-        p = doc.add_paragraph()
-        p.add_run().add_break(WD_BREAK.PAGE)
+        shema, page = draw_scheme(str(d["shema"]), base, out, warnings, d.get("orientatsiya"))
+        pw, ph_, text_w, pic_h = PAGES[page]
+        sec = doc.add_section(WD_SECTION.NEW_PAGE)    # the scheme – on its own A4 page, turned to fit it
+        sec.orientation = WD_ORIENT.LANDSCAPE if page == "landscape" else WD_ORIENT.PORTRAIT
+        sec.page_width, sec.page_height = Cm(pw), Cm(ph_)
+        sec.left_margin, sec.right_margin = Cm(2.5), Cm(2.0)
+        sec.top_margin, sec.bottom_margin = Cm(1.5), Cm(1.5)
         B.para(doc, "СХЕМА", align=B.CENTER, indent=False, size=14)
         title2 = B.typo(str(d.get("shema_zaglavie") or
                             f"за разполагане на силите и средствата при провеждане на ПТЗ в {obekt or tema}"))
         B.para(doc, title2, align=B.CENTER, indent=False)
         B.blank(doc)
         pic = B.fmt(doc.add_paragraph(), B.CENTER, line=None)
-        width, height = Cm(16.5), None
+        width, height = Cm(text_w), None
         try:
             from PIL import Image
             with Image.open(shema) as im:
                 w, h = im.size
-            if h / w * 16.5 > 21.5:                    # a tall scheme – keep it on the page
-                width, height = None, Cm(21.5)
+            if h / w * text_w > pic_h:                 # a tall scheme – keep it on the page
+                width, height = None, Cm(pic_h)
         except Exception:  # noqa: BLE001
             pass
         pic.add_run().add_picture(shema, width=width, height=height)
@@ -297,7 +334,7 @@ def build(d, out, base):
     doc.save(out)
     B.report(out)
     return {"output": out, "redove": len(rows), "obshto_minuti": total_min, "shema": shema,
-            "preduprezhdeniya": warnings}
+            "stranitsa_shema": page if shema else None, "preduprezhdeniya": warnings}
 
 
 def main():

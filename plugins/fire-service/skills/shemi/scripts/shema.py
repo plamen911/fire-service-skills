@@ -12,10 +12,17 @@ shema.py — чертае СХЕМА за разполагане на силит
 разработка на планове за пожарогасене“) към Указанията за разработване на планове за пожарогасене,
 рег. № Iз-2749/18.11.2010 г. на МВР – по рисунките в приложенията (PDF на МВР). В приложението
 автомобилите, пожарът, огнището и направленията са в червено, а линиите, струйниците,
-разклонителите, водоизточниците и задимяването – в синьо. По подразбиране схемата е черно-бяла
-(за печат); с "cvetna": true – в тези цветове.
+разклонителите, водоизточниците и задимяването – в синьо. Схемите са цветни по тези цветове;
+"cvetna": false – черно-бяла.
 
-    python3 scripts/shema.py shema.json -o shema.png [--svg shema.svg]
+Под схемата по подразбиране няма нищо – нито легенда („Условни знаци“), нито мащаб, нито вятър;
+"legenda": true ги добавя (вятърът – ако е подаден "vyatar"). Знакът за посоките е винаги в горния ляв ъгъл.
+
+    python3 scripts/shema.py shema.json -o shema.png [--svg shema.svg] [--shirina-cm 25.2 --visochina-cm 14]
+
+Ширината на картинката е ширината на текста на страницата (по подразбиране 16,5 cm – A4 изправена;
+25,2 cm – A4 легнала), а височината на чертежа е най-много --visochina-cm (по подразбиране 17 cm).
+Шрифтовете и знаците са едни и същи при всяка ширина – картинката се вмъква без мащабиране.
 
 Координатите са в метри: x – на изток (надясно), y – на север (нагоре), началото е долният ляв ъгъл
 на терена. Сградите са правоъгълници, успоредни на осите. Ъглите са в градуси: 0 – изток, 90 – север.
@@ -49,10 +56,11 @@ shema.py — чертае СХЕМА за разполагане на силит
   "stalbi": [{"ot": [40, 54], "do": [40, 58], "vid": "sglobna"}],
   "shtab": [{"x": 66, "y": 44}],                                    // място за разположение на щаба
   "pbt": [{"x": 56, "y": 30}],                                      // пост по безопасност на труда
-  "vyatar": {"ugal": 200, "sila": "5 m/s"},                         // накъде духа и скоростта – под схемата
+  "vyatar": {"ugal": 200, "sila": "5 m/s"},                         // накъде духа и скоростта – в легендата
   "tekst": [{"x": 5, "y": 5, "tekst": "ул. „Христо Ботев“", "ugal": 0}],
   "shlang_m": 20,                               // дължина на един шланг – чертичка на всеки толкова метра
-  "cvetna": false, "sever": true, "mashtab": true, "legenda": true
+  "cvetna": true, "sever": true, "legenda": false,                 // легендата носи и мащаба ("mashtab") и вятъра
+  "shirina_cm": 16.5, "visochina_cm": 17                           // или --shirina-cm / --visochina-cm
 }
 
 Видове (стойности на "vid"):
@@ -370,17 +378,20 @@ def legend_keys(data, hose_m):
     extra = [(None, o["legenda"], o["etiket"]) for o in data["obekti"] if o["legenda"]]
     return keys, extra
 
-def render(d, out_png, out_svg=None):
+def render(d, out_png, out_svg=None, width_cm=None, height_cm=None):
     data, warnings = load(d)
-    pal = Pal(bool(d.get("cvetna", False)))
+    pal = Pal(bool(d.get("cvetna", True)))
+    width_cm = width_cm or num(d.get("shirina_cm", WIDTH_CM), "shirina_cm")
+    height_cm = height_cm or num(d.get("visochina_cm", MAX_DRAW_HEIGHT_CM), "visochina_cm")
+    block = bool(d.get("legenda", False))             # the legend, the scale and the wind under the drawing
     x0, y0, x1, y1 = data["box"]
     wu, hu = x1 - x0, y1 - y0
     s = data["s"]                                      # the size of a symbol in drawing units (m)
     hose_m = num(d.get("shlang_m", 20) or 0, "shlang_m")
-    keys, extra = legend_keys(data, hose_m) if d.get("legenda", True) else ([], [])
+    keys, extra = legend_keys(data, hose_m) if block else ([], [])
 
-    width_in = WIDTH_CM / 2.54
-    draw_h_in = min(width_in * hu / wu, MAX_DRAW_HEIGHT_CM / 2.54)
+    width_in = width_cm / 2.54
+    draw_h_in = min(width_in * hu / wu, height_cm / 2.54)
     draw_w_in = draw_h_in * wu / hu
     fs = 7.0
     # the legend: two columns, long names wrapped
@@ -390,7 +401,7 @@ def render(d, out_png, out_svg=None):
     row_lines = [max(len(e[1]) for e in pair if e) for pair in zip(col_rows[0], col_rows[1] + [None] * len(col_rows[0]))
                  if pair[0] is not None]
     line_in = 0.13
-    legend_h_in = (sum(0.15 + line_in * n for n in row_lines) + 0.3) if entries else 0.0
+    legend_h_in = (sum(0.15 + line_in * n for n in row_lines) + 0.3) if entries else (0.35 if block else 0.0)
     title = str(d.get("zaglavie") or "")
     title_in = 0.3 if title else 0.0
     fig_h = draw_h_in + legend_h_in + title_in
@@ -486,12 +497,12 @@ def render(d, out_png, out_svg=None):
     for t in data["tekst"]:
         ax.text(t["x"], t["y"], t["tekst"], ha="left", va="center", fontsize=fs, rotation=t["ugal"], zorder=9)
     # the north–south sign of the library – in the upper left corner (чл. 9, ал. 5 от Указанията Iз-2749);
-    # the wind – under the drawing
+    # the wind – in the legend, when there is one
     if d.get("sever", True):
         draw_kompas(ax, x0 + 0.9 * s, y1 - 2.3 * s, s, fs)
 
-    if entries or d.get("mashtab", True) or data["vyatar"]:
-        lh = max(legend_h_in, 0.35)
+    if block:
+        lh = legend_h_in
         lax = fig.add_axes([0.0, 0.0, 1.0, lh / fig_h])
         lax.set_xlim(0, width_in)
         lax.set_ylim(0, lh)
@@ -532,6 +543,7 @@ def render(d, out_png, out_svg=None):
         fig.savefig(out_svg, facecolor="white")
     plt.close(fig)
     counts = {k: len(data[k]) for k in ("sgradi", "avtomobili", "linii", "vodoiztochnitsi", "pozhar")}
+    counts["razmer_m"] = [round(wu, 1), round(hu, 1)]       # the drawn area – for choosing the page orientation
     return counts, hoses, warnings
 
 def main():
@@ -539,6 +551,8 @@ def main():
     ap.add_argument("shema", help="JSON файл със схемата")
     ap.add_argument("-o", "--out", required=True, help="изходен .png")
     ap.add_argument("--svg", help="и .svg")
+    ap.add_argument("--shirina-cm", type=float, help="ширината на картинката, cm (16.5 – A4 изправена, 25.2 – легнала)")
+    ap.add_argument("--visochina-cm", type=float, help="най-голямата височина на чертежа, cm")
     a = ap.parse_args()
     try:
         with open(a.shema, encoding="utf-8") as f:
@@ -546,7 +560,7 @@ def main():
     except (OSError, json.JSONDecodeError) as e:
         bad(f"не мога да прочета {a.shema}: {e}")
     os.makedirs(os.path.dirname(os.path.abspath(a.out)) or ".", exist_ok=True)
-    counts, hoses, warnings = render(d, a.out, a.svg)
+    counts, hoses, warnings = render(d, a.out, a.svg, a.shirina_cm, a.visochina_cm)
     print(json.dumps({"output": a.out, "svg": a.svg, "elementi": counts, "shlangove": hoses,
                       "preduprezhdeniya": warnings}, ensure_ascii=False, indent=1))
 
