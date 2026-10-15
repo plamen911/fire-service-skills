@@ -72,8 +72,8 @@ import blanka as B  # noqa: E402  (the common blank of the training documents)
 
 SHEMA_SCRIPT = os.path.join(SKILLS, "shemi", "scripts", "shema.py")
 # The page of the scheme: (page width, page height, text width, height left for the picture under the title), cm;
-# margins 2.5 / 2.0 cm left / right and 1.5 cm top / bottom.
-PAGES = {"landscape": (29.7, 21.0, 25.2, 15.0), "portrait": (21.0, 29.7, 16.5, 22.5)}
+# margins 1.5 cm left and 1.0 cm right, top and bottom – the scheme takes all the room the title leaves.
+PAGES = {"landscape": (29.7, 21.0, 27.2, 17.6), "portrait": (21.0, 29.7, 18.5, 26.3)}
 
 TSEL = ["Изучаване на оперативно-тактическите особености на обекта.",
         "Трениране на КЕ за ръководство на екипите.",
@@ -167,19 +167,27 @@ def field(doc, roman, label, value):
     B.para(doc, f"{roman}. {label}: {value}", indent=False, keep=False)
 
 
-def orientation(width, height, forced=None):
+def room(page, title=""):
+    """(width, height) in cm left for the picture on the page of the scheme, under „СХЕМА“ and the title –
+    a title that wraps onto more lines takes its height from the picture."""
+    tw, ph = PAGES[page][2], PAGES[page][3]
+    lines = max(1, math.ceil(len(title) / (tw * 4.4)))     # about 4.4 characters of 12 pt per cm
+    return tw, ph - 0.3 - 0.6 * (lines - 1)
+
+
+def orientation(width, height, forced=None, title=""):
     """The page on which a drawing of these proportions comes out bigger – landscape for a wide site,
     portrait for a narrow or tall one."""
     if forced in PAGES:
         return forced
-    scale = {k: min(tw / width, ph / height) for k, (_, _, tw, ph) in PAGES.items()}
+    scale = {k: min(room(k, title)[0] / width, room(k, title)[1] / height) for k in PAGES}
     return "landscape" if scale["landscape"] >= scale["portrait"] else "portrait"
 
 
-def run_shema(src, png, page):
-    _, _, tw, ph = PAGES[page]
+def run_shema(src, png, page, title=""):
+    tw, h = room(page, title)
     r = subprocess.run([sys.executable, SHEMA_SCRIPT, src, "-o", png, "--shirina-cm", str(tw),
-                        "--visochina-cm", str(ph - 0.3)], capture_output=True, text=True)
+                        "--visochina-cm", str(h)], capture_output=True, text=True)
     if r.returncode != 0:
         sys.stderr.write("SHEMA_FAILED: " + (r.stderr.strip() or "без съобщение") + "\n")
         sys.exit(4)
@@ -189,7 +197,7 @@ def run_shema(src, png, page):
         return {}
 
 
-def draw_scheme(path, base, out, warnings, forced=None):
+def draw_scheme(path, base, out, warnings, forced=None, title=""):
     """(the picture, the page orientation): a .png as it is, or a .json drawn by the skill shemi next to the
     output – first for a landscape page; when the site fits a portrait page better, again for it."""
     src = path if os.path.isabs(path) else os.path.join(base, path)
@@ -202,13 +210,13 @@ def draw_scheme(path, base, out, warnings, forced=None):
                 w, h = im.size
         except Exception:  # noqa: BLE001
             w, h = 3, 2
-        return src, orientation(w, h, forced)
+        return src, orientation(w, h, forced, title)
     png = os.path.splitext(out)[0] + "_shema.png"
-    res = run_shema(src, png, "landscape")
+    res = run_shema(src, png, "landscape", title)
     wu, hu = (res.get("elementi") or {}).get("razmer_m") or [3, 2]
-    page = orientation(wu, hu, forced)
+    page = orientation(wu, hu, forced, title)
     if page != "landscape":
-        res = run_shema(src, png, page)
+        res = run_shema(src, png, page, title)
     warnings += ["схема: " + w for w in res.get("preduprezhdeniya") or []]
     return png, page
 
@@ -304,25 +312,27 @@ def build(d, out, base):
 
     shema, page = None, None
     if d.get("shema"):
-        shema, page = draw_scheme(str(d["shema"]), base, out, warnings, d.get("orientatsiya"))
-        pw, ph_, text_w, pic_h = PAGES[page]
+        title2 = B.typo(str(d.get("shema_zaglavie") or
+                            f"за разполагане на силите и средствата при провеждане на ПТЗ в {obekt or tema}"))
+        shema, page = draw_scheme(str(d["shema"]), base, out, warnings, d.get("orientatsiya"), title2)
+        pw, ph_ = PAGES[page][:2]
+        text_w, pic_h = room(page, title2)
         sec = doc.add_section(WD_SECTION.NEW_PAGE)    # the scheme – on its own A4 page, turned to fit it
         sec.orientation = WD_ORIENT.LANDSCAPE if page == "landscape" else WD_ORIENT.PORTRAIT
         sec.page_width, sec.page_height = Cm(pw), Cm(ph_)
-        sec.left_margin, sec.right_margin = Cm(2.5), Cm(2.0)
-        sec.top_margin, sec.bottom_margin = Cm(1.5), Cm(1.5)
+        sec.left_margin, sec.right_margin = Cm(1.5), Cm(1.0)
+        sec.top_margin, sec.bottom_margin = Cm(1.0), Cm(1.0)
+        sec.header_distance = sec.footer_distance = Cm(0.5)
         B.para(doc, "СХЕМА", align=B.CENTER, indent=False, size=14)
-        title2 = B.typo(str(d.get("shema_zaglavie") or
-                            f"за разполагане на силите и средствата при провеждане на ПТЗ в {obekt or tema}"))
-        B.para(doc, title2, align=B.CENTER, indent=False)
-        B.blank(doc)
+        tp = B.para(doc, title2, align=B.CENTER, indent=False)
+        tp.paragraph_format.space_after = B.Pt(4)
         pic = B.fmt(doc.add_paragraph(), B.CENTER, line=None)
         width, height = Cm(text_w), None
         try:
             from PIL import Image
             with Image.open(shema) as im:
                 w, h = im.size
-            if h / w * text_w > pic_h:                 # a tall scheme – keep it on the page
+            if h / w * text_w > pic_h:                 # limited by the height – keep it on the page
                 width, height = None, Cm(pic_h)
         except Exception:  # noqa: BLE001
             pass

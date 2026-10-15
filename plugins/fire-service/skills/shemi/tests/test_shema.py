@@ -83,7 +83,10 @@ def test_defaults():
     for word in ("Условни знаци", "Мащаб", "Вятър"):
         check(word not in svg, f"no „{word}“ under the drawing")
     check("#d0021b" in svg.lower() and "#1f4fd8" in svg.lower(), "red and blue as in Приложение № 6")
-    check('width="714' in svg or 'width="714.' in svg, "the drawing is as wide as the landscape text (25.2 cm)")
+    import re
+    w = float(re.search(r'<svg[^>]*width="([0-9.]+)pt"', svg).group(1)) / 72 * 2.54
+    h = float(re.search(r'<svg[^>]*height="([0-9.]+)pt"', svg).group(1)) / 72 * 2.54
+    check(abs(h - 14.7) < 0.05 and w <= 25.25, f"the drawing fills the height it is given, no white strips ({w:.1f} × {h:.1f} cm)")
 
 
 def test_minimal_and_colour():

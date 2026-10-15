@@ -59,7 +59,8 @@ shema.py — чертае СХЕМА за разполагане на силит
   "vyatar": {"ugal": 200, "sila": "5 m/s"},                         // накъде духа и скоростта – в легендата
   "tekst": [{"x": 5, "y": 5, "tekst": "ул. „Христо Ботев“", "ugal": 0}],
   "shlang_m": 20,                               // дължина на един шланг – чертичка на всеки толкова метра
-  "cvetna": true, "sever": true, "legenda": false,                 // легендата носи и мащаба ("mashtab") и вятъра
+  "cvetna": true, "sever": true, "ramka": false,  // "ramka": true – рамка около чертежа
+  "legenda": false,                             // true – легенда, мащаб ("mashtab") и вятър под чертежа
   "shirina_cm": 16.5, "visochina_cm": 17                           // или --shirina-cm / --visochina-cm
 }
 
@@ -393,7 +394,9 @@ def render(d, out_png, out_svg=None, width_cm=None, height_cm=None):
     width_in = width_cm / 2.54
     draw_h_in = min(width_in * hu / wu, height_cm / 2.54)
     draw_w_in = draw_h_in * wu / hu
-    fs = 7.0
+    if not block:                                      # only the drawing – no white strips beside it
+        width_in = draw_w_in
+    fs = 7.0 * min(1.45, max(1.0, draw_w_in * 2.54 / 16.5))   # the lettering grows with the drawing
     # the legend: two columns, long names wrapped
     entries = [(k, textwrap.wrap(legend_text(k, hose_m), 40)) for k in keys] + \
               [("obekt", textwrap.wrap(text, 40), label) for _, text, label in extra]
@@ -415,7 +418,8 @@ def render(d, out_png, out_svg=None, width_cm=None, height_cm=None):
     ax.set_aspect("equal")
     ax.set_xticks([])
     ax.set_yticks([])
-    for sp in ax.spines.values():
+    for sp in ax.spines.values():                      # no frame around the drawing ("ramka": true – with one)
+        sp.set_visible(bool(d.get("ramka", False)))
         sp.set_linewidth(0.8)
 
     if data["ograda"]:
