@@ -33,7 +33,8 @@ LAST = set("""дъбов липов яворов кестенов брезов �
 петров петрова георгиев стоянов новаков админов тестов непознат""".split())
 
 # Authors of the literature the skills cite, historical figures in street names and the like.
-ALLOWED_NAMES = {"Веселин Симеонов"}   # the author of „Пожаротехническа експертиза“, cited in the ЕПТЗ template
+ALLOWED_NAMES = {"Веселин Симеонов",   # the author of „Пожаротехническа експертиза“, cited in the ЕПТЗ template
+                 "Валентин Чочев"}    # the author of „Оперативна тактика за гасене на пожари“, cited in eptz
 
 PATTERNS = {
     "personal key": re.compile(r"\bfs_[0-9A-Za-z_-]{8,}"),
