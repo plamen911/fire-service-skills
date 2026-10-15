@@ -53,6 +53,21 @@ def test_fixture():
                  "Вятър:", "Мащаб:", "Зона на задимяване"):
         check(name in svg, f"the legend names „{name}“ (Приложение № 6 към Iз-2749)")
     check("Пожарен водоем" in svg and "Надземен хидрант" not in svg, "only the symbols in use go into the legend")
+    check(">С<" in svg.replace(" ", "") or "С</text>" in svg, "the north–south sign is on the scheme")
+
+
+def test_library():
+    print("znatsi.py – the library of symbols")
+    import znatsi
+    out = os.path.join(tempfile.mkdtemp(), "katalog.svg")
+    n = znatsi.katalog(out, colour=True)
+    check(n == len(znatsi.LEGEND_ORDER) + len(znatsi.KATALOG_EXTRA), f"the catalogue draws every symbol ({n})")
+    svg = open(out, encoding="utf-8").read()
+    for name in ("Пожарен автомобил с лафетен струйник", "Стълба палка", "Огнище на пожара", "Посоките – север (С) и юг (Ю)"):
+        check(name in svg, f"the catalogue names „{name}“")
+    check(all(k in znatsi.LEGEND_TEXT for k in znatsi.LEGEND_ORDER), "every symbol in the order has a name")
+    import shema as sh
+    check(sh.draw_truck is znatsi.draw_truck and sh.obrazets is znatsi.obrazets, "the scheme draws with the library itself")
 
 
 def test_minimal_and_colour():
@@ -101,5 +116,6 @@ if __name__ == "__main__":
     test_warnings()
     test_bad_input()
     test_label_avoids_fire()
+    test_library()
     print("FAILURES: " + "; ".join(failures) if failures else "ALL OK")
     sys.exit(1 if failures else 0)
