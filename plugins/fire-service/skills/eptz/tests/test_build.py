@@ -239,7 +239,22 @@ def test_smetka():
     check(ws["A43"].value == "/ старши пожарникар Г. Малинов /", "another expert under „Изготвил“")
 
 
+def test_nachalo():
+    print("nachalo.py – една команда в началото")
+    r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "nachalo.py"), "--data", "2026-07-11",
+                        "--mesto", "Луковит"], capture_output=True, text=True, cwd=tempfile.gettempdir())
+    check(r.returncode == 0, "runs from any folder")
+    d = json.loads(r.stdout)
+    check(d["papka"] == SKILL, "gives the skill folder")
+    check(d["profil"] and d["profil"].get("ime") if isinstance(d["profil"], dict) else "ГРЕШКА" in d["profil"],
+          "profile from the staff list (or its error)")
+    check(all(k in d for k in ("proizshestviya", "obraztsi", "etalon")), "a missing part never stops the rest")
+    skill = open(os.path.join(SKILL, "SKILL.md"), encoding="utf-8").read()
+    check("scripts/nachalo.py --data" in skill, "SKILL.md starts with nachalo.py")
+
+
 if __name__ == "__main__":
+    test_nachalo()
     test_eptz()
     test_smetka()
     print("\nALL PASS" if not failures else f"\n{len(failures)} FAILED")
