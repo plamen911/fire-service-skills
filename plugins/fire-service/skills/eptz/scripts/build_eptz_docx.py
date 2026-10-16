@@ -6,6 +6,14 @@ build_eptz_docx.py (v3) — генерира ЕПТЗ .docx, като КЛОНИ
 отстъп 1,5 см, подравняване двустранно, подчертани заглавия, без удебеляване,
 таблици за подпис „ЕКСПЕРТ“ и „Изготвил“, номерирана литература).
 
+Позоваванията: маркер [[ключ]] / [[ключ: място]] след справочното число – напр. „52 °C [[icsc:1561]]“,
+„(…) [[chochev: прил. № 7, с. 223]]“ – става „(ICSC 1561)“, „(Чочев, 2003, прил. № 7, с. 223)“.
+„Използвана литература“ се сглобява сама: задължителните източници (Симеонов, Методическото
+ръководство) и всеки цитиран, по реда на първото позоваване (_shared/scripts/svoistva.py).
+В meta.json: "dop_iztochnitsi" – източници само за случая (ИЛБ на продукта и др.):
+{"ilb-x": {"kratko": "ИЛБ на „X“, 2024", "palno": "Информационен лист за безопасност …;"}};
+"literatura" – допълнителни редове, ако трябват (повторенията отпадат).
+
 Употреба:
   python build_eptz_docx.py --content report.md --meta meta.json --out EPTZ.docx
   [--template path/to/eptz_template.docx]
@@ -26,16 +34,12 @@ from docx.oxml.ns import qn
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_shared", "scripts"))
 from docx_common import report, typo, typo_all  # noqa: E402  (the common typography rules and the final check)
+from svoistva import Problem, bez_iztochnik, citiraj  # noqa: E402  (the [[…]] references and the literature list)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_TEMPLATE = os.path.join(HERE, "..", "assets", "eptz_template.docx")
 PH = "[...]"
 CITATION_RE = re.compile(r"\s*\[\s*Източник\s*:[^\]]*\]", re.I)
-DEFAULT_LIT = [
-    "„Пожаротехническа експертиза“, Веселин Симеонов, „Атеа Букс” – гр. София, 2023 г.;",
-    "„Методическо ръководство за установяване на причините за възникване на пожари”, НПИПАБ – НСПБЗН – МВР, гр. София, 2007 г.;",
-    "„Справочник за пожарната опасност на веществата и материалите”, Държавно издателство „Техника” 1980 г."
-]
 
 def m(meta, k, default=PH):
     v = meta.get(k)
@@ -75,6 +79,15 @@ def clone(proto, text=None):
     if text is not None:
         set_text(el, text)
     return el
+
+def left_align(p_el):
+    ppr = p_el.find(qn("w:pPr"))
+    if ppr is None:
+        ppr = p_el.makeelement(qn("w:pPr"), {}); p_el.insert(0, ppr)
+    jc = ppr.find(qn("w:jc"))
+    if jc is None:
+        jc = ppr.makeelement(qn("w:jc"), {}); ppr.append(jc)
+    jc.set(qn("w:val"), "left")
 
 def replace_in(el, old, new):
     for p in el.iter(qn("w:p")):
@@ -152,6 +165,13 @@ def build(content, meta, out, final, template):
             clone(P_HDR, "II. Представен доказателствен материал."),
             clone(P_BODY, m(meta, "predstaven_material",
                   f"Материали по ДП № {m(meta,'dp_no')} по описа на {prok} и ЗМ № {m(meta,'zm_no')} г. по описа на {m(meta,'zm_opis')}."))]
+    # [[ключ]] → „(Кратко, място)“; литературата – задължителните + цитираните (_shared/svoistva/)
+    for s_ in bez_iztochnik(re.sub(r"<!--.*?-->|^#+ .*$", "", content, flags=re.S | re.M)):
+        print(f"⚠ число без позоваване – ако не е от материалите по делото, сложи [[ключ]]: {s_[:120]}")
+    try:
+        content, literatura, _ = citiraj(content, meta.get("dop_iztochnitsi"), meta.get("literatura"))
+    except Problem as e:
+        raise SystemExit(f"Източници: {e}")
     secs = parse_md(content)
     for key, title in (("circ", "III. Обстоятелства по делото."),
                        ("q", "IV. Поставени въпроси пред експерта.")):
@@ -217,11 +237,15 @@ def build(content, meta, out, final, template):
     if lit_ps:
         proto = copy.deepcopy(lit_ps[0])
         for el in lit_ps[1:]: body.remove(el)
-        items = meta.get("literatura") or DEFAULT_LIT
+        items = literatura
         cur = lit_ps[0]
         set_text(cur, items[0])
+        lit_els = [cur]
         for it in items[1:]:
-            e = clone(proto, it); cur.addnext(e); cur = e
+            e = clone(proto, it); cur.addnext(e); cur = e; lit_els.append(e)
+        for el, it in zip(lit_els, items):
+            if "http" in it:   # a long address cannot wrap – justified text would stretch the line before it
+                left_align(el)
 
     # ---- no draft notice in the footer either (templates made before 2.4.3) ----
     for sec in doc.sections:

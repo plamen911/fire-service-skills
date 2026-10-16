@@ -98,6 +98,56 @@ def test_eptz():
     t_no = doc_text(out)
     check("Охридски“ № 4." in t_no and "№4" not in t_no, "№ followed by a space")
     check("—" not in t_no and " - " not in t_no, "only en dash as a dash")
+    test_literatura(tmp, mp)
+
+
+def literatura(path):
+    """The numbered paragraphs after „Използвана литература“."""
+    d = Document(path)
+    return [p.text for p in d.paragraphs if p._p.find(".//" + p._p.tag.replace("}p", "}numPr")) is not None
+            and p.style.name.replace(" ", "").lower() in ("bodytextindent3",)]
+
+
+def test_literatura(tmp, mp):
+    print("позоваванията [[…]] и литературата")
+    src = open(FIXTURE, encoding="utf-8").read()
+    text = src.replace("### Отговор на въпрос № 1:\n",
+                       "### Отговор на въпрос № 1:\n\nПламната температура на дизеловото гориво е 52 °C "
+                       "[[icsc:1561]], а алуминиевите сплави се топят при 600 ÷ 660 °C "
+                       "[[chochev: прил. № 7, с. 223]]. Бензинът [[icsc:1400]] и пак дизелът [[icsc:1561]].\n", 1)
+    check(text != src, "fixture has an answer to put the citations in")
+    md = os.path.join(tmp, "lit.md")
+    open(md, "w", encoding="utf-8").write(text)
+    out = os.path.join(tmp, "lit.docx")
+    build(md, mp, out)
+    t = doc_text(out)
+    check("52 °C (ICSC 1561)" in t, "[[icsc:1561]] → (ICSC 1561)")
+    check("(Чочев, 2003, прил. № 7, с. 223)" in t, "[[chochev: …]] → (Чочев, 2003, …)")
+    check("[[" not in t, "no marker left")
+    lit = literatura(out)
+    check(len(lit) == 5, f"literature: 2 mandatory + 3 cited, each once (got {len(lit)})")
+    check(lit and "Симеонов" in lit[0] and "Методическо ръководство" in lit[1], "mandatory sources first")
+    check(len(lit) == 5 and "ICSC 1561" in lit[2] and "Чочев" in lit[3] and "ICSC 1400" in lit[4],
+          "cited sources in the order of the first citation")
+    check(lit and all(x.endswith(";") for x in lit[:-1]) and lit[-1].endswith("."), "„;“ between, „.“ at the end")
+    check(not any("Справочник за пожарната опасност" in x for x in lit), "an uncited book is not listed")
+
+    # an unknown source stops the build instead of listing a book nobody cited
+    open(md, "w", encoding="utf-8").write(text.replace("[[icsc:1400]]", "[[babrauskaz]]"))
+    r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "build_eptz_docx.py"),
+                        "--content", md, "--meta", mp, "--out", out], capture_output=True, text=True)
+    check(r.returncode != 0 and "babrauskas" in (r.stderr + r.stdout), "unknown key stops the build and suggests the right one")
+
+    # a per-case source (ИЛБ) from meta.json
+    meta = json.load(open(mp, encoding="utf-8"))
+    meta["dop_iztochnitsi"] = {"ilb-razreditel": {"kratko": "ИЛБ на „Разредител 650“, 2024",
+                                                  "palno": "Информационен лист за безопасност на „Разредител 650“, версия 3.0 от 12.01.2024 г.;"}}
+    mp2 = os.path.join(tmp, "meta2.json")
+    json.dump(meta, open(mp2, "w", encoding="utf-8"), ensure_ascii=False)
+    open(md, "w", encoding="utf-8").write(text.replace("[[icsc:1400]]", "[[ilb-razreditel: раздел 9]]"))
+    build(md, mp2, out)
+    check("(ИЛБ на „Разредител 650“, 2024, раздел 9)" in doc_text(out), "per-case source rendered")
+    check(any("Разредител 650" in x for x in literatura(out)), "per-case source listed")
 
 
 def test_smetka():
