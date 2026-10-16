@@ -74,6 +74,11 @@
       "palno": "Корольченко, А. Я., Корольченко, Д. А., „Пожаровзрывоопасность веществ и материалов и средства их тушения“, справочник в 2 части, 2-ро издание, Асоциация „Пожнаука“ – Москва, 2004 г.;",
       "v_skila": "_shared/svoistva/literatura.csv – дървесина по видове, стърготини, сено, олио, памук, хартия, пластмаси, въглища, торф; мястото е с частта и страницата: [[korolchenko: ч. II, с. 395]]"
     },
+    "nwcg-pms412": {
+      "kratko": "NWCG PMS 412, 2025",
+      "palno": "„Guide to Wildland Fire Origin and Cause Determination“, PMS 412, National Wildfire Coordinating Group, март 2025 г., https://fs-prod-nwcg.s3.us-gov-west-1.amazonaws.com/s3fs-public/publication/pms412.pdf;",
+      "v_skila": "_shared/svoistva/literatura.csv – фокусирането на слънчевите лъчи от стъкло (ефектът на лупата) – кои предмети запалват, кои не, как се изследва; страницата е отпечатаната в долния колонтитул („208 of 241“): [[nwcg-pms412: с. 208]]"
+    },
     "nfpa-921": {
       "kratko": "NFPA 921",
       "palno": "NFPA 921 „Guide for Fire and Explosion Investigations“, National Fire Protection Association, Quincy, MA, издание 2024;",

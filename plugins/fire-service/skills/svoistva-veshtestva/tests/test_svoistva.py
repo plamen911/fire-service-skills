@@ -191,6 +191,11 @@ def test_literatura():
     check(pin["kor-07"]["stoinost"].startswith("самовъзпламеняване на слой прах 180 °C") and pin["kor-07"]["mesto"] == "ч. II, с. 395",
           "сено equals ч. II, с. 395")
     check(pin["kor-08"]["stoinost"].startswith("пламна температура 205 °C"), "слънчогледово олио equals ч. II, с. 58")
+    check(all(pin[f"nwcg-0{i}"]["mesto"] == "с. 208" for i in range(1, 5)), "NWCG PMS 412: Refraction is on p. 208")
+    check("цветно стъкло не запалват" in pin["nwcg-02"]["stoinost"], "flat and colored glass do not ignite")
+    check(any(r["iztochnik"] == "nwcg-pms412" for r in s.tarsi("стъкло")), "„стъкло“ finds the lens effect")
+    check(not re.search(r"\d+\s*пъти", " ".join(r["stoinost"] for r in rows if r["iztochnik"] == "nwcg-pms412")),
+          "no concentration factor – the guide gives none")
     check({r.get("iztochnik") for r in s.tarsi("олио")} >= {"korolchenko"}, "„олио“ → also Корольченко")
 
 
