@@ -1,9 +1,24 @@
 {
-  "_opisanie": "Каталог на източниците, на които се позовават документите (ЕПТЗ и др.). kratko – позоваването в текста, в скоби; palno – редът в „Използвана литература“; vinagi – влиза в литературата на всяко ЕПТЗ (методическата основа); v_skila – къде са стойностите от източника. Картите ICSC не са тук поотделно – редът им се сглобява от stoinosti.csv по шаблона в _icsc.",
-  "_icsc": {
-    "kratko": "ICSC {nomer}",
-    "palno": "Международна карта за химична безопасност ICSC {nomer} – {ime_en}, Международна организация на труда и Световна здравна организация (ILO/WHO), версия от {karta_versiya}, сверена на {proveren} на адрес {url};",
-    "v_skila": "_shared/svoistva/stoinosti.csv – всяка стойност е свалена от картата с tools/icsc_fetch.py"
+  "_opisanie": "Каталог на източниците, на които се позовават документите (ЕПТЗ и др.). kratko – позоваването в текста, в скоби; palno – редът в „Използвана литература“; vinagi – влиза в литературата на всяко ЕПТЗ (методическата основа); v_skila – къде са стойностите от източника. Картите ICSC и CHRIS и записите от GESTIS-STAUB-EX не са тук поотделно – редът им се сглобява от таблицата им по шаблона в _shabloni ({id} – номерът или кодът след „:“ в ключа).",
+  "_shabloni": {
+    "icsc": {
+      "tablitsa": "stoinosti.csv",
+      "kratko": "ICSC {id}",
+      "palno": "Международна карта за химична безопасност ICSC {id} – {ime_en}, Международна организация на труда и Световна здравна организация (ILO/WHO), версия от {karta_versiya}, сверена на {proveren} на адрес {url};",
+      "v_skila": "_shared/svoistva/stoinosti.csv – всяка стойност е свалена от картата с tools/icsc_fetch.py"
+    },
+    "chris": {
+      "tablitsa": "chris.csv",
+      "kratko": "CHRIS {id}",
+      "palno": "Карта CHRIS {id} – {ime_en}, Chemical Hazards Response Information System, Бреговата охрана на САЩ (U.S. Coast Guard), издание от {karta_versiya}, сверена на {proveren} на адрес {url};",
+      "v_skila": "_shared/svoistva/chris.csv – маслата; температурите в картата са във °F, в таблицата са и в °C (закръглени); свалени с tools/chris_fetch.py"
+    },
+    "gestis-staub": {
+      "tablitsa": "prahove.csv",
+      "kratko": "GESTIS-STAUB-EX, № {id}",
+      "palno": "Запис № {id} – {ime_en}, база данни GESTIS-STAUB-EX (горимост и взривни характеристики на прахове), Институт за безопасност на труда (IFA) към Германското социално осигуряване срещу злополуки (DGUV), сверен на {proveren} на адрес {url};",
+      "v_skila": "_shared/svoistva/prahove.csv – праховете (проба по проба); свалени с tools/gestis_staub_fetch.py"
+    }
   },
   "iztochnitsi": {
     "simeonov": {

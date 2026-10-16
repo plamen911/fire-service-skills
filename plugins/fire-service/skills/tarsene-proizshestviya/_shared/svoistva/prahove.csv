@@ -1,0 +1,32 @@
+kluch,ime,sinonimi,ime_en,mediana_um,vlazhnost,zapalvane_oblak,zapalvane_metod,tleene_sloy,dgv,url,proveren
+gestis-staub:2010,дървесен прах – бук,дървесен прах;прах от дърво;бук;букова дървесина;дървесина;дърво,"Wood, beech",61,,490,G-G,310,,https://staubex.ifa.dguv.de/explokomp.aspx?nr=2010&lang=e,2026-10-16
+gestis-staub:2012,дървесен прах – бук,дървесен прах;прах от дърво;бук;букова дървесина;дървесина;дърво,"Wood, beech",170,,500,G-G,320,125,https://staubex.ifa.dguv.de/explokomp.aspx?nr=2012&lang=e,2026-10-16
+gestis-staub:2015,дървесно брашно – бук,дървесен прах;дървесно брашно;бук;дървесина;дърво,"Wood, beech (flour)",90,,490,G-G,310,60,https://staubex.ifa.dguv.de/explokomp.aspx?nr=2015&lang=e,2026-10-16
+gestis-staub:10373,дървесен прах – бор/смърч от силоз,дървесен прах;бор;смърч;иглолистна дървесина;дървесина;дърво,"Wood (pine/ spruce), from silo","550,3","33,9",410,BAM,340,60,https://staubex.ifa.dguv.de/explokomp.aspx?nr=10373&lang=e,2026-10-16
+gestis-staub:10375,дървесен прах – бор/смърч при рязане,дървесен прах;бор;смърч;иглолистна дървесина;дърводелски цех;дървесина;дърво,"Wood (pine/ spruce), sawing, dust deposits",618,"17,8",410,BAM,350,250,https://staubex.ifa.dguv.de/explokomp.aspx?nr=10375&lang=e,2026-10-16
+gestis-staub:26,дървесни стърготини и прах,стърготини;талаш;дървесен прах;дървесина;дърво,Wood (chips/dust),98,,410,G-G,310,,https://staubex.ifa.dguv.de/explokomp.aspx?nr=26&lang=e,2026-10-16
+gestis-staub:10597,прах от МДФ при шлайфане,МДФ;MDF;дървесен прах;плоскости;дървесина,mdf (Medium Density Fibreboard); wide belt sanding; from precipitator,"63,4","4,6",400,BAM,300,15,https://staubex.ifa.dguv.de/explokomp.aspx?nr=10597&lang=e,2026-10-16
+gestis-staub:815,целулоза (иглолистна и широколистна дървесина),целулоза;дървесина,"Cellulose (93 % softwood, 6 % hardwood)",14,,420,BAM,335,15,https://staubex.ifa.dguv.de/explokomp.aspx?nr=815&lang=e,2026-10-16
+gestis-staub:2213,слама,слама;сламен прах,Straw,200,,470,G-G,310,125,https://staubex.ifa.dguv.de/explokomp.aspx?nr=2213&lang=e,2026-10-16
+gestis-staub:2214,слама,слама;сламен прах,Straw,320,,510,G-G,340,,https://staubex.ifa.dguv.de/explokomp.aspx?nr=2214&lang=e,2026-10-16
+gestis-staub:2092,пшенично брашно,брашно;пшенично брашно;мелница,Wheat flour,57,,430,G-G,n.g.u.450,60,https://staubex.ifa.dguv.de/explokomp.aspx?nr=2092&lang=e,2026-10-16
+gestis-staub:2093,пшенично брашно тип 550,брашно;пшенично брашно;мелница,"Wheat flour, type 550",56,,470,G-G,n.g.u.450,60,https://staubex.ifa.dguv.de/explokomp.aspx?nr=2093&lang=e,2026-10-16
+gestis-staub:6986,пшенично брашно тип 405,брашно;пшенично брашно;мелница,"Wheat flour, type 405",30,"7,0",400,BAM,450,60,https://staubex.ifa.dguv.de/explokomp.aspx?nr=6986&lang=e,2026-10-16
+gestis-staub:3113,зърнен прах,зърно;зърнен прах;силоз,"Grain, dust",70,"6,3",360,BAM,,,https://staubex.ifa.dguv.de/explokomp.aspx?nr=3113&lang=e,2026-10-16
+gestis-staub:233,захар (от цвекло),захар;захарен прах,Beet sugar,29,,470,G-G,melts,60,https://staubex.ifa.dguv.de/explokomp.aspx?nr=233&lang=e,2026-10-16
+gestis-staub:173,слънчогледов шрот,слънчоглед;шрот;слънчогледов шрот,Sunflower seed expeller,420,,470,G-G,350,125,https://staubex.ifa.dguv.de/explokomp.aspx?nr=173&lang=e,2026-10-16
+gestis-staub:3160,слънчогледови пелети,слънчоглед;пелети,Sunflower seed pellets,,,430,BAM,,,https://staubex.ifa.dguv.de/explokomp.aspx?nr=3160&lang=e,2026-10-16
+gestis-staub:10737,картон (отпадъчна хартия) при рязане,картон;хартия;хартиен прах,Cardboard (waste paper); sawing; from precipitator,"99,2","5,5",420,BAM,320,30,https://staubex.ifa.dguv.de/explokomp.aspx?nr=10737&lang=e,2026-10-16
+gestis-staub:10123,памук,памук;памучен прах;текстил,Cotton,"31,2","4,7",400,BAM,360,10,https://staubex.ifa.dguv.de/explokomp.aspx?nr=10123&lang=e,2026-10-16
+gestis-staub:10124,памук,памук;памучен прах;текстил,Cotton,"34,3","3,5",400,BAM,380,10,https://staubex.ifa.dguv.de/explokomp.aspx?nr=10124&lang=e,2026-10-16
+gestis-staub:357,полиетилен (ниско налягане),полиетилен;PE;HDPE;пластмаса,Polyethylene low pressure,13,,360,G-G,melts,15,https://staubex.ifa.dguv.de/explokomp.aspx?nr=357&lang=e,2026-10-16
+gestis-staub:361,полиетилен (ниско налягане),полиетилен;PE;HDPE;пластмаса,Polyethylene low pressure,52,,460,G-G,melts,30,https://staubex.ifa.dguv.de/explokomp.aspx?nr=361&lang=e,2026-10-16
+gestis-staub:369,полиетилен (ниско налягане),полиетилен;PE;HDPE;пластмаса,Polyethylene low pressure,135,,470,G-G,melts,60,https://staubex.ifa.dguv.de/explokomp.aspx?nr=369&lang=e,2026-10-16
+gestis-staub:2266,поливинилхлорид (PVC),поливинилхлорид;PVC;ПВЦ;пластмаса,Polyvinyl chloride,46,,490,G-G,330,30,https://staubex.ifa.dguv.de/explokomp.aspx?nr=2266&lang=e,2026-10-16
+gestis-staub:2267,поливинилхлорид (PVC),поливинилхлорид;PVC;ПВЦ;пластмаса,Polyvinyl chloride,130,,530,G-G,340,30,https://staubex.ifa.dguv.de/explokomp.aspx?nr=2267&lang=e,2026-10-16
+gestis-staub:451,поливинилхлорид (PVC),поливинилхлорид;PVC;ПВЦ;пластмаса,Polyvinyl chloride,250,,700,G-G,n.g.u.450,,https://staubex.ifa.dguv.de/explokomp.aspx?nr=451&lang=e,2026-10-16
+gestis-staub:10633,експандиран полистирен (стиропор) при рязане,стиропор;EPS;полистирен;пластмаса,"polystyrene, expanded (EPS); cutting of sheets; from filter","427,6","2,1",460,BAM,,60,https://staubex.ifa.dguv.de/explokomp.aspx?nr=10633&lang=e,2026-10-16
+gestis-staub:242,лигнитни въглища,въглища;лигнит;кафяви въглища,Lignite,32,,380,G-G,225,60,https://staubex.ifa.dguv.de/explokomp.aspx?nr=242&lang=e,2026-10-16
+gestis-staub:2106,лигнитни въглища,въглища;лигнит;кафяви въглища,Lignite,21,,410,G-G,270,,https://staubex.ifa.dguv.de/explokomp.aspx?nr=2106&lang=e,2026-10-16
+gestis-staub:2176,каменни въглища,въглища;каменни въглища,Hard coal,16,,600,G-G,250,,https://staubex.ifa.dguv.de/explokomp.aspx?nr=2176&lang=e,2026-10-16
+gestis-staub:2177,каменни въглища,въглища;каменни въглища,Hard coal,24,,610,G-G,270,,https://staubex.ifa.dguv.de/explokomp.aspx?nr=2177&lang=e,2026-10-16

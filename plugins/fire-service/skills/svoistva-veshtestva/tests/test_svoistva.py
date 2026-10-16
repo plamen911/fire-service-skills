@@ -30,7 +30,7 @@ def run(*args):
 
 def test_data():
     print("данните")
-    rows = s.stoinosti()
+    rows = [r for r in s.stoinosti() if r["kluch"].startswith("icsc:")]
     check(len(rows) >= 25, f"table has the substances ({len(rows)})")
     keys = [r["kluch"] for r in rows]
     check(len(keys) == len(set(keys)), "keys are unique")
@@ -66,7 +66,7 @@ def test_lookup():
     check(names("1561") == ["дизелово гориво"], "card number")
     check(len(names("ксилен")) == 3, "xylene → the three isomers")
     try:
-        s.tarsi("олио")
+        s.tarsi("битумна хидроизолация")
         check(False, "no value for an unknown substance")
     except s.Problem as e:
         check(str(e).startswith("NOT_FOUND") and "по памет" in str(e), "unknown substance → NOT_FOUND, not a guess")
@@ -77,7 +77,7 @@ def test_lookup():
     check(s.formatirai(s.tarsi("водород")[0])["plamna"] == "няма – горим газ", "flammable gas has no flash point")
     r = run("нафта")
     check(r.returncode == 0 and "[[icsc:1561]]" in r.stdout and "сверена на" in r.stdout, "CLI gives marker and literature line")
-    r = run("олио")
+    r = run("битумна хидроизолация")
     check(r.returncode == 2 and "NOT_FOUND" in r.stderr, "CLI: NOT_FOUND with exit code 2")
     r = run("--iztochnitsi")
     check(r.returncode == 0 and "chochev" in r.stdout and "винаги" in r.stdout, "CLI lists the source keys")
@@ -117,14 +117,55 @@ def test_katalog():
         check(bool(v.get("kratko")) and v.get("palno", "").endswith(";"), f"{key}: short and full form")
     check([x for x, v in k["iztochnitsi"].items() if v.get("vinagi")] == ["simeonov", "metodichesko-rakovodstvo"],
           "mandatory sources: Симеонов and the Методическо ръководство")
-    with open(os.path.join(SKILL, "_shared", "svoistva", "stoinosti.csv"), encoding="utf-8") as f:
-        header = next(csv.reader(f))
-    for field in re.findall(r"\{(\w+)\}", k["_icsc"]["palno"]):
-        check(field in header or field == "nomer", f"ICSC template field „{field}“ exists")
+    for p, sh in k["_shabloni"].items():
+        with open(os.path.join(SKILL, "_shared", "svoistva", sh["tablitsa"]), encoding="utf-8") as f:
+            header = next(csv.reader(f))
+        for field in re.findall(r"\{(\w+)\}", sh["palno"] + sh["kratko"]):
+            check(field in header or field == "id", f"{p}: template field „{field}“ exists")
+
+
+def test_masla_prahove():
+    print("маслата (CHRIS) и праховете (GESTIS-STAUB-EX)")
+    rows = s.stoinosti()
+    keys = [r["kluch"] for r in rows]
+    check(len(keys) == len(set(keys)), "keys unique across all tables")
+    masla = [r for r in rows if r["kluch"].startswith("chris:")]
+    prahove = [r for r in rows if r["kluch"].startswith("gestis-staub:")]
+    check(len(masla) >= 8 and len(prahove) >= 30, f"{len(masla)} oils, {len(prahove)} dust samples")
+    for r in masla:
+        for c, label in (("plamna", "Flash Point"), ("samovazpl", "Auto Ignition Temperature")):
+            m = re.search(re.escape(label) + r": (\d+)°F", r["izhodni"])
+            check(bool(m) == bool(r[c]), f"{r['kluch']}: {c} present exactly when the card has it")
+            if m:
+                check(r[c] == str(round((int(m.group(1)) - 32) * 5 / 9)), f"{r['kluch']}: {c} = °F from the card in °C")
+        check(r["url"].endswith(r["kluch"][6:].upper() + ".pdf"), f"{r['kluch']}: url points to its own card")
+    for r in prahove:
+        check(r["url"].endswith(f"nr={r['kluch'][13:]}&lang=e"), f"{r['kluch']}: url points to its own record")
+        check(r["zapalvane_metod"] in ("G-G", "BAM", ""), f"{r['kluch']}: method")
+        check(bool(r["zapalvane_oblak"] or r["tleene_sloy"]), f"{r['kluch']}: has a temperature")
+        check(not r["tleene_sloy"] or re.fullmatch(r"\d+|n\.g\.u\. ?\d+|melts", r["tleene_sloy"]) is not None,
+              f"{r['kluch']}: smouldering „{r['tleene_sloy']}“ is a known form")
+    by = {r["kluch"]: r for r in rows}
+    check((by["chris:osb"]["plamna"], by["chris:osb"]["plamna_metod"], by["chris:osb"]["izhodni"]) ==
+          ("282", "з.т.", "Flash Point: 540°F C.C.; Auto Ignition Temperature: 833°F"), "chris:osb equals its card")
+    check((by["gestis-staub:2213"]["zapalvane_oblak"], by["gestis-staub:2213"]["tleene_sloy"]) == ("470", "310"),
+          "gestis-staub:2213 (straw) equals its record")
+    f = s.formatirai(by["chris:ols"])
+    check(f["plamna"] == "279 °C, открит тигел (535 °F в картата)", "oil: °C, method and the °F of the card")
+    check(s.formatirai(by["gestis-staub:2092"])["tleene_sloy"] == "не тлее до 450 °C", "„n.g.u.“ in words")
+    check(s.formatirai(by["gestis-staub:357"])["tleene_sloy"].startswith("топи се"), "„melts“ in words")
+    check(len(s.tarsi("слама")) == 2 and all(r["vid"] == "прах" for r in s.tarsi("слама")), "straw → both samples")
+    check({r["ime"] for r in s.tarsi("олио")} >= {"растително олио (общо)", "соево олио"}, "„олио“ → the oils")
+    t, lit, _ = s.citiraj("Слама [[gestis-staub:2213]], олио [[chris:ovg]].")
+    check(t == "Слама (GESTIS-STAUB-EX, № 2213), олио (CHRIS OVG).", "dust and oil markers rendered")
+    check("staubex.ifa.dguv.de/explokomp.aspx?nr=2213" in lit[2] and "chris/OVG.pdf" in lit[3], "their literature lines")
+    _, lit, _ = s.citiraj("Ръчно (CHRIS OSB) и (GESTIS-STAUB-EX, № 2176).")
+    check(len(lit) == 4, "hand-typed CHRIS and GESTIS references are listed")
 
 
 if __name__ == "__main__":
     test_data()
+    test_masla_prahove()
     test_lookup()
     test_citiraj()
     test_katalog()

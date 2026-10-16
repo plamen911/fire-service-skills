@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
 """
-svoistva.py — пожароопасните свойства на веществата с източника на всяка стойност, и позоваванията
-на източниците в документите (ЕПТЗ).
+svoistva.py — пожароопасните свойства на веществата и материалите с източника на всяка стойност, и
+позоваванията на източниците в документите (ЕПТЗ).
 
-Стойностите са в `_shared/svoistva/stoinosti.csv` – всяка е свалена от Международната карта за
-химична безопасност (ICSC, ILO/WHO) на веществото, с номера и версията на картата, адреса и датата,
-на която е сверена (tools/icsc_fetch.py в хранилището). Каталогът на източниците (книги, стандарти,
-бази) е в `_shared/svoistva/iztochnitsi.json`. Нищо не се пише по памет: вещество, което го няма в
-таблицата, излиза с NOT_FOUND.
+Данните са в `_shared/svoistva/`, всяка стойност – свалена от източника си със скрипт от `tools/` в
+хранилището, с адреса и датата на сверяване:
+  • `stoinosti.csv` – горими течности и газове, от Международните карти за химична безопасност
+    (ICSC, ILO/WHO);
+  • `chris.csv` – растителни масла и мазнини, от картите CHRIS на Бреговата охрана на САЩ
+    (температурите в картите са във °F – пазят се и те, и преводът в °C);
+  • `prahove.csv` – прахове (дървесен прах, слама, брашно, памук, пластмаси, въглища), проба по проба,
+    от базата GESTIS-STAUB-EX (IFA/DGUV).
+Каталогът на източниците (книги, стандарти, бази) е `_shared/svoistva/iztochnitsi.json`. Нищо не се
+пише по памет: вещество, което го няма в таблиците, излиза с NOT_FOUND.
 
     python3 _shared/scripts/svoistva.py дизел                 # свойствата, позоваването и реда за литературата
+    python3 _shared/scripts/svoistva.py слама
     python3 _shared/scripts/svoistva.py "пропан-бутан" --json
-    python3 _shared/scripts/svoistva.py --spisak              # всички вещества в таблицата
+    python3 _shared/scripts/svoistva.py --spisak              # всичко в таблиците
     python3 _shared/scripts/svoistva.py --iztochnitsi         # ключовете на източниците за [[…]]
 
 Позоваване в текста на документ: маркер `[[ключ]]` или `[[ключ: място]]` след числото, напр.
@@ -33,12 +39,19 @@ DATA = os.path.join(HERE, "..", "svoistva")
 STOINOSTI = os.path.join(DATA, "stoinosti.csv")
 KATALOG = os.path.join(DATA, "iztochnitsi.json")
 MARKER_RE = re.compile(r"\s*\[\[([^\[\]]*)\]\]")
-ITEM_RE = re.compile(r"^\s*(icsc:\d{4}|[a-z0-9][a-z0-9-]*)\s*(?:[:,]\s*(.+?))?\s*$")
+KEY = r"icsc:\d{4}|chris:[a-z]{3}|gestis-staub:\d+|[a-z0-9][a-z0-9-]*"
+ITEM_RE = re.compile(r"^\s*(" + KEY + r")\s*(?:[:,]\s*(.+?))?\s*$")
+# a reference typed by hand instead of a marker
+HAND_RE = re.compile(r"ICSC (\d{4})|CHRIS ([A-Z]{3})\b|GESTIS-STAUB-EX, № (\d+)")
 
 LABELS = [("plamna", "Пламна температура"), ("samovazpl", "Температура на самовъзпламеняване"),
           ("granitsi", "Граници на взривяемост във въздух (КГВ–ВГВ)"), ("kipene", "Температура на кипене"),
           ("otn_platnost_pari", "Относителна плътност на парите (въздух = 1)")]
+LABELS_PRAH = [("zapalvane_oblak", "Температура на запалване на облак прах"),
+               ("tleene_sloy", "Температура на тлеене на слой прах 5 mm"),
+               ("dgv", "Долна граница на взривяемост"), ("proba", "Пробата")]
 METOD = {"з.т.": "затворен тигел", "о.т.": "открит тигел"}
+METOD_PRAH = {"G-G": "пещ на Годберт-Грийнуолд", "BAM": "пещ BAM"}
 
 
 class Problem(Exception):
@@ -46,19 +59,32 @@ class Problem(Exception):
 
 
 # ---------- data ----------
-def stoinosti():
-    with open(STOINOSTI, encoding="utf-8") as f:
-        return list(csv.DictReader(f))
-
-
 def katalog():
     with open(KATALOG, encoding="utf-8") as f:
         return json.load(f)
 
 
+def _read(name):
+    path = os.path.join(DATA, name)
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
+def stoinosti():
+    """All rows of all tables; dust rows carry vid='прах', the rest vid='течност/газ'."""
+    rows = []
+    for name in dict.fromkeys(s["tablitsa"] for s in katalog()["_shabloni"].values()):
+        for r in _read(name):
+            r["vid"] = "прах" if "zapalvane_oblak" in r else "течност/газ"
+            rows.append(r)
+    return rows
+
+
 def norm(s):
     s = s.lower().replace("ѝ", "й").replace("ё", "е")
-    return re.sub(r"[\s\-–_.,]+", "", s)
+    return re.sub(r"[\s\-–_.,/()]+", "", s)
 
 
 def chislo(v):
@@ -72,15 +98,39 @@ def chislo(v):
     return pre + v
 
 
+def _izhodni_f(r, label):
+    m = re.search(re.escape(label) + r": (\d+)°F", r.get("izhodni", ""))
+    return f" ({m.group(1)} °F в картата)" if m else ""
+
+
 def formatirai(r):
     """The values of one row as Bulgarian text, empty values left out."""
     out = {}
+    if r["vid"] == "прах":
+        if r["zapalvane_oblak"]:
+            out["zapalvane_oblak"] = f"{chislo(r['zapalvane_oblak'])} °C" + (
+                f" ({METOD_PRAH[r['zapalvane_metod']]})" if r["zapalvane_metod"] in METOD_PRAH else "")
+        t = r["tleene_sloy"].replace(" ", "")
+        if t.startswith("n.g.u."):
+            out["tleene_sloy"] = f"не тлее до {t[6:]} °C"
+        elif t == "melts":
+            out["tleene_sloy"] = "топи се, преди да започне да тлее"
+        elif t:
+            out["tleene_sloy"] = f"{chislo(t)} °C"
+        if r["dgv"]:
+            out["dgv"] = f"{chislo(r['dgv'])} g/m³"
+        proba = [f"медиана на частиците {chislo(r['mediana_um'])} μm" if r["mediana_um"] else "",
+                 f"влажност {chislo(r['vlazhnost'])} %" if r["vlazhnost"] else ""]
+        if any(proba):
+            out["proba"] = ", ".join(x for x in proba if x)
+        return out
     if r["plamna"]:
-        out["plamna"] = f"{chislo(r['plamna'])} °C" + (f", {METOD[r['plamna_metod']]}" if r["plamna_metod"] else "")
+        out["plamna"] = f"{chislo(r['plamna'])} °C" + (f", {METOD[r['plamna_metod']]}" if r["plamna_metod"] else "") \
+            + _izhodni_f(r, "Flash Point")
     elif r["sastoyanie"] == "газ":
         out["plamna"] = "няма – горим газ"
     if r["samovazpl"]:
-        out["samovazpl"] = f"{chislo(r['samovazpl'])} °C"
+        out["samovazpl"] = f"{chislo(r['samovazpl'])} °C" + _izhodni_f(r, "Auto Ignition Temperature")
     if r["kgv"] and r["vgv"]:
         out["granitsi"] = f"{chislo(r['kgv'])}–{chislo(r['vgv'])} % (об.)"
     if r["kipene"]:
@@ -97,7 +147,7 @@ def tarsi(q, rows=None):
         raise Problem("NOT_FOUND: празно търсене")
     exact, part = [], []
     for r in rows:
-        names = [r["ime"], r["ime_en"], r["cas"], r["kluch"], r["kluch"].split(":")[1]] + r["sinonimi"].split(";")
+        names = [r["ime"], r["ime_en"], r.get("cas", ""), r["kluch"], r["kluch"].split(":")[1]] + r["sinonimi"].split(";")
         ns = [norm(x) for x in names if x]
         if n in ns:
             exact.append(r)
@@ -107,13 +157,17 @@ def tarsi(q, rows=None):
         return exact or part
     names = sorted({x for r in rows for x in [r["ime"]] + r["sinonimi"].split(";") if x})
     close = difflib.get_close_matches(q.lower(), names, n=5, cutoff=0.6)
-    raise Problem(f"NOT_FOUND: няма потвърдена стойност за „{q}“ в таблицата – не я давай по памет"
+    raise Problem(f"NOT_FOUND: няма потвърдена стойност за „{q}“ в таблиците – не я давай по памет"
                   + (f". Най-близки: {', '.join(close)}" if close else ""))
 
 
 # ---------- sources ----------
+def _iso(d):
+    return ".".join(reversed(d.split("-"))) + " г." if re.fullmatch(r"\d{4}-\d{2}-\d{2}", d or "") else d
+
+
 def iztochnik(kluch, extra=None, rows=None):
-    """{'kratko', 'palno'} for a source key: a catalogue entry, an ICSC card or an extra (per-case) source."""
+    """{'kratko', 'palno'} for a source key: a catalogue entry, a card/record from a table or an extra (per-case) source."""
     if extra and kluch in extra:
         e = extra[kluch]
         if not e.get("kratko") or not e.get("palno"):
@@ -122,14 +176,15 @@ def iztochnik(kluch, extra=None, rows=None):
     k = katalog()
     if kluch in k["iztochnitsi"]:
         return k["iztochnitsi"][kluch]
-    if kluch.startswith("icsc:"):
+    prefix = kluch.split(":")[0]
+    if ":" in kluch and prefix in k["_shabloni"]:
         rows = rows if rows is not None else stoinosti()
         r = next((x for x in rows if x["kluch"] == kluch), None)
         if r is None:
-            raise Problem(f"UNKNOWN_SOURCE: картата {kluch} не е в таблицата – добави я с tools/icsc_fetch.py")
-        nomer = kluch.split(":")[1]
-        d = {**r, "nomer": nomer, "proveren": ".".join(reversed(r["proveren"].split("-"))) + " г."}
-        return {"kratko": k["_icsc"]["kratko"].format(**d), "palno": k["_icsc"]["palno"].format(**d)}
+            raise Problem(f"UNKNOWN_SOURCE: {kluch} не е в таблиците – добави го със скрипта в tools/")
+        sh = k["_shabloni"][prefix]
+        d = {**r, "id": kluch.split(":")[1].upper(), "proveren": _iso(r["proveren"])}
+        return {"kratko": sh["kratko"].format(**d), "palno": sh["palno"].format(**d)}
     keys = list(k["iztochnitsi"]) + list(extra or {})
     close = difflib.get_close_matches(kluch, keys, n=3)
     raise Problem(f"UNKNOWN_SOURCE: няма източник „{kluch}“" + (f" – може би {', '.join(close)}?" if close else ""))
@@ -182,11 +237,12 @@ def citiraj(text, extra=None, dop_literatura=None):
         i = out.find(v["kratko"])
         if i >= 0:
             first[key] = i
-    for m in re.finditer(r"ICSC (\d{4})", out):
-        key = f"icsc:{m.group(1)}"
+    for m in HAND_RE.finditer(out):
+        key = ("icsc:" + m.group(1) if m.group(1) else "chris:" + m.group(2).lower() if m.group(2)
+               else "gestis-staub:" + m.group(3))
         if key not in first:
             if not any(r["kluch"] == key for r in rows):
-                raise Problem(f"UNKNOWN_SOURCE: в текста има {m.group(0)}, а картата не е в таблицата")
+                raise Problem(f"UNKNOWN_SOURCE: в текста има „{m.group(0)}“, а го няма в таблиците")
             first[key] = m.start()
     used = sorted(set(used) | set(first), key=lambda x: first.get(x, 0))
     keys = [x for x, v in k.items() if v.get("vinagi")] + [x for x in used if not k.get(x, {}).get("vinagi")]
@@ -203,7 +259,7 @@ def bez_iztochnik(text):
     """Sentences with a temperature, energy or concentration but without a [[…]] marker (a warning)."""
     out = []
     for s in re.split(r"(?<=[.!?])\s+", text):
-        if re.search(r"\d\s*(?:°\s*C|°С|kW|kJ|MJ|% ?\(об\.\)|об\. ?%)", s) and "[[" not in s:
+        if re.search(r"\d\s*(?:°\s*C|°С|kW|kJ|MJ|% ?\(об\.\)|об\. ?%|g/m)", s) and "[[" not in s:
             out.append(s.strip())
     return out
 
@@ -212,8 +268,11 @@ def bez_iztochnik(text):
 def pokazhi(r, extra=None):
     f = formatirai(r)
     src = iztochnik(r["kluch"], extra)
-    lines = [f"{r['ime']} – {r['ime_en']}" + (f", CAS {r['cas']}" if r["cas"] else "")]
-    for k, label in LABELS:
+    head = f"{r['ime']} – {r['ime_en']}" + (f", CAS {r['cas']}" if r.get("cas") else "")
+    lines = [head]
+    for k, label in (LABELS_PRAH if r["vid"] == "прах" else LABELS):
+        if k == "proba" and k not in f:
+            continue
         lines.append(f"  {label}: {f.get(k, '—')}")
     lines.append(f"  Позоваване в текста: ({src['kratko']})   маркер в ЕПТЗ: [[{r['kluch']}]]")
     lines.append(f"  Литература: {src['palno']}")
@@ -222,8 +281,8 @@ def pokazhi(r, extra=None):
 
 def main():
     ap = argparse.ArgumentParser(description="Пожароопасни свойства на веществата с източника им")
-    ap.add_argument("ime", nargs="?", help="вещество – име, синоним, CAS или номер на ICSC карта")
-    ap.add_argument("--spisak", action="store_true", help="всички вещества в таблицата")
+    ap.add_argument("ime", nargs="?", help="вещество или материал – име, синоним, CAS, номер или код на карта/запис")
+    ap.add_argument("--spisak", action="store_true", help="всичко в таблиците")
     ap.add_argument("--iztochnitsi", action="store_true", help="ключовете на източниците за [[…]]")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
@@ -233,12 +292,13 @@ def main():
             for key, v in k["iztochnitsi"].items():
                 print(f"{key:26} ({v['kratko']}){'  – винаги в литературата' if v.get('vinagi') else ''}")
                 print(f"{'':26} {v['v_skila']}")
-            print(f"{'icsc:NNNN':26} ({k['_icsc']['kratko'].format(nomer='NNNN')}) – картите в таблицата, виж --spisak")
+            for p, sh in k["_shabloni"].items():
+                print(f"{p + ':…':26} ({sh['kratko'].format(id='…')}) – {sh['v_skila']}")
             return
         rows = stoinosti()
         if a.spisak:
             for r in rows:
-                print(f"{r['kluch']}  {r['ime']} ({r['sinonimi'].replace(';', ', ')})")
+                print(f"{r['kluch']:20} {r['ime']} [{r['vid']}] ({r['sinonimi'].replace(';', ', ')})")
             return
         if not a.ime:
             ap.error("кажи вещество, --spisak или --iztochnitsi")
