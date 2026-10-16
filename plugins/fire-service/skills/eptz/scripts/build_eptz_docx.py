@@ -166,7 +166,7 @@ def build(content, meta, out, final, template):
             clone(P_BODY, m(meta, "predstaven_material",
                   f"Материали по ДП № {m(meta,'dp_no')} по описа на {prok} и ЗМ № {m(meta,'zm_no')} г. по описа на {m(meta,'zm_opis')}."))]
     # [[ключ]] → „(Кратко, място)“; литературата – задължителните + цитираните (_shared/svoistva/)
-    for s_ in bez_iztochnik(re.sub(r"<!--.*?-->|^#+ .*$", "", content, flags=re.S | re.M)):
+    for s_ in bez_iztochnik(re.sub(r"^#+ .*$", "", re.sub(r"<!--.*?-->", "", content, flags=re.S), flags=re.M)):
         print(f"⚠ число без позоваване – ако не е от материалите по делото, сложи [[ключ]]: {s_[:120]}")
     neverni = proveri_chisla(content, meta.get("dop_iztochnitsi"))
     if neverni:

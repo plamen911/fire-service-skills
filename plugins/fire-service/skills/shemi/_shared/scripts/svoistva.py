@@ -281,7 +281,7 @@ def danni_za(kluch, mesto, rows):
 
 
 def proveri_chisla(text, extra=None):
-    """Numbers with a unit in the clause before a [[…]] marker that the cited place does not give.
+    """The value with a unit right before a [[…]] marker, when the cited place does not give it.
     Sources without data in the plugin (Чочев, Симеонов, a per-case ИЛБ) are not checked."""
     rows = stoinosti()
     problems, start = [], 0
@@ -290,11 +290,15 @@ def proveri_chisla(text, extra=None):
         cut = max(before.rfind(". "), before.rfind("\n"), before.rfind("; "))
         clause = before[cut + 1:] if cut >= 0 else before
         start = m.end()
-        nums = {_n(x) for x in UNIT_NUM_RE.findall(clause)}
-        for a, b in RANGE_RE.findall(clause):
-            nums |= {_n(a), _n(b)}
-        if not nums:
+        # only the value right before the marker is checked – the marker stands right after the
+        # number it proves; other numbers in the clause may come from the case or a calculation
+        last = None
+        for mm in re.finditer(r"(-?\d+(?:[.,]\d+)?)(?:\s*[–÷-]\s*(-?\d+(?:[.,]\d+)?))?\s*"
+                              r"(?:°\s*C|°С|°F|kW|kJ|MJ|g/m|μm|% ?\(об|об\. ?%)", clause):
+            last = mm
+        if last is None:
             continue
+        nums = {_n(x) for x in last.groups() if x}
         data, checked = set(), False
         for item in m.group(1).split(";"):
             im = ITEM_RE.match(item)
@@ -369,7 +373,7 @@ def citiraj(text, extra=None, dop_literatura=None):
 def bez_iztochnik(text):
     """Sentences with a temperature, energy or concentration but without a [[…]] marker (a warning)."""
     out = []
-    for s in re.split(r"(?<=[.!?])\s+", text):
+    for s in re.split(r"(?<=[.!?])\s+|\n+", text):
         if re.search(r"\d\s*(?:°\s*C|°С|kW|kJ|MJ|% ?\(об\.\)|об\. ?%|g/m)", s) and "[[" not in s:
             out.append(s.strip())
     return out

@@ -139,6 +139,13 @@ def test_literatura(tmp, mp):
                         "--content", md, "--meta", mp, "--out", out], capture_output=True, text=True)
     check(r.returncode != 0 and "babrauskas" in (r.stderr + r.stdout), "unknown key stops the build and suggests the right one")
 
+    # a temperature without a marker is reported (a warning, the document is still built)
+    open(md, "w", encoding="utf-8").write(text.replace("### Отговор на въпрос № 2:\n",
+                                                       "### Отговор на въпрос № 2:\n\nГорещият газ е около 777 °C.\n", 1))
+    r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "build_eptz_docx.py"),
+                        "--content", md, "--meta", mp, "--out", out], capture_output=True, text=True)
+    check(r.returncode == 0 and "777 °C" in r.stdout and "⚠" in r.stdout, "a number without a source is warned about")
+
     # a number that the cited place does not give stops the build
     open(md, "w", encoding="utf-8").write(text.replace("52 °C", "62 °C", 1))
     r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "build_eptz_docx.py"),
