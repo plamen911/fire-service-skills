@@ -34,7 +34,7 @@ from docx.oxml.ns import qn
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_shared", "scripts"))
 from docx_common import report, typo, typo_all  # noqa: E402  (the common typography rules and the final check)
-from svoistva import Problem, bez_iztochnik, citiraj, proveri_chisla  # noqa: E402  (the [[…]] references and the literature list)
+from svoistva import Problem, bez_iztochnik, chochev_neprovereni, citiraj, proveri_chisla, zadai_chochev  # noqa: E402  (the [[…]] references and the literature list)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_TEMPLATE = os.path.join(HERE, "..", "assets", "eptz_template.docx")
@@ -168,6 +168,10 @@ def build(content, meta, out, final, template):
     # [[ключ]] → „(Кратко, място)“; литературата – задължителните + цитираните (_shared/svoistva/)
     for s_ in bez_iztochnik(re.sub(r"^#+ .*$", "", re.sub(r"<!--.*?-->", "", content, flags=re.S), flags=re.M)):
         print(f"⚠ число без позоваване – ако не е от материалите по делото, сложи [[ключ]]: {s_[:120]}")
+    for p in chochev_neprovereni(content):
+        print(f"⚠ Чочев, прил. № {p} – числата не са проверени: прочети приложението с regs_read "
+              f"(heading „Прил. № {p}“), запиши го във файл със заглавието „## Прил. № {p} …“ и пусни "
+              f"сборката отново с --chochev ФАЙЛ")
     neverni = proveri_chisla(content, meta.get("dop_iztochnitsi"))
     if neverni:
         raise SystemExit("Източници – числото не е на посоченото място:\n  " + "\n  ".join(neverni))
@@ -268,7 +272,14 @@ if __name__ == "__main__":
     ap.add_argument("--content", required=True); ap.add_argument("--meta")
     ap.add_argument("--out", required=True); ap.add_argument("--final", action="store_true", help="без действие – приема се заради старите извиквания")
     ap.add_argument("--template", default=DEFAULT_TEMPLATE)
+    ap.add_argument("--chochev", action="append", default=[],
+                    help="приложение на Чочев, прочетено през конектора (regs_read) – за проверката на числата")
     a = ap.parse_args()
+    try:
+        for f in a.chochev:
+            zadai_chochev(f)
+    except Problem as e:
+        raise SystemExit(str(e))
     meta = json.load(open(a.meta, encoding="utf-8")) if a.meta else {}
     md = open(a.content, encoding="utf-8").read()
     build(md, meta, a.out, a.final, a.template)

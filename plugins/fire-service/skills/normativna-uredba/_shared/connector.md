@@ -37,6 +37,7 @@
 | `regs.py index` | `regs_list` с `name: "_INDEX_"`, после `regs_read` | индексът е голям – чети го с `match`, не целия |
 | `regs.py katalog --q ТЕКСТ` | `regs_list` с `name: "index.json"`, после `regs_read` с `match: "ТЕКСТ"` | статусът на файла: `in_force`, `superseded_by`, `map` |
 | `regs.py get ФАЙЛ` | `regs_list` (за `id`) → `regs_read` с `heading: "Чл. 5"` или `match: "текст"` | цитирай дословно от върнатото |
+| проверката на числата по Чочев в ЕПТЗ (`svoistva.py` чете таблиците от n8n) | `regs_read` на `Ogneborets_Reference_Chochev…` с `heading: "Прил. № N"` → файл със заглавието `## Прил. № N …` → `build_eptz_docx.py --chochev ФАЙЛ` | записва се дословно, с бележките под таблицата |
 
 ## Инструменти само за администратора
 

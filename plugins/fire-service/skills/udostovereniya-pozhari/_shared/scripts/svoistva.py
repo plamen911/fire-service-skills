@@ -301,6 +301,33 @@ def _chochev_tekst():
     return _chochev["text"]
 
 
+def zadai_chochev(path):
+    """The Чочев appendices from a file – what Claude read through the connector (`regs_read`,
+    heading „Прил. № N“) when the script has no personal key. One or more sections, each starting
+    with its heading „## Прил. № N …“. The file is added to what n8n gives, if anything."""
+    text = open(path, encoding="utf-8").read()
+    if not re.search(r"^## Прил\. № \d+", text, re.M):
+        raise Problem(f"BAD_CHOCHEV: {path} – липсва заглавието „## Прил. № N …“ на приложението")
+    _chochev_tekst()
+    _chochev["text"] = ((_chochev["text"] or "") + "\n\n" + text).strip()
+    _chochev["loaded"] = True
+
+
+def chochev_neprovereni(text):
+    """The Чочев appendices cited in the text that the script has no table for – their numbers are
+    not checked."""
+    tables = chochev_prilozheniya() or {}
+    out = []
+    for m in MARKER_RE.finditer(text):
+        for item in m.group(1).split(";"):
+            im = ITEM_RE.match(item)
+            if im and im.group(1) == "chochev":
+                p = re.search(r"прил\.\s*№\s*(\d+)", im.group(2) or "")
+                if p and p.group(1) not in tables and p.group(1) not in out:
+                    out.append(p.group(1))
+    return out
+
+
 def chochev_prilozheniya(text=None):
     """{appendix number: the numbers in its table} from the Чочев file („## Прил. № N – … – с. X“)."""
     text = text if text is not None else _chochev_tekst()

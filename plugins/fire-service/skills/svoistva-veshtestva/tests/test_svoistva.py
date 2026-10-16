@@ -238,6 +238,28 @@ def test_greshki():
     check("232" in nums and "327.5" not in nums, "a note under the table is not the book's number")
 
 
+def test_chochev_fail():
+    print("Чочев от файл (колега с конектора)")
+    import tempfile
+    os.environ["FIRE_SERVICE_NO_KEY"] = "1"
+    old = dict(s._chochev)
+    s._chochev.update(loaded=False, text=None)
+    t = "Цинкът се топи при 419 °C [[chochev: прил. № 7, с. 223]]."
+    check(s.chochev_neprovereni(t) == ["7"], "without a key – appendix 7 is reported as not checked")
+    f = os.path.join(tempfile.mkdtemp(), "chochev_7.md")
+    open(f, "w", encoding="utf-8").write("## Прил. № 7 – Температура на топене – с. 223\n\n| Цинк | 419 |\n")
+    s.zadai_chochev(f)
+    check(s.chochev_neprovereni(t) == [] and s.proveri_chisla(t) == [], "from the file – checked, 419 °C is there")
+    check(len(s.proveri_chisla(t.replace("419", "420"))) == 1, "a wrong number stops")
+    open(f, "w", encoding="utf-8").write("| Цинк | 419 |\n")
+    try:
+        s.zadai_chochev(f)
+        check(False, "a file without the heading stops")
+    except s.Problem:
+        check(True, "a file without the heading stops")
+    s._chochev.clear(); s._chochev.update(old)
+
+
 def test_vreme():
     print("времето (METAR) – без мрежа")
     import datetime
@@ -274,6 +296,7 @@ def test_vreme():
 if __name__ == "__main__":
     test_greshki()
     test_vreme()
+    test_chochev_fail()
     test_data()
     test_proveri()
     test_literatura()
