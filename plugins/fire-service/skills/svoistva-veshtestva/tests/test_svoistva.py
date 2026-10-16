@@ -183,6 +183,13 @@ def test_literatura():
     check(pin["darvo-01"]["stoinost"] == "около 250 °C" and "с. 184" in pin["darvo-01"]["mesto"], "darvo-01 equals Table 5")
     check((pin["darvo-02"]["stoinost"], pin["darvo-03"]["stoinost"]) == ("300–310 °C", "350–365 °C"),
           "hardwood/softwood equal Table 5")
+    kor = [r for r in rows if r["iztochnik"] == "korolchenko"]
+    check(len(kor) >= 20 and all(re.fullmatch(r"ч\. II?, с\. \d+", r["mesto"]) for r in kor),
+          "Корольченко: every row has its part and page")
+    check(pin["kor-07"]["stoinost"].startswith("самовъзпламеняване на слой прах 180 °C") and pin["kor-07"]["mesto"] == "ч. II, с. 395",
+          "сено equals ч. II, с. 395")
+    check(pin["kor-08"]["stoinost"].startswith("пламна температура 205 °C"), "слънчогледово олио equals ч. II, с. 58")
+    check({r.get("iztochnik") for r in s.tarsi("олио")} >= {"korolchenko"}, "„олио“ → also Корольченко")
 
 
 if __name__ == "__main__":
