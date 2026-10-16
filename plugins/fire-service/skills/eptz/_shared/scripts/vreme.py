@@ -9,6 +9,7 @@ vreme.py — времето по часове за деня на пожара о
     python3 vreme.py LBPL 2026-08-04                      # целият ден
     python3 vreme.py LBPL 2026-08-04 --ot 16:00 --do 19:00
     python3 vreme.py --blizo 43.42,24.61 2026-08-04       # най-близкото летище до мястото
+    python3 vreme.py --mesto "Долни Луковит" 2026-07-11  # по населеното място (района на РДПБЗН – Плевен)
     python3 vreme.py LBPL 2026-08-04 --fail metar.csv     # съобщенията, свалени другаде (WebFetch)
     python3 vreme.py LBPL 2025-07-18 2025-07-21           # по дни: температури, вятър, валежи
     python3 vreme.py --stantsii                           # летищата
@@ -71,6 +72,19 @@ def km(a, b):
 def nay_blizka(lat, lon):
     icao = min(STANTSII, key=lambda k: km((lat, lon), STANTSII[k][1:]))
     return icao, round(km((lat, lon), STANTSII[icao][1:]))
+
+
+def koordinati(ime):
+    """„ШИРИНА,ДЪЛЖИНА“ of a settlement in the РДПБЗН – Плевен area (raioni/koordinati_pleven.csv)."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "raioni", "koordinati_pleven.csv")
+    ime_n = re.sub(r"^(с|гр)\.\s*", "", ime.strip(), flags=re.I).lower()
+    with open(path, encoding="utf-8") as f:
+        rows = [r for r in csv.DictReader(l for l in f if not l.startswith("#")) if r["naseleno_masto"].lower() == ime_n]
+    if not rows:
+        raise Problem(f"BAD_INPUT: „{ime}“ не е в района на РДПБЗН – Плевен – дай --blizo ШИРИНА,ДЪЛЖИНА")
+    if len({r["obshtina"] for r in rows}) > 1:
+        raise Problem(f"BAD_INPUT: „{ime}“ има в няколко общини ({', '.join(sorted({r['obshtina'] for r in rows}))}) – дай --blizo")
+    return f"{rows[0]['lat']},{rows[0]['lng']}"
 
 
 def ms(kt):
@@ -225,6 +239,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("args", nargs="*", help="[ICAO] ДАТА [ДО_ДАТА] (ГГГГ-ММ-ДД или ДД.ММ.ГГГГ); с две дати – обобщение по дни")
     ap.add_argument("--blizo", help="ШИРИНА,ДЪЛЖИНА на мястото – взима най-близкото летище")
+    ap.add_argument("--mesto", help="населено място от района на РДПБЗН – Плевен (по ЕКАТТЕ) – вместо --blizo")
     ap.add_argument("--ot", help="от час (ЧЧ:ММ, местно време)")
     ap.add_argument("--do", help="до час (ЧЧ:ММ, местно време)")
     ap.add_argument("--fail", help="CSV от архива, свален другаде")
@@ -237,6 +252,8 @@ def main():
             return
         args = list(a.args)
         razst = None
+        if a.mesto:
+            a.blizo = koordinati(a.mesto)
         if a.blizo:
             lat, lon = (float(x) for x in a.blizo.split(","))
             icao, razst = nay_blizka(lat, lon)

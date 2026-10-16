@@ -256,6 +256,8 @@ def test_vreme():
     dni, ot, do = vreme.ot_mesto("04.08.2026, 16:00–19:00 ч.")
     check((dni, ot, do) == ([datetime.date(2026, 8, 4)], "16:00", "19:00"), "a day with hours")
     check(vreme.nay_blizka(43.42, 24.61)[0] == "LBPL", "Плевен → Долна Митрополия")
+    lat, lon = map(float, vreme.koordinati("с. Долни Луковит").split(","))
+    check(vreme.nay_blizka(lat, lon) == ("LBPL", 24), "a settlement by name → airport and distance")
     t, lit, _ = s.citiraj("при 34–36 °C и вятър 1 m/s [[metar:LBPL: 04.08.2026, 16:00–19:00 ч.]].")
     check(t == "при 34–36 °C и вятър 1 m/s (METAR LBPL, 04.08.2026).", "marker renders with the date")
     check(any("летище Долна Митрополия (LBPL)" in l and "mesonet" in l for l in lit), "the airport is listed")
