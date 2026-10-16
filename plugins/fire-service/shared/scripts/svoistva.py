@@ -234,14 +234,17 @@ def _chisla(text):
 
 
 def _stranitsi(mesto):
-    """('II', {235, 236}) from „ч. II, с. 235–236“; pages of „табл. 5“ are not pages."""
+    """('II', {'с:235', 'с:236'}) from „ч. II, с. 235–236“; sections („т. 4.1.5.1“) and chapters
+    („гл. 9“) are places too; „табл. 5“ alone is not a place."""
     part = re.search(r"ч\.\s*(I+)", mesto or "")
-    pages = set()
+    places = set()
     for a, b in re.findall(r"с\.\s*(\d+)(?:\s*[–-]\s*(\d+))?", mesto or ""):
-        pages |= set(range(int(a), int(b or a) + 1))
+        places |= {f"с:{n}" for n in range(int(a), int(b or a) + 1)}
     for extra_page in re.findall(r"\bи\s+(\d{2,4})\b", mesto or ""):
-        pages.add(int(extra_page))
-    return (part.group(1) if part else ""), pages
+        places.add(f"с:{extra_page}")
+    places |= {f"т:{x}" for x in re.findall(r"т\.\s*(\d+(?:\.\d+)*)", mesto or "")}
+    places |= {f"гл:{x}" for x in re.findall(r"гл\.\s*(\d+)", mesto or "")}
+    return (part.group(1) if part else ""), places
 
 
 def danni_za(kluch, mesto, rows):

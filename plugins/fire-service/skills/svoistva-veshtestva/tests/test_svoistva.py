@@ -170,7 +170,7 @@ def test_literatura():
     check(len(rows) >= 10, f"{len(rows)} rows")
     for r in rows:
         check(r["iztochnik"] in k, f"{r['id']}: source „{r['iztochnik']}“ is in the catalogue")
-        check(bool(r["mesto"]) and ";" not in r["mesto"] and re.search(r"с\. \d", r["mesto"]) is not None,
+        check(bool(r["mesto"]) and ";" not in r["mesto"] and re.search(r"(с|т|гл)\. \d", r["mesto"]) is not None,
               f"{r['id']}: page given, no „;“ („{r['mesto']}“)")
         check(bool(r["stoinost"] and r["usloviya"] and r["pokazatel"]), f"{r['id']}: value, conditions, property")
         t, lit, _ = s.citiraj("x " + s.marker(r) + ".")
