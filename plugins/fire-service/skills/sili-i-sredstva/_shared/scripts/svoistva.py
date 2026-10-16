@@ -10,7 +10,9 @@ svoistva.py — пожароопасните свойства на вещест�
   • `chris.csv` – растителни масла и мазнини, от картите CHRIS на Бреговата охрана на САЩ
     (температурите в картите са във °F – пазят се и те, и преводът в °C);
   • `prahove.csv` – прахове (дървесен прах, слама, брашно, памук, пластмаси, въглища), проба по проба,
-    от базата GESTIS-STAUB-EX (IFA/DGUV).
+    от базата GESTIS-STAUB-EX (IFA/DGUV);
+  • `literatura.csv` – стойности от книги и статии (масивна дървесина – Babrauskas, 2001), всяка със
+    страницата; маркерът ѝ е ключът на източника с мястото – `[[babrauskas-2001: табл. 5, с. 83]]`.
 Каталогът на източниците (книги, стандарти, бази) е `_shared/svoistva/iztochnitsi.json`. Нищо не се
 пише по памет: вещество, което го няма в таблиците, излиза с NOT_FOUND.
 
@@ -75,11 +77,22 @@ def _read(name):
 def stoinosti():
     """All rows of all tables; dust rows carry vid='прах', the rest vid='течност/газ'."""
     rows = []
+    # values from books first: a question about „дърво“ is usually about the solid material, not its dust
+    for r in _read("literatura.csv"):
+        r.update(vid="литература", kluch="lit:" + r["id"], ime_en="")
+        rows.append(r)
     for name in dict.fromkeys(s["tablitsa"] for s in katalog()["_shabloni"].values()):
         for r in _read(name):
             r["vid"] = "прах" if "zapalvane_oblak" in r else "течност/газ"
             rows.append(r)
     return rows
+
+
+def marker(r):
+    """The [[…]] marker that cites this row."""
+    if r["vid"] == "литература":
+        return f"[[{r['iztochnik']}: {r['mesto']}]]"
+    return f"[[{r['kluch']}]]"
 
 
 def norm(s):
@@ -106,6 +119,8 @@ def _izhodni_f(r, label):
 def formatirai(r):
     """The values of one row as Bulgarian text, empty values left out."""
     out = {}
+    if r["vid"] == "литература":
+        return {"stoinost": r["stoinost"], "usloviya": r["usloviya"]}
     if r["vid"] == "прах":
         if r["zapalvane_oblak"]:
             out["zapalvane_oblak"] = f"{chislo(r['zapalvane_oblak'])} °C" + (
@@ -267,6 +282,12 @@ def bez_iztochnik(text):
 # ---------- CLI ----------
 def pokazhi(r, extra=None):
     f = formatirai(r)
+    if r["vid"] == "литература":
+        src = iztochnik(r["iztochnik"], extra)
+        return "\n".join([f"{r['ime']} – {r['pokazatel']}: {r['stoinost']}",
+                          f"  Условия: {r['usloviya']}",
+                          f"  Позоваване в текста: ({src['kratko']}, {r['mesto']})   маркер в ЕПТЗ: {marker(r)}",
+                          f"  Литература: {src['palno']}"])
     src = iztochnik(r["kluch"], extra)
     head = f"{r['ime']} – {r['ime_en']}" + (f", CAS {r['cas']}" if r.get("cas") else "")
     lines = [head]
@@ -274,7 +295,7 @@ def pokazhi(r, extra=None):
         if k == "proba" and k not in f:
             continue
         lines.append(f"  {label}: {f.get(k, '—')}")
-    lines.append(f"  Позоваване в текста: ({src['kratko']})   маркер в ЕПТЗ: [[{r['kluch']}]]")
+    lines.append(f"  Позоваване в текста: ({src['kratko']})   маркер в ЕПТЗ: {marker(r)}")
     lines.append(f"  Литература: {src['palno']}")
     return "\n".join(lines)
 
@@ -304,7 +325,9 @@ def main():
             ap.error("кажи вещество, --spisak или --iztochnitsi")
         found = tarsi(a.ime, rows)
         if a.json:
-            print(json.dumps([{**r, "tekst": formatirai(r), "iztochnik": iztochnik(r["kluch"])} for r in found],
+            print(json.dumps([{**r, "tekst": formatirai(r), "marker": marker(r),
+                               "citat": iztochnik(r["iztochnik"] if r["vid"] == "литература" else r["kluch"])}
+                              for r in found],
                              ensure_ascii=False, indent=1))
         else:
             print("\n\n".join(pokazhi(r) for r in found))

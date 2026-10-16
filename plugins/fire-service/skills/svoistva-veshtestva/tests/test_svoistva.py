@@ -82,7 +82,7 @@ def test_lookup():
     r = run("--iztochnitsi")
     check(r.returncode == 0 and "chochev" in r.stdout and "винаги" in r.stdout, "CLI lists the source keys")
     j = json.loads(run("ацетон", "--json").stdout)
-    check(j[0]["iztochnik"]["kratko"] == "ICSC 0087", "--json carries the source")
+    check(j[0]["citat"]["kratko"] == "ICSC 0087" and j[0]["marker"] == "[[icsc:0087]]", "--json carries the source")
 
 
 def test_citiraj():
@@ -163,8 +163,31 @@ def test_masla_prahove():
     check(len(lit) == 4, "hand-typed CHRIS and GESTIS references are listed")
 
 
+def test_literatura():
+    print("стойностите от книги и статии")
+    rows = [r for r in s.stoinosti() if r["vid"] == "литература"]
+    k = s.katalog()["iztochnitsi"]
+    check(len(rows) >= 10, f"{len(rows)} rows")
+    for r in rows:
+        check(r["iztochnik"] in k, f"{r['id']}: source „{r['iztochnik']}“ is in the catalogue")
+        check(bool(r["mesto"]) and ";" not in r["mesto"] and re.search(r"с\. \d", r["mesto"]) is not None,
+              f"{r['id']}: page given, no „;“ („{r['mesto']}“)")
+        check(bool(r["stoinost"] and r["usloviya"] and r["pokazatel"]), f"{r['id']}: value, conditions, property")
+        t, lit, _ = s.citiraj("x " + s.marker(r) + ".")
+        check(t == f"x ({k[r['iztochnik']]['kratko']}, {r['mesto']}).", f"{r['id']}: its marker renders with the page")
+        check(any(k[r["iztochnik"]]["palno"].rstrip(";") in l for l in lit), f"{r['id']}: its source is listed")
+    found = s.tarsi("дърво")
+    check(found[0]["vid"] == "литература", "„дърво“ → solid wood first, not its dust")
+    check(not any(r["vid"] == "прах" for r in found), "„дърво“ does not return dust samples")
+    pin = {r["id"]: r for r in rows}
+    check(pin["darvo-01"]["stoinost"] == "около 250 °C" and "с. 83" in pin["darvo-01"]["mesto"], "darvo-01 equals Table 5")
+    check((pin["darvo-02"]["stoinost"], pin["darvo-03"]["stoinost"]) == ("300–310 °C", "350–365 °C"),
+          "hardwood/softwood equal Table 5")
+
+
 if __name__ == "__main__":
     test_data()
+    test_literatura()
     test_masla_prahove()
     test_lookup()
     test_citiraj()

@@ -1,12 +1,12 @@
 kluch,ime,sinonimi,ime_en,mediana_um,vlazhnost,zapalvane_oblak,zapalvane_metod,tleene_sloy,dgv,url,proveren
-gestis-staub:2010,дървесен прах – бук,дървесен прах;прах от дърво;бук;букова дървесина;дървесина;дърво,"Wood, beech",61,,490,G-G,310,,https://staubex.ifa.dguv.de/explokomp.aspx?nr=2010&lang=e,2026-10-16
-gestis-staub:2012,дървесен прах – бук,дървесен прах;прах от дърво;бук;букова дървесина;дървесина;дърво,"Wood, beech",170,,500,G-G,320,125,https://staubex.ifa.dguv.de/explokomp.aspx?nr=2012&lang=e,2026-10-16
-gestis-staub:2015,дървесно брашно – бук,дървесен прах;дървесно брашно;бук;дървесина;дърво,"Wood, beech (flour)",90,,490,G-G,310,60,https://staubex.ifa.dguv.de/explokomp.aspx?nr=2015&lang=e,2026-10-16
-gestis-staub:10373,дървесен прах – бор/смърч от силоз,дървесен прах;бор;смърч;иглолистна дървесина;дървесина;дърво,"Wood (pine/ spruce), from silo","550,3","33,9",410,BAM,340,60,https://staubex.ifa.dguv.de/explokomp.aspx?nr=10373&lang=e,2026-10-16
-gestis-staub:10375,дървесен прах – бор/смърч при рязане,дървесен прах;бор;смърч;иглолистна дървесина;дърводелски цех;дървесина;дърво,"Wood (pine/ spruce), sawing, dust deposits",618,"17,8",410,BAM,350,250,https://staubex.ifa.dguv.de/explokomp.aspx?nr=10375&lang=e,2026-10-16
-gestis-staub:26,дървесни стърготини и прах,стърготини;талаш;дървесен прах;дървесина;дърво,Wood (chips/dust),98,,410,G-G,310,,https://staubex.ifa.dguv.de/explokomp.aspx?nr=26&lang=e,2026-10-16
-gestis-staub:10597,прах от МДФ при шлайфане,МДФ;MDF;дървесен прах;плоскости;дървесина,mdf (Medium Density Fibreboard); wide belt sanding; from precipitator,"63,4","4,6",400,BAM,300,15,https://staubex.ifa.dguv.de/explokomp.aspx?nr=10597&lang=e,2026-10-16
-gestis-staub:815,целулоза (иглолистна и широколистна дървесина),целулоза;дървесина,"Cellulose (93 % softwood, 6 % hardwood)",14,,420,BAM,335,15,https://staubex.ifa.dguv.de/explokomp.aspx?nr=815&lang=e,2026-10-16
+gestis-staub:2010,дървесен прах – бук,дървесен прах;прах от дърво;бук;букова дървесина,"Wood, beech",61,,490,G-G,310,,https://staubex.ifa.dguv.de/explokomp.aspx?nr=2010&lang=e,2026-10-16
+gestis-staub:2012,дървесен прах – бук,дървесен прах;прах от дърво;бук;букова дървесина,"Wood, beech",170,,500,G-G,320,125,https://staubex.ifa.dguv.de/explokomp.aspx?nr=2012&lang=e,2026-10-16
+gestis-staub:2015,дървесно брашно – бук,дървесен прах;дървесно брашно;бук,"Wood, beech (flour)",90,,490,G-G,310,60,https://staubex.ifa.dguv.de/explokomp.aspx?nr=2015&lang=e,2026-10-16
+gestis-staub:10373,дървесен прах – бор/смърч от силоз,дървесен прах;бор;смърч;иглолистна дървесина,"Wood (pine/ spruce), from silo","550,3","33,9",410,BAM,340,60,https://staubex.ifa.dguv.de/explokomp.aspx?nr=10373&lang=e,2026-10-16
+gestis-staub:10375,дървесен прах – бор/смърч при рязане,дървесен прах;бор;смърч;иглолистна дървесина;дърводелски цех,"Wood (pine/ spruce), sawing, dust deposits",618,"17,8",410,BAM,350,250,https://staubex.ifa.dguv.de/explokomp.aspx?nr=10375&lang=e,2026-10-16
+gestis-staub:26,дървесни стърготини и прах,стърготини;талаш;дървесен прах,Wood (chips/dust),98,,410,G-G,310,,https://staubex.ifa.dguv.de/explokomp.aspx?nr=26&lang=e,2026-10-16
+gestis-staub:10597,прах от МДФ при шлайфане,МДФ;MDF;дървесен прах;плоскости,mdf (Medium Density Fibreboard); wide belt sanding; from precipitator,"63,4","4,6",400,BAM,300,15,https://staubex.ifa.dguv.de/explokomp.aspx?nr=10597&lang=e,2026-10-16
+gestis-staub:815,целулоза (иглолистна и широколистна дървесина),целулоза,"Cellulose (93 % softwood, 6 % hardwood)",14,,420,BAM,335,15,https://staubex.ifa.dguv.de/explokomp.aspx?nr=815&lang=e,2026-10-16
 gestis-staub:2213,слама,слама;сламен прах,Straw,200,,470,G-G,310,125,https://staubex.ifa.dguv.de/explokomp.aspx?nr=2213&lang=e,2026-10-16
 gestis-staub:2214,слама,слама;сламен прах,Straw,320,,510,G-G,340,,https://staubex.ifa.dguv.de/explokomp.aspx?nr=2214&lang=e,2026-10-16
 gestis-staub:2092,пшенично брашно,брашно;пшенично брашно;мелница,Wheat flour,57,,430,G-G,n.g.u.450,60,https://staubex.ifa.dguv.de/explokomp.aspx?nr=2092&lang=e,2026-10-16
