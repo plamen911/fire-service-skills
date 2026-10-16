@@ -28,7 +28,7 @@ KARTI = os.path.join(ROOT, "tools", "icsc_karti.csv")
 OUT = os.path.join(ROOT, "plugins", "fire-service", "shared", "svoistva", "stoinosti.csv")
 URL = "https://chemicalsafety.ilo.org/dyn/icsc/showcard.display?p_lang=en&p_card_id={id}&p_version=2"
 COLUMNS = ["kluch", "ime", "sinonimi", "ime_en", "cas", "sastoyanie", "plamna", "plamna_metod",
-           "samovazpl", "kgv", "vgv", "kipene", "otn_platnost_pari", "karta_versiya", "url", "proveren"]
+           "samovazpl", "kgv", "vgv", "kipene", "topene", "otn_platnost_pari", "karta_versiya", "url", "proveren"]
 MONTHS = {"January": "януари", "February": "февруари", "March": "март", "April": "април", "May": "май",
           "June": "юни", "July": "юли", "August": "август", "September": "септември",
           "October": "октомври", "November": "ноември", "December": "декември"}
@@ -77,12 +77,13 @@ def parse(card, text):
     lm = re.match(r"^(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)", lim)
     plamna, metod = temp(field(flat, "Flash point"))
     kip, _ = temp(field(flat, "Boiling point"))
+    top, _ = temp(field(flat, "Melting point"))
     sam, _ = temp(field(flat, "Auto-ignition temperature"))
     if not (title and ver):
         raise SystemExit(f"ICSC {card}: страницата не прилича на карта – провери адреса")
     return {"ime_en": title.group(1).strip(), "cas": cas.group(1) if cas else "",
             "plamna": plamna, "plamna_metod": metod, "samovazpl": sam,
-            "kgv": lm.group(1) if lm else "", "vgv": lm.group(2) if lm else "", "kipene": kip,
+            "kgv": lm.group(1) if lm else "", "vgv": lm.group(2) if lm else "", "kipene": kip, "topene": top,
             "otn_platnost_pari": re.sub(r"\s+", "", field(flat, "Relative vapour density (air = 1)")),
             "karta_versiya": f"{MONTHS[ver.group(1)]} {ver.group(2)} г.", "url": URL.format(id=card)}
 

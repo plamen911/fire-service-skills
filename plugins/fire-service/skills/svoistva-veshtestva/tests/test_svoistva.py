@@ -45,7 +45,7 @@ def test_data():
         check(r["sastoyanie"] in ("течност", "газ", "твърдо вещество"), f"{where}: state")
         for c in ("plamna", "samovazpl", "kgv", "vgv", "kipene"):
             check(not r[c] or num.match(r[c]) is not None, f"{where}: {c} „{r[c]}“ is a number or range")
-        check(bool(r["plamna"] or r["samovazpl"] or r["kgv"]), f"{where}: has at least one fire property")
+        check(bool(r["plamna"] or r["samovazpl"] or r["kgv"] or r.get("topene")), f"{where}: has at least one property")
     # pinned to the cards (ICSC, checked by hand against chemicalsafety.ilo.org)
     pin = {"icsc:1561": ("52", "з.т.", "254-285", "0.6", "6.5"), "icsc:1400": ("<-21", "", "~250", "1.3", "7.1"),
            "icsc:0087": ("-18", "з.т.", "465", "2.2", "13"), "icsc:0319": ("-104", "", "450", "2.1", "9.5")}
@@ -192,8 +192,22 @@ def test_literatura():
     check({r.get("iztochnik") for r in s.tarsi("олио")} >= {"korolchenko"}, "„олио“ → also Корольченко")
 
 
+def test_proveri():
+    print("проверката число ↔ източник")
+    check(s.proveri_chisla("Дизелът е с пламна температура 52 °C [[icsc:1561]].") == [], "right number passes")
+    check(len(s.proveri_chisla("Дизелът е с пламна температура 62 °C [[icsc:1561]].")) == 1, "wrong number caught")
+    check(s.proveri_chisla("Сламата тлее при 310 °C [[gestis-staub:2213]].") == [], "dust record checked")
+    check(s.proveri_chisla("Олиото – 321 °C [[chris:ovg]].") == [], "CHRIS °C checked")
+    check(s.proveri_chisla("Сеното тлее при 204 °C [[korolchenko: ч. II, с. 395]].") == [], "book page checked")
+    check(len(s.proveri_chisla("Сеното тлее при 214 °C [[korolchenko: ч. II, с. 395]].")) == 1, "wrong number on a page caught")
+    check(len(s.proveri_chisla("Сеното тлее при 204 °C [[korolchenko: ч. II, с. 396]].")) == 1, "wrong page caught")
+    check(s.proveri_chisla("Алуминият – 600 ÷ 660 °C [[chochev: прил. № 7, с. 223]].") == [], "no data for Чочев – not checked")
+    check(s.proveri_chisla("Огнището е в ъгъла [[simeonov]].") == [], "no number – nothing to check")
+
+
 if __name__ == "__main__":
     test_data()
+    test_proveri()
     test_literatura()
     test_masla_prahove()
     test_lookup()

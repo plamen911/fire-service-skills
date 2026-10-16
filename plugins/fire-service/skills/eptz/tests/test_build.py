@@ -2,6 +2,7 @@
 """Smoke tests for build_eptz_docx.py and build_smetka.py. Run from the skill folder:
     python3 tests/test_build.py
 """
+import glob
 import json
 import os
 import re
@@ -137,6 +138,25 @@ def test_literatura(tmp, mp):
     r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "build_eptz_docx.py"),
                         "--content", md, "--meta", mp, "--out", out], capture_output=True, text=True)
     check(r.returncode != 0 and "babrauskas" in (r.stderr + r.stdout), "unknown key stops the build and suggests the right one")
+
+    # a number that the cited place does not give stops the build
+    open(md, "w", encoding="utf-8").write(text.replace("52 °C", "62 °C", 1))
+    r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "build_eptz_docx.py"),
+                        "--content", md, "--meta", mp, "--out", out], capture_output=True, text=True)
+    check(r.returncode != 0 and "62" in (r.stderr + r.stdout), "a wrong number next to [[icsc:1561]] stops the build")
+
+    # every [[…]] in the reference files gives a number its source really has
+    sys.path.insert(0, os.path.join(SKILL, "_shared", "scripts"))
+    import svoistva  # noqa: E402
+    for f in sorted(glob.glob(os.path.join(SKILL, "references", "technical_reference", "*.md"))):
+        t = open(f, encoding="utf-8").read()
+        bad = svoistva.proveri_chisla(t)
+        check(not bad, f"{os.path.basename(f)}: its markers match their sources" + (f" {bad}" if bad else ""))
+        try:
+            svoistva.citiraj(t)
+            check(True, f"{os.path.basename(f)}: every marker is a known source")
+        except svoistva.Problem as e:
+            check(False, f"{os.path.basename(f)}: {e}")
 
     # a per-case source (ИЛБ) from meta.json
     meta = json.load(open(mp, encoding="utf-8"))

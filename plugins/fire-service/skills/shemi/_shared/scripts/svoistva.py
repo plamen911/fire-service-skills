@@ -48,6 +48,7 @@ HAND_RE = re.compile(r"ICSC (\d{4})|CHRIS ([A-Z]{3})\b|GESTIS-STAUB-EX, № (\d+
 
 LABELS = [("plamna", "Пламна температура"), ("samovazpl", "Температура на самовъзпламеняване"),
           ("granitsi", "Граници на взривяемост във въздух (КГВ–ВГВ)"), ("kipene", "Температура на кипене"),
+          ("topene", "Температура на топене"),
           ("otn_platnost_pari", "Относителна плътност на парите (въздух = 1)")]
 LABELS_PRAH = [("zapalvane_oblak", "Температура на запалване на облак прах"),
                ("tleene_sloy", "Температура на тлеене на слой прах 5 mm"),
@@ -150,6 +151,8 @@ def formatirai(r):
         out["granitsi"] = f"{chislo(r['kgv'])}–{chislo(r['vgv'])} % (об.)"
     if r["kipene"]:
         out["kipene"] = f"{chislo(r['kipene'])} °C"
+    if r.get("topene"):
+        out["topene"] = f"{chislo(r['topene'])} °C"
     if r["otn_platnost_pari"]:
         out["otn_platnost_pari"] = chislo(r["otn_platnost_pari"])
     return out
@@ -214,6 +217,79 @@ def _krai(lines):
 
 def _sravni(s):
     return re.sub(r"[\s„“”\"';.,]+", "", s).lower()
+
+
+# ---------- number ↔ source check ----------
+UNIT_NUM_RE = re.compile(r"(-?\d+(?:[.,]\d+)?)(?=\s*(?:–\s*-?\d+(?:[.,]\d+)?\s*)?(?:°\s*C|°С|°F|kW|kJ|MJ|g/m|μm|% ?\(об|об\. ?%))")
+RANGE_RE = re.compile(r"(-?\d+(?:[.,]\d+)?)\s*[–÷-]\s*(-?\d+(?:[.,]\d+)?)(?=\s*(?:°\s*C|°С|°F|kW|kJ|MJ|g/m|μm|%))")
+NUM_RE = re.compile(r"\d+(?:[.,]\d+)?")
+
+
+def _n(x):
+    return str(float(x.replace(",", ".").lstrip("-"))).rstrip("0").rstrip(".")
+
+
+def _chisla(text):
+    return {_n(x) for x in NUM_RE.findall(text or "")}
+
+
+def _stranitsi(mesto):
+    """('II', {235, 236}) from „ч. II, с. 235–236“; pages of „табл. 5“ are not pages."""
+    part = re.search(r"ч\.\s*(I+)", mesto or "")
+    pages = set()
+    for a, b in re.findall(r"с\.\s*(\d+)(?:\s*[–-]\s*(\d+))?", mesto or ""):
+        pages |= set(range(int(a), int(b or a) + 1))
+    for extra_page in re.findall(r"\bи\s+(\d{2,4})\b", mesto or ""):
+        pages.add(int(extra_page))
+    return (part.group(1) if part else ""), pages
+
+
+def danni_za(kluch, mesto, rows):
+    """The numbers the source gives at that place, or None when the plugin has no data for it."""
+    if kluch.split(":")[0] in ("icsc", "chris", "gestis-staub"):
+        r = next((x for x in rows if x["kluch"] == kluch), None)
+        if r is None:
+            return None
+        return _chisla(" ".join(v for k, v in r.items() if k not in ("kluch", "url", "proveren", "cas", "sinonimi",
+                                                                       "karta_versiya", "ime", "ime_en")))
+    part, pages = _stranitsi(mesto)
+    found = [r for r in rows if r.get("vid") == "литература" and r["iztochnik"] == kluch]
+    if not found:
+        return None
+    hit = [r for r in found if (lambda rp: (not part or rp[0] == part) and (not pages or rp[1] & pages))(_stranitsi(r["mesto"]))]
+    if not hit:
+        return set()
+    return set().union(*(_chisla(r["stoinost"] + " " + r["usloviya"]) for r in hit))
+
+
+def proveri_chisla(text, extra=None):
+    """Numbers with a unit in the clause before a [[…]] marker that the cited place does not give.
+    Sources without data in the plugin (Чочев, Симеонов, a per-case ИЛБ) are not checked."""
+    rows = stoinosti()
+    problems, start = [], 0
+    for m in MARKER_RE.finditer(text):
+        before = text[start:m.start()]
+        cut = max(before.rfind(". "), before.rfind("\n"), before.rfind("; "))
+        clause = before[cut + 1:] if cut >= 0 else before
+        start = m.end()
+        nums = {_n(x) for x in UNIT_NUM_RE.findall(clause)}
+        for a, b in RANGE_RE.findall(clause):
+            nums |= {_n(a), _n(b)}
+        if not nums:
+            continue
+        data, checked = set(), False
+        for item in m.group(1).split(";"):
+            im = ITEM_RE.match(item)
+            if not im or (extra and im.group(1) in extra):
+                continue
+            d = danni_za(im.group(1), im.group(2), rows)
+            if d is not None:
+                data |= d
+                checked = True
+        if checked and nums - data:
+            problems.append(f"„{clause.strip()[-90:]}“ → [[{m.group(1)}]]: "
+                            f"{', '.join(sorted(nums - data))} го няма на посоченото място")
+    return problems
 
 
 def citiraj(text, extra=None, dop_literatura=None):

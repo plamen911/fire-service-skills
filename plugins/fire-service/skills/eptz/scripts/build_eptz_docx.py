@@ -34,7 +34,7 @@ from docx.oxml.ns import qn
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_shared", "scripts"))
 from docx_common import report, typo, typo_all  # noqa: E402  (the common typography rules and the final check)
-from svoistva import Problem, bez_iztochnik, citiraj  # noqa: E402  (the [[…]] references and the literature list)
+from svoistva import Problem, bez_iztochnik, citiraj, proveri_chisla  # noqa: E402  (the [[…]] references and the literature list)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_TEMPLATE = os.path.join(HERE, "..", "assets", "eptz_template.docx")
@@ -168,6 +168,9 @@ def build(content, meta, out, final, template):
     # [[ключ]] → „(Кратко, място)“; литературата – задължителните + цитираните (_shared/svoistva/)
     for s_ in bez_iztochnik(re.sub(r"<!--.*?-->|^#+ .*$", "", content, flags=re.S | re.M)):
         print(f"⚠ число без позоваване – ако не е от материалите по делото, сложи [[ключ]]: {s_[:120]}")
+    neverni = proveri_chisla(content, meta.get("dop_iztochnitsi"))
+    if neverni:
+        raise SystemExit("Източници – числото не е на посоченото място:\n  " + "\n  ".join(neverni))
     try:
         content, literatura, _ = citiraj(content, meta.get("dop_iztochnitsi"), meta.get("literatura"))
     except Problem as e:
