@@ -180,7 +180,7 @@ def test_literatura():
     check(found[0]["vid"] == "литература", "„дърво“ → solid wood first, not its dust")
     check(not any(r["vid"] == "прах" for r in found), "„дърво“ does not return dust samples")
     pin = {r["id"]: r for r in rows}
-    check(pin["darvo-01"]["stoinost"] == "около 250 °C" and "с. 83" in pin["darvo-01"]["mesto"], "darvo-01 equals Table 5")
+    check(pin["darvo-01"]["stoinost"] == "около 250 °C" and "с. 184" in pin["darvo-01"]["mesto"], "darvo-01 equals Table 5")
     check((pin["darvo-02"]["stoinost"], pin["darvo-03"]["stoinost"]) == ("300–310 °C", "350–365 °C"),
           "hardwood/softwood equal Table 5")
 

@@ -43,10 +43,15 @@
       "palno": "„Справочник за пожарната опасност на веществата и материалите“, Държавно издателство „Техника“, 1980 г.;",
       "v_skila": "няма го – само ако експертът е взел стойността от книгата, със страницата"
     },
+    "babrauskas-2002": {
+      "kratko": "Babrauskas, 2002",
+      "palno": "Babrauskas, V., „Ignition of Wood: A Review of the State of the Art“, Journal of Fire Protection Engineering, Vol. 12, No. 3, pp. 163–189, 2002;",
+      "v_skila": "_shared/svoistva/literatura.csv – стойностите за масивна дървесина, със страницата в списанието; позоваването е с мястото: [[babrauskas-2002: табл. 5, с. 184]]"
+    },
     "babrauskas-2001": {
       "kratko": "Babrauskas, 2001",
       "palno": "Babrauskas, V., „Ignition of Wood: A Review of the State of the Art“, pp. 71–88 in Interflam 2001, Interscience Communications Ltd., London, 2001;",
-      "v_skila": "_shared/svoistva/literatura.csv – стойностите за масивна дървесина, със страницата; позоваването е с мястото: [[babrauskas-2001: табл. 5, с. 83]]"
+      "v_skila": "същият обзор като babrauskas-2002, ранната версия в сборника на Interflam 2001 – цитира се, само ако експертът ползва нея"
     },
     "metodika-iz2749": {
       "kratko": "Методика към Указания рег. № Iз-2749/2010",

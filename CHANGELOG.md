@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.12.1 – 2026-10-16
+
+- **Масивната дървесина се цитира по рецензираната версия на обзора** – Babrauskas, „Ignition of
+  Wood: A Review of the State of the Art“, Journal of Fire Protection Engineering, Vol. 12, No. 3,
+  pp. 163–189 (2002), със страниците от списанието (`[[babrauskas-2002: табл. 5, с. 184]]`).
+  Стойностите са същите като в сборника на Interflam 2001, който остава в каталога като
+  `babrauskas-2001`.
+
 ## 2.12.0 – 2026-10-16
 
 - **`svoistva-veshtestva`: масивната дървесина** – стойностите от обзора на Babrauskas, „Ignition of
