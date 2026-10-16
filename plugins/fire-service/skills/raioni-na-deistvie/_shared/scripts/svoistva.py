@@ -307,6 +307,7 @@ def chochev_prilozheniya(text=None):
     if not text:
         return None
     text = re.sub(r"(?<=\d) (?=\d{3}\b)", "", text)  # „1 000“ → „1000“
+    text = re.sub(r"^>.*$", "", text, flags=re.M)  # notes under a table are not the book's numbers
     out = {}
     for m in re.finditer(r"^## Прил\. № (\d+)[^\n]*\n(.*?)(?=^## |\Z)", text, re.S | re.M):
         out[m.group(1)] = _chisla(m.group(2))
@@ -384,6 +385,12 @@ def proveri_chisla(text, extra=None):
         for item in m.group(1).split(";"):
             im = ITEM_RE.match(item)
             if not im:
+                continue
+            gr = next((g for g in katalog()["iztochnitsi"].get(im.group(1), {}).get("greshki", [])
+                       if g["duma"] in clause.lower()), None)
+            if gr:
+                problems.append(f"„{clause.strip()[-90:]}“ → [[{m.group(1)}]]: {gr['belezhka']} – не се цитира "
+                                f"оттам; вярната стойност е {gr['pravilno']}")
                 continue
             if extra and im.group(1) in extra:
                 # a per-case source (ИЛБ) is checked against the values copied from it, if given

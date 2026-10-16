@@ -228,6 +228,16 @@ def test_proveri():
         s._chochev.update(loaded=False, text=None)
 
 
+def test_greshki():
+    print("известните грешки в книгите")
+    p = s.proveri_chisla("оловото се топи при 232 °C [[chochev: прил. № 7, с. 223]]")
+    check(len(p) == 1 and "327,5 °C" in p[0], "Чочев за оловото – спира и дава вярната стойност")
+    check(s.proveri_chisla("оловото се топи при 327,5 °C [[icsc:0052]]") == [], "ICSC 0052 за оловото")
+    t = "## Прил. № 7 – Температура на топене – с. 223\n\n| Олово | 232 ¹ |\n\n> ¹ Грешка: 327,5 °C (ICSC 0052).\n"
+    nums = s.chochev_prilozheniya(t)["7"]
+    check("232" in nums and "327.5" not in nums, "a note under the table is not the book's number")
+
+
 def test_vreme():
     print("времето (METAR) – без мрежа")
     import datetime
@@ -260,6 +270,7 @@ def test_vreme():
 
 
 if __name__ == "__main__":
+    test_greshki()
     test_vreme()
     test_data()
     test_proveri()
