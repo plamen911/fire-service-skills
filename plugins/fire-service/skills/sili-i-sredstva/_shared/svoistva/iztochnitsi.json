@@ -20,6 +20,12 @@
       "v_skila": "_shared/svoistva/prahove.csv – праховете (проба по проба); свалени с tools/gestis_staub_fetch.py"
     }
   },
+  "_metar": {
+    "kratko": "METAR {icao}",
+    "palno": "Метеорологични съобщения (METAR) на летище {ime} ({icao}), архив на Iowa Environmental Mesonet, Iowa State University, https://mesonet.agron.iastate.edu/request/download.phtml?network=BG__ASOS;",
+    "mesto_v_teksta": "\\d{2}\\.\\d{2}\\.\\d{4}(?:\\s*[–-]\\s*\\d{2}\\.\\d{2}\\.\\d{4})?",
+    "v_skila": "_shared/scripts/vreme.py – времето по часове от съобщенията на летището; ключът е metar:ICAO, мястото – датата и часовете: [[metar:LBPL: 04.08.2026, 16:00–19:00 ч.]]; скриптът сверява температурата и вятъра с архива"
+  },
   "iztochnitsi": {
     "simeonov": {
       "kratko": "Симеонов, 2023",

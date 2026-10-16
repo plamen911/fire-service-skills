@@ -42,7 +42,7 @@ DATA = os.path.join(HERE, "..", "svoistva")
 STOINOSTI = os.path.join(DATA, "stoinosti.csv")
 KATALOG = os.path.join(DATA, "iztochnitsi.json")
 MARKER_RE = re.compile(r"\s*\[\[([^\[\]]*)\]\]")
-KEY = r"icsc:\d{4}|chris:[a-z]{3}|gestis-staub:\d+|[a-z0-9][a-z0-9-]*"
+KEY = r"icsc:\d{4}|chris:[a-z]{3}|gestis-staub:\d+|metar:[A-Za-z]{4}|[a-z0-9][a-z0-9-]*"
 ITEM_RE = re.compile(r"^\s*(" + KEY + r")\s*(?:[:,]\s*(.+?))?\s*$")
 # a reference typed by hand instead of a marker
 HAND_RE = re.compile(r"ICSC (\d{4})|CHRIS ([A-Z]{3})\b|GESTIS-STAUB-EX, № (\d+)")
@@ -196,6 +196,14 @@ def iztochnik(kluch, extra=None, rows=None):
     if kluch in k["iztochnitsi"]:
         return k["iztochnitsi"][kluch]
     prefix = kluch.split(":")[0]
+    if prefix == "metar":
+        sys.path.insert(0, HERE)
+        import vreme
+        icao = kluch.split(":", 1)[1].upper() if ":" in kluch else ""
+        if icao not in vreme.STANTSII:
+            raise Problem(f"UNKNOWN_SOURCE: {kluch} – летището не е в списъка ({', '.join(vreme.STANTSII)})")
+        d = {"icao": icao, "ime": vreme.STANTSII[icao][0]}
+        return {"kratko": k["_metar"]["kratko"].format(**d), "palno": k["_metar"]["palno"].format(**d)}
     if ":" in kluch and prefix in k["_shabloni"]:
         rows = rows if rows is not None else stoinosti()
         r = next((x for x in rows if x["kluch"] == kluch), None)
@@ -218,7 +226,8 @@ def v_teksta(kluch, mesto, extra=None):
         return ""
     if extra and kluch in extra:
         return mesto
-    pat = katalog()["iztochnitsi"].get(kluch, {}).get("mesto_v_teksta")
+    k = katalog()
+    pat = (k["_metar"] if kluch.split(":")[0] == "metar" else k["iztochnitsi"].get(kluch, {})).get("mesto_v_teksta")
     m = re.search(pat, mesto) if pat else None
     return m.group(0) if m else ""
 
@@ -304,6 +313,26 @@ def chochev_prilozheniya(text=None):
     return out
 
 
+def _metar_chisla(icao, mesto):
+    """The temperatures, winds and humidities the airport reported in the window of the place
+    („04.08.2026, 16:00–19:00 ч.“); None offline – then the weather is not checked."""
+    if os.environ.get("FIRE_SERVICE_OFFLINE") or os.environ.get("FIRE_SERVICE_NO_KEY"):
+        return None
+    sys.path.insert(0, HERE)
+    import vreme
+    dni, ot, do = vreme.ot_mesto(mesto)
+    if not dni or icao.upper() not in vreme.STANTSII:
+        return None
+    out = set()
+    try:
+        for den in dni:
+            obs, _ = vreme.svali(icao.upper(), den)
+            out |= vreme.chisla(vreme.prozorets(obs, ot, do) if len(dni) == 1 else obs)
+    except Exception:  # noqa: BLE001 – no network: the check is skipped, never fails
+        return None
+    return out or None
+
+
 def danni_za(kluch, mesto, rows):
     """The numbers the source gives at that place, or None when the plugin has no data for it."""
     if kluch == "chochev":
@@ -312,6 +341,8 @@ def danni_za(kluch, mesto, rows):
         if not tables or pril.group(1) not in tables:
             return None
         return tables[pril.group(1)]
+    if kluch.split(":")[0] == "metar":
+        return _metar_chisla(kluch.split(":", 1)[1], mesto)
     if kluch.split(":")[0] in ("icsc", "chris", "gestis-staub"):
         r = next((x for x in rows if x["kluch"] == kluch), None)
         if r is None:
@@ -341,13 +372,14 @@ def proveri_chisla(text, extra=None):
         start = m.end()
         # only the value right before the marker is checked – the marker stands right after the
         # number it proves; other numbers in the clause may come from the case or a calculation
-        last = None
-        for mm in re.finditer(r"(-?\d+(?:[.,]\d+)?)(?:\s*[–÷-]\s*(-?\d+(?:[.,]\d+)?))?\s*"
-                              r"(?:°\s*C|°С|°F|kW|kJ|MJ|g/m|μm|% ?\(об|об\. ?%)", clause):
-            last = mm
-        if last is None:
+        found = list(re.finditer(r"(-?\d+(?:[.,]\d+)?)(?:\s*[–÷-]\s*(-?\d+(?:[.,]\d+)?))?\s*"
+                                 r"(?:°\s*C|°С|°F|kW|kJ|MJ|g/m|μm|m/s|% ?\(об|об\. ?%)", clause))
+        if not found:
             continue
-        nums = {_n(x) for x in last.groups() if x}
+        # a weather clause is all from the airport – every value in it is checked
+        items = [ITEM_RE.match(i) for i in m.group(1).split(";")]
+        vreme_samo = all(i and i.group(1).startswith("metar:") for i in items)
+        nums = {_n(x) for mm in (found if vreme_samo else found[-1:]) for x in mm.groups() if x}
         data, checked = set(), False
         for item in m.group(1).split(";"):
             im = ITEM_RE.match(item)

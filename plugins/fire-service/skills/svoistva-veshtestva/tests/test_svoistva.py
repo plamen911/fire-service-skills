@@ -228,7 +228,39 @@ def test_proveri():
         s._chochev.update(loaded=False, text=None)
 
 
+def test_vreme():
+    print("времето (METAR) – без мрежа")
+    import datetime
+    import vreme
+    os.environ["FIRE_SERVICE_NO_KEY"] = "1"
+    d = vreme.razchiti("LBPL 041300Z 27002KT 9999 FEW070 35/13 Q1015 RMK T03540132")
+    check((d["temp"], d["orosyavane"], d["vyatar_ms"], d["vyatar_posoka"]) == (35.4, 13.2, 1.0, "западен"),
+          "temperature from the RMK group, wind in m/s, direction")
+    check(d["oblachnost"] == ["незначителна на 2100 m"] and d["vlazhnost"] == 26, "clouds in m, relative humidity")
+    d = vreme.razchiti("LBSF 171500Z 24015G28KT 4000 -TSRA BKN040CB 22/18 Q1009")
+    check(d["porivi_ms"] == 14.4 and "слаб гръмотевична буря с дъжд" in d["yavleniya"]
+          and d["oblachnost"] == ["значителна на 1200 m (купесто-дъждовна)"], "gusts, thunderstorm, CB")
+    check(vreme.razchiti("LBPL 040400Z 00000KT CAVOK 16/12 Q1018")["vyatar_posoka"] == "тихо", "calm")
+    dni, ot, do = vreme.ot_mesto("18.07.2025–21.07.2025")
+    check(len(dni) == 4 and dni[0] == datetime.date(2025, 7, 18) and ot is None, "a range of days")
+    dni, ot, do = vreme.ot_mesto("04.08.2026, 16:00–19:00 ч.")
+    check((dni, ot, do) == ([datetime.date(2026, 8, 4)], "16:00", "19:00"), "a day with hours")
+    check(vreme.nay_blizka(43.42, 24.61)[0] == "LBPL", "Плевен → Долна Митрополия")
+    t, lit, _ = s.citiraj("при 34–36 °C и вятър 1 m/s [[metar:LBPL: 04.08.2026, 16:00–19:00 ч.]].")
+    check(t == "при 34–36 °C и вятър 1 m/s (METAR LBPL, 04.08.2026).", "marker renders with the date")
+    check(any("летище Долна Митрополия (LBPL)" in l and "mesonet" in l for l in lit), "the airport is listed")
+    check(s.proveri_chisla("вятър 9 m/s [[metar:LBPL: 04.08.2026]]") == [], "offline – the weather is not checked")
+    try:
+        s.citiraj("x [[metar:XXXX: 04.08.2026]]")
+        check(False, "unknown airport stops")
+    except s.Problem as e:
+        check("UNKNOWN_SOURCE" in str(e), "unknown airport stops")
+    obs = [{**vreme.razchiti("LBPL 221000Z 24010KT 9999 SKC 33/15 Q1008"), "chas": "11:00"}]
+    check({"33", "5", "5.1"} <= vreme.chisla(obs), "numbers a text may cite")
+
+
 if __name__ == "__main__":
+    test_vreme()
     test_data()
     test_proveri()
     test_literatura()
