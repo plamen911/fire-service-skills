@@ -205,6 +205,22 @@ def test_proveri():
     check(len(s.proveri_chisla("Сеното тлее при 204 °C [[korolchenko: ч. II, с. 396]].")) == 1, "wrong page caught")
     check(s.proveri_chisla("Алуминият – 600 ÷ 660 °C [[chochev: прил. № 7, с. 223]].") == [], "no data for Чочев – not checked")
     check(s.proveri_chisla("Огнището е в ъгъла [[simeonov]].") == [], "no number – nothing to check")
+    ilb = {"ilb-r": {"kratko": "ИЛБ на „Р 650“, 2024", "palno": "ИЛБ;", "stoinosti": "пламна температура 23 °C; самовъзпламеняване 245 °C"}}
+    check(s.proveri_chisla("Разредителят – 23 °C [[ilb-r: раздел 9]].", ilb) == [], "ИЛБ: value from its section 9 passes")
+    check(len(s.proveri_chisla("Разредителят – 32 °C [[ilb-r: раздел 9]].", ilb)) == 1, "ИЛБ: other value caught")
+    ilb["ilb-r"].pop("stoinosti")
+    check(s.proveri_chisla("Разредителят – 32 °C [[ilb-r: раздел 9]].", ilb) == [], "ИЛБ without stoinosti – not checked")
+    # Чочев – with the tables (offline sample; live they come from the normative base through n8n)
+    sample = ("## Прил. № 5 – Температура на пожара – с. 222\n| Дървесина в помещение | 100 | 1 000 |\n"
+              "## Прил. № 7 – Температура на топене – с. 223\n| Алуминий | 600 ÷ 660 |\n| Олово | 232 |\n")
+    s._chochev.update(loaded=True, text=sample)
+    try:
+        check(s.proveri_chisla("Алуминият – 600 ÷ 660 °C [[chochev: прил. № 7, с. 223]].") == [], "Чочев: right value passes")
+        check(len(s.proveri_chisla("Оловото – 327 °C [[chochev: прил. № 7, с. 223]].")) == 1, "Чочев: value not in the appendix caught")
+        check(s.proveri_chisla("До 1 000 °C [[chochev: прил. № 5, с. 222]].") == [], "Чочев: „1 000“ read as 1000")
+        check(s.proveri_chisla("До 900 °C [[chochev: прил. № 9]].") == [], "Чочев: appendix without a table – not checked")
+    finally:
+        s._chochev.update(loaded=False, text=None)
 
 
 if __name__ == "__main__":

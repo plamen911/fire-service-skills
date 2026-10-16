@@ -262,8 +262,56 @@ def _stranitsi(mesto):
     return (part.group(1) if part else ""), places
 
 
+CHOCHEV_FILE = "Ogneborets_Reference_Chochev"
+_chochev = {"loaded": False, "text": None}
+
+
+def _chochev_tekst():
+    """The Чочев tables from the normative base (n8n, personal key), cached for a day; None without
+    a key or a network – then numbers cited from Чочев are not checked."""
+    if _chochev["loaded"]:
+        return _chochev["text"]
+    _chochev["loaded"] = True
+    if os.environ.get("FIRE_SERVICE_NO_KEY"):
+        return None
+    import tempfile
+    import time
+    cache = os.path.join(tempfile.gettempdir(), "fire-service-chochev.md")
+    try:
+        if os.path.exists(cache) and time.time() - os.path.getmtime(cache) < 86400:
+            _chochev["text"] = open(cache, encoding="utf-8").read()
+            return _chochev["text"]
+        sys.path.insert(0, HERE)
+        import api_config
+        files = api_config.post("regs_url", {"action": "list"})["files"]
+        f = next(x for x in files if CHOCHEV_FILE in (x.get("path") or "") and x["path"].endswith(".md"))
+        _chochev["text"] = api_config.post("regs_url", {"action": "download", "id": f["id"]})["content"]
+        open(cache, "w", encoding="utf-8").write(_chochev["text"])
+    except Exception:  # noqa: BLE001 – no key, no network, no file: the check is skipped, never fails
+        _chochev["text"] = None
+    return _chochev["text"]
+
+
+def chochev_prilozheniya(text=None):
+    """{appendix number: the numbers in its table} from the Чочев file („## Прил. № N – … – с. X“)."""
+    text = text if text is not None else _chochev_tekst()
+    if not text:
+        return None
+    text = re.sub(r"(?<=\d) (?=\d{3}\b)", "", text)  # „1 000“ → „1000“
+    out = {}
+    for m in re.finditer(r"^## Прил\. № (\d+)[^\n]*\n(.*?)(?=^## |\Z)", text, re.S | re.M):
+        out[m.group(1)] = _chisla(m.group(2))
+    return out
+
+
 def danni_za(kluch, mesto, rows):
     """The numbers the source gives at that place, or None when the plugin has no data for it."""
+    if kluch == "chochev":
+        pril = re.search(r"прил\.\s*№\s*(\d+)", mesto or "")
+        tables = chochev_prilozheniya() if pril else None
+        if not tables or pril.group(1) not in tables:
+            return None
+        return tables[pril.group(1)]
     if kluch.split(":")[0] in ("icsc", "chris", "gestis-staub"):
         r = next((x for x in rows if x["kluch"] == kluch), None)
         if r is None:
@@ -289,6 +337,7 @@ def proveri_chisla(text, extra=None):
         before = text[start:m.start()]
         cut = max(before.rfind(". "), before.rfind("\n"), before.rfind("; "))
         clause = before[cut + 1:] if cut >= 0 else before
+        clause = re.sub(r"(?<=\d)[ \u00a0\u202f](?=\d{3}\b)", "", clause)  # „1 000“ → „1000“
         start = m.end()
         # only the value right before the marker is checked – the marker stands right after the
         # number it proves; other numbers in the clause may come from the case or a calculation
@@ -302,9 +351,13 @@ def proveri_chisla(text, extra=None):
         data, checked = set(), False
         for item in m.group(1).split(";"):
             im = ITEM_RE.match(item)
-            if not im or (extra and im.group(1) in extra):
+            if not im:
                 continue
-            d = danni_za(im.group(1), im.group(2), rows)
+            if extra and im.group(1) in extra:
+                # a per-case source (ИЛБ) is checked against the values copied from it, if given
+                d = _chisla(extra[im.group(1)].get("stoinosti")) if extra[im.group(1)].get("stoinosti") else None
+            else:
+                d = danni_za(im.group(1), im.group(2), rows)
             if d is not None:
                 data |= d
                 checked = True
