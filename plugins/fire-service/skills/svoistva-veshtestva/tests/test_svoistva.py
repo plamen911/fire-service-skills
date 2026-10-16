@@ -88,7 +88,9 @@ def test_lookup():
 def test_citiraj():
     print("позоваванията")
     t, lit, used = s.citiraj("А е 52 °C [[icsc:1561]]. Б [[chochev: прил. № 7, с. 223]], пак [[icsc:1561]].")
-    check(t == "А е 52 °C (ICSC 1561). Б (Чочев, 2003, прил. № 7, с. 223), пак (ICSC 1561).", "markers rendered")
+    check(t == "А е 52 °C (ICSC 1561). Б (Чочев, 2003, прил. № 7), пак (ICSC 1561).", "markers rendered, no page in the text")
+    t, _, _ = s.citiraj("x [[korolchenko: ч. II, с. 395; korolchenko: ч. I, с. 538]].")
+    check(t == "x (Корольченко, 2004).", "same source twice in one marker → once, author and year only")
     check(len(lit) == 4 and "Симеонов" in lit[0] and "ICSC 1561" in lit[2] and "Чочев" in lit[3],
           "mandatory first, then cited in order, each once")
     check(lit[-1].endswith(".") and all(x.endswith(";") for x in lit[:-1]), "punctuation of the list")
@@ -174,7 +176,7 @@ def test_literatura():
               f"{r['id']}: page given, no „;“ („{r['mesto']}“)")
         check(bool(r["stoinost"] and r["usloviya"] and r["pokazatel"]), f"{r['id']}: value, conditions, property")
         t, lit, _ = s.citiraj("x " + s.marker(r) + ".")
-        check(t == f"x ({k[r['iztochnik']]['kratko']}, {r['mesto']}).", f"{r['id']}: its marker renders with the page")
+        check(t == f"x ({k[r['iztochnik']]['kratko']}).", f"{r['id']}: its marker renders as author and year")
         check(any(k[r["iztochnik"]]["palno"].rstrip(";") in l for l in lit), f"{r['id']}: its source is listed")
     found = s.tarsi("дърво")
     check(found[0]["vid"] == "литература", "„дърво“ → solid wood first, not its dust")

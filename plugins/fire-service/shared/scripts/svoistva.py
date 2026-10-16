@@ -24,7 +24,8 @@ svoistva.py — пожароопасните свойства на вещест�
 
 Позоваване в текста на документ: маркер `[[ключ]]` или `[[ключ: място]]` след числото, напр.
 „52 °C [[icsc:1561]]“, „600 ÷ 660 °C [[chochev: прил. № 7, с. 223]]“, няколко – с „;“:
-`[[icsc:1561; simeonov]]`. `citiraj()` ги сменя с „(ICSC 1561)“, „(Чочев, 2003, прил. № 7, с. 223)“
+`[[icsc:1561; simeonov]]`. `citiraj()` ги сменя с „(ICSC 1561)“, „(Чочев, 2003, прил. № 7)“ – в текста
+само автор и година (при Чочев и приложението); страницата остава в маркера за проверката
 и връща редовете на „Използвана литература“ – винаги задължителните, после цитираните по реда
 на първото позоваване.
 """
@@ -208,6 +209,20 @@ def iztochnik(kluch, extra=None, rows=None):
     raise Problem(f"UNKNOWN_SOURCE: няма източник „{kluch}“" + (f" – може би {', '.join(close)}?" if close else ""))
 
 
+def v_teksta(kluch, mesto, extra=None):
+    """The part of the place that the document shows. The page or section stays in the marker – the
+    check and the chat use it – but the text shows only the author and year; a source may keep a
+    short part (Чочев – the appendix) through „mesto_v_teksta“ (a regex) in the catalogue.
+    A per-case source (ИЛБ) shows its place as written."""
+    if not mesto:
+        return ""
+    if extra and kluch in extra:
+        return mesto
+    pat = katalog()["iztochnitsi"].get(kluch, {}).get("mesto_v_teksta")
+    m = re.search(pat, mesto) if pat else None
+    return m.group(0) if m else ""
+
+
 def _krai(lines):
     """';' after every line, '.' after the last one."""
     out = [l.rstrip().rstrip(";").rstrip() for l in lines]
@@ -318,7 +333,9 @@ def citiraj(text, extra=None, dop_literatura=None):
                 continue
             if kluch not in used:
                 used.append(kluch)
-            parts.append(src["kratko"] + (f", {mesto}" if mesto else ""))
+            shown = src["kratko"] + (f", {v_teksta(kluch, mesto, extra)}" if v_teksta(kluch, mesto, extra) else "")
+            if shown not in parts:
+                parts.append(shown)
         return f" ({'; '.join(parts)})" if parts else ""
 
     out = MARKER_RE.sub(sub, text)
@@ -365,7 +382,8 @@ def pokazhi(r, extra=None):
         src = iztochnik(r["iztochnik"], extra)
         return "\n".join([f"{r['ime']} – {r['pokazatel']}: {r['stoinost']}",
                           f"  Условия: {r['usloviya']}",
-                          f"  Позоваване в текста: ({src['kratko']}, {r['mesto']})   маркер в ЕПТЗ: {marker(r)}",
+                          f"  Позоваване в текста: ({src['kratko']})   място (за проверка): {r['mesto']}",
+                          f"  Маркер в ЕПТЗ: {marker(r)}",
                           f"  Литература: {src['palno']}"])
     src = iztochnik(r["kluch"], extra)
     head = f"{r['ime']} – {r['ime_en']}" + (f", CAS {r['cas']}" if r.get("cas") else "")

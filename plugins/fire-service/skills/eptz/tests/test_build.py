@@ -123,7 +123,7 @@ def test_literatura(tmp, mp):
     build(md, mp, out)
     t = doc_text(out)
     check("52 °C (ICSC 1561)" in t, "[[icsc:1561]] → (ICSC 1561)")
-    check("(Чочев, 2003, прил. № 7, с. 223)" in t, "[[chochev: …]] → (Чочев, 2003, …)")
+    check("(Чочев, 2003, прил. № 7)" in t and "с. 223" not in t, "[[chochev: …]] → (Чочев, 2003, прил. № 7), no page in the text")
     check("[[" not in t, "no marker left")
     lit = literatura(out)
     check(len(lit) == 5, f"literature: 2 mandatory + 3 cited, each once (got {len(lit)})")
