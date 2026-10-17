@@ -185,7 +185,7 @@ def compute(d):
 
 
 def fill(d, xlsx_out):
-    wb = openpyxl.load_workbook(TEMPLATE)
+    wb = openpyxl.load_workbook(TEMPLATE, rich_text=True)  # A2 – шапката: три реда с различен размер
     ws = wb.active
     dots = lambda v, fallback: v if v else fallback
     title = (d.get("expert_title") or DEFAULT_TITLE).strip()
