@@ -10,8 +10,7 @@ pregled.py — механичната част от независимия пр�
     python3 scripts/pregled.py --content report.md --meta meta.json \
         [--vaprosi vaprosi.json] [--materiali case_ingest.md …]
 
---vaprosi   JSON списък с въпросите от постановлението (напр. "vaprosi" от скила
-            vhodyashti-dokumenti) – сверява се дали раздел II ги дава дословно и дали всеки има отговор.
+--vaprosi   JSON списък с въпросите от постановлението – сверява се дали раздел II ги дава дословно и дали всеки има отговор.
 --materiali текстът на материалите (case_ingest.md от ingest_case_folder.py, или файл с
             разчетеното) – датите и часовете в заключението трябва да ги има там или в meta.json.
 

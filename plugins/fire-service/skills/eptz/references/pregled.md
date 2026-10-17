@@ -11,8 +11,7 @@
    python3 scripts/pregled.py --content <report.md> --meta meta.json \
      [--vaprosi vaprosi.json] [--materiali case_ingest.md]
    ```
-   `vaprosi.json` – въпросите от постановлението (списък; ако постановлението е минало през скила
-   `vhodyashti-dokumenti`, те са там). `case_ingest.md` – материалите от Фаза 0 (или файл с
+   `vaprosi.json` – въпросите от постановлението (JSON списък, дословно). `case_ingest.md` – материалите от Фаза 0 (или файл с
    разчетеното от тях). Находките в `greshki` се поправят веднага и документът се изгражда наново;
    `za_proverka` минават в смисловия преглед.
 2. Смисловата част – от отделен проверяващ:
