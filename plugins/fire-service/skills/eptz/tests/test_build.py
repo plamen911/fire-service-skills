@@ -99,7 +99,7 @@ def test_eptz():
     t_no = doc_text(out)
     check("Охридски“ № 4." in t_no and "№4" not in t_no, "№ followed by a space")
     check("—" not in t_no and " - " not in t_no, "only en dash as a dash")
-    test_literatura(tmp, mp)
+    check_literatura(tmp, mp)
 
 
 def literatura(path):
@@ -109,7 +109,7 @@ def literatura(path):
             and p.style.name.replace(" ", "").lower() in ("bodytextindent3",)]
 
 
-def test_literatura(tmp, mp):
+def check_literatura(tmp, mp):
     print("позоваванията [[…]] и литературата")
     src = open(FIXTURE, encoding="utf-8").read()
     text = src.replace("### Отговор на въпрос № 1:\n",
