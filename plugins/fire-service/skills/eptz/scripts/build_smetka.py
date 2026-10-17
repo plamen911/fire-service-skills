@@ -57,6 +57,9 @@ from docx_common import typo  # noqa: E402  (the common typography rules)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, "..", "assets", "smetka_template.xlsx")
+# шапката – картина на шапката от бланките .docx (един и същ вид във всички документи;
+# Excel няма разредка и сгъстяване на буквите, затова не е текст)
+LETTERHEAD = os.path.join(HERE, "..", "assets", "letterhead.png")
 
 RATE = 0.035 * 620.2          # E11 – the same formula stands in the template; the test compares the two
 NUMBERS = ("pages", "copies", "hours", "a4_bw", "a4_color", "a3_bw", "hours_weekend", "hours_holiday", "complex_addon")
@@ -184,9 +187,27 @@ def compute(d):
     return round(labour + overhead + cons + addons, 2)
 
 
+def add_letterhead(ws):
+    """The letterhead picture in row 2, 509 pt wide like the .docx letterhead, centred on columns A–F."""
+    from openpyxl.drawing.image import Image
+    from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor
+    from openpyxl.drawing.xdr import XDRPositiveSize2D
+    from openpyxl.utils.units import pixels_to_EMU
+    img = Image(LETTERHEAD)
+    w_px = round(509 / 72 * 96)                       # 509 pt = the width of the .docx letterhead
+    h_px = round(w_px * img.height / img.width)
+    cols_px = sum(round((ws.column_dimensions[c].width or 9.14) * 7 + 5) for c in "ABCDEF")
+    left = max((cols_px - w_px) // 2, 0)
+    ws.row_dimensions[2].height = round(h_px * 0.75) + 6
+    marker = AnchorMarker(col=0, colOff=pixels_to_EMU(left), row=1, rowOff=pixels_to_EMU(4))
+    img.anchor = OneCellAnchor(_from=marker, ext=XDRPositiveSize2D(pixels_to_EMU(w_px), pixels_to_EMU(h_px)))
+    ws.add_image(img)
+
+
 def fill(d, xlsx_out):
-    wb = openpyxl.load_workbook(TEMPLATE, rich_text=True)  # A2 – шапката: три реда с различен размер
+    wb = openpyxl.load_workbook(TEMPLATE)
     ws = wb.active
+    add_letterhead(ws)
     dots = lambda v, fallback: v if v else fallback
     title = (d.get("expert_title") or DEFAULT_TITLE).strip()
     ws["A7"] = (
