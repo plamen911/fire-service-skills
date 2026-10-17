@@ -1,0 +1,102 @@
+{
+  "_opisanie": "Каталог на източниците, на които се позовават документите (ЕПТЗ и др.). kratko – позоваването в текста, в скоби; palno – редът в „Използвана литература“; vinagi – влиза в литературата на всяко ЕПТЗ (методическата основа); v_skila – къде са стойностите от източника. Картите ICSC и CHRIS и записите от GESTIS-STAUB-EX не са тук поотделно – редът им се сглобява от таблицата им по шаблона в _shabloni ({id} – номерът или кодът след „:“ в ключа). Стойностите, взети от книги и статии, са в literatura.csv – със страницата; маркерът им е ключът на източника с мястото. В текста на документа позоваването е само автор и година; mesto_v_teksta (регулярен израз) показва и част от мястото – при Чочев приложението.",
+  "_shabloni": {
+    "icsc": {
+      "tablitsa": "stoinosti.csv",
+      "kratko": "ICSC {id}",
+      "palno": "Международна карта за химична безопасност ICSC {id} – {ime_en}, Международна организация на труда и Световна здравна организация (ILO/WHO), версия от {karta_versiya}, сверена на {proveren} на адрес {url};",
+      "v_skila": "_shared/svoistva/stoinosti.csv – всяка стойност е свалена от картата с tools/icsc_fetch.py"
+    },
+    "chris": {
+      "tablitsa": "chris.csv",
+      "kratko": "CHRIS {id}",
+      "palno": "Карта CHRIS {id} – {ime_en}, Chemical Hazards Response Information System, Бреговата охрана на САЩ (U.S. Coast Guard), издание от {karta_versiya}, сверена на {proveren} на адрес {url};",
+      "v_skila": "_shared/svoistva/chris.csv – маслата; температурите в картата са във °F, в таблицата са и в °C (закръглени); свалени с tools/chris_fetch.py"
+    },
+    "gestis-staub": {
+      "tablitsa": "prahove.csv",
+      "kratko": "GESTIS-STAUB-EX, № {id}",
+      "palno": "Запис № {id} – {ime_en}, база данни GESTIS-STAUB-EX (горимост и взривни характеристики на прахове), Институт за безопасност на труда (IFA) към Германското социално осигуряване срещу злополуки (DGUV), сверен на {proveren} на адрес {url};",
+      "v_skila": "_shared/svoistva/prahove.csv – праховете (проба по проба); свалени с tools/gestis_staub_fetch.py"
+    }
+  },
+  "_metar": {
+    "kratko": "METAR {icao}",
+    "palno": "Метеорологични съобщения (METAR) на летище {ime} ({icao}), архив на Iowa Environmental Mesonet, Iowa State University, https://mesonet.agron.iastate.edu/request/download.phtml?network=BG__ASOS;",
+    "mesto_v_teksta": "\\d{2}\\.\\d{2}\\.\\d{4}(?:\\s*[–-]\\s*\\d{2}\\.\\d{2}\\.\\d{4})?",
+    "v_skila": "_shared/scripts/vreme.py – времето по часове от съобщенията на летището; ключът е metar:ICAO, мястото – датата и часовете: [[metar:LBPL: 04.08.2026, 16:00–19:00 ч.]]; скриптът сверява температурата и вятъра с архива"
+  },
+  "iztochnitsi": {
+    "simeonov": {
+      "kratko": "Симеонов, 2023",
+      "palno": "„Пожаротехническа експертиза“, Веселин Симеонов, „Атеа Букс“ – гр. София, 2023 г.;",
+      "vinagi": true,
+      "v_skila": "разделите, отбелязани „(Симеонов)“, в references/technical_reference/ на eptz"
+    },
+    "metodichesko-rakovodstvo": {
+      "kratko": "Методическо ръководство, 2007",
+      "palno": "„Методическо ръководство за установяване на причините за възникване на пожари“, НПИПАБ – НСПБЗН – МВР, гр. София, 2007 г.;",
+      "vinagi": true,
+      "v_skila": "_shared/svoistva/literatura.csv – стойностите по точки (т. 4.1 – 4.1.10, 6.3, 7.6, 9.x); текстът е публикуван по глави на сайта на РДПБЗН – Пловдив: https://www.fire-plovdiv.org/pri4ini-pojari.php; позоваването е с точката: [[metodichesko-rakovodstvo: т. 4.1.5.1, табл. 1]]"
+    },
+    "chochev": {
+      "kratko": "Чочев, 2003",
+      "palno": "„Оперативна тактика за гасене на пожари“, Валентин Чочев, „Огнеборец“ ЕООД – гр. София, 2003 г.;",
+      "v_skila": "нормативната база в Drive, tier-c/Ogneborets_Reference_Chochev-… – с номера на приложението и страницата",
+      "mesto_v_teksta": "прил\\. № \\d+",
+      "greshki": [
+        {"duma": "олов", "v_knigata": "232", "pravilno": "327,5 °C [[icsc:0052]]", "belezhka": "грешка в книгата (прил. № 7, с. 223) – 232 °C е топенето на калая"}
+      ]
+    },
+    "spravochnik-1980": {
+      "kratko": "Справочник за пожарната опасност, 1980",
+      "palno": "„Справочник за пожарната опасност на веществата и материалите“, Държавно издателство „Техника“, 1980 г.;",
+      "v_skila": "няма го – само ако експертът е взел стойността от книгата, със страницата"
+    },
+    "babrauskas-2002": {
+      "kratko": "Babrauskas, 2002",
+      "palno": "Babrauskas, V., „Ignition of Wood: A Review of the State of the Art“, Journal of Fire Protection Engineering, Vol. 12, No. 3, pp. 163–189, 2002;",
+      "v_skila": "_shared/svoistva/literatura.csv – стойностите за масивна дървесина, със страницата в списанието; позоваването е с мястото: [[babrauskas-2002: табл. 5, с. 184]]"
+    },
+    "babrauskas-2001": {
+      "kratko": "Babrauskas, 2001",
+      "palno": "Babrauskas, V., „Ignition of Wood: A Review of the State of the Art“, pp. 71–88 in Interflam 2001, Interscience Communications Ltd., London, 2001;",
+      "v_skila": "същият обзор като babrauskas-2002, ранната версия в сборника на Interflam 2001 – цитира се, само ако експертът ползва нея"
+    },
+    "metodika-iz2749": {
+      "kratko": "Методика към Указания рег. № Iз-2749/2010",
+      "palno": "Методика за определяне на необходимите сили и средства за гасене на пожари, Приложение № 5 към Указанията за разработване на планове за пожарогасене, рег. № Iз-2749/18.11.2010 г. на МВР;",
+      "v_skila": "скилът sili-i-sredstva"
+    },
+    "bds-en-iso-2719": {
+      "kratko": "БДС EN ISO 2719",
+      "palno": "БДС EN ISO 2719 „Determination of flash point – Pensky-Martens closed cup method“ (метод на Пенски-Мартенс със затворен тигел);",
+      "v_skila": "методът, не стойности – при позоваване на начина на определяне на пламната температура; изданието в сила се проверява в БИС преди да се цитира"
+    },
+    "babrauskas": {
+      "kratko": "Babrauskas, 2003",
+      "palno": "Babrauskas, V., „Ignition Handbook“, Fire Science Publishers / Society of Fire Protection Engineers, Issaquah, WA, 2003;",
+      "v_skila": "няма го – само ако експертът е взел стойността от книгата, с таблицата или страницата"
+    },
+    "korolchenko": {
+      "kratko": "Корольченко, 2004",
+      "palno": "Корольченко, А. Я., Корольченко, Д. А., „Пожаровзрывоопасность веществ и материалов и средства их тушения“, справочник в 2 части, 2-ро издание, Асоциация „Пожнаука“ – Москва, 2004 г.;",
+      "v_skila": "_shared/svoistva/literatura.csv – дървесина по видове, стърготини, сено, олио, памук, хартия, пластмаси, въглища, торф; мястото е с частта и страницата: [[korolchenko: ч. II, с. 395]]"
+    },
+    "nwcg-pms412": {
+      "kratko": "NWCG PMS 412, 2025",
+      "palno": "„Guide to Wildland Fire Origin and Cause Determination“, PMS 412, National Wildfire Coordinating Group, март 2025 г., https://fs-prod-nwcg.s3.us-gov-west-1.amazonaws.com/s3fs-public/publication/pms412.pdf;",
+      "v_skila": "_shared/svoistva/literatura.csv – фокусирането на слънчевите лъчи от стъкло (ефектът на лупата) – кои предмети запалват, кои не, как се изследва; страницата е отпечатаната в долния колонтитул („208 of 241“): [[nwcg-pms412: с. 208]]"
+    },
+    "nfpa-921": {
+      "kratko": "NFPA 921",
+      "palno": "NFPA 921 „Guide for Fire and Explosion Investigations“, National Fire Protection Association, Quincy, MA, издание 2024;",
+      "v_skila": "няма го – за методиката на изследването, с раздела"
+    },
+    "sfpe": {
+      "kratko": "SFPE Handbook, 2016",
+      "palno": "„SFPE Handbook of Fire Protection Engineering“, 5-то издание, Springer, New York, 2016;",
+      "v_skila": "няма го – само ако експертът е взел стойността от книгата, с главата и таблицата"
+    }
+  }
+}
