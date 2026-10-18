@@ -43,7 +43,7 @@ description: >-
 **Първата команда** – щом от материалите знаеш датата и мястото на пожара – е една:
 
 ```bash
-D=$(python3 -c "import glob,os;print((glob.glob(os.path.expanduser('~/.claude/plugins/**/skills/eptz'),recursive=True)+glob.glob('/mnt/skills/**/eptz',recursive=True))[0])"); cd "$D" && sed '/^## 8\./,$d' _shared/conventions.md; cat _shared/terminology.md; python3 scripts/nachalo.py --data ГГГГ-ММ-ДД --mesto "МЯСТО"
+D=$(python3 -c "import glob,os;print((glob.glob(os.path.expanduser('~/.claude/plugins/**/skills/eptz'),recursive=True)+glob.glob('/mnt/skills/**/eptz',recursive=True))[0])"); cd "$D" && awk '/^## 8\./{exit}1' _shared/conventions.md; cat _shared/terminology.md; python3 scripts/nachalo.py --data ГГГГ-ММ-ДД --mesto "МЯСТО"
 ```
 
 Тя намира папката на скила (не я търси другояче и не проверявай обявената при зареждането),
