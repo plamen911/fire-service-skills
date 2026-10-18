@@ -87,6 +87,11 @@ r = check(GOOD.replace("Най-вероятната причина е небре
 ok(any("късо съединение" in z for z in r["za_proverka"]), "the summary names a rejected version")
 r = check(GOOD + "\nОглед на местопроизшествието от вещото лице не е извършен.\n", META)
 ok(any("оглед" in g for g in r["greshki"]), "„оглед … не е извършен“")
+# the same thing with the words in the other order – a real eval run wrote exactly this
+r = check(GOOD + "\nТъй като не е извършен и описан оглед, версията не може да бъде изключена.\n", META)
+ok(any("оглед" in g for g in r["greshki"]), "„не е извършен … оглед“")
+r = check(GOOD + "\nВ материалите по делото няма представен протокол за оглед.\n", META)
+ok(r["ok"], "the allowed wording about a missing протокол за оглед is not flagged")
 r = check(GOOD + "\nДеянието е по чл. 330 от НК.\n", META)
 ok(any("НК" in g for g in r["greshki"]), "a legal qualification")
 r = check(GOOD + "\nПо данни на Иван Георгиев Дъбов.\n", META)

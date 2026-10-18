@@ -1,0 +1,22 @@
+schema_version: "1.1"
+name: eptz-no-trigger-spravka
+description: Изгасен пожар без постановление и без дело – това е справка по чл. 20 ал. 3, не ЕПТЗ.
+tags: [eptz, trigger]
+runs: 3
+execution:
+  max_turns: 4
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: |
+    Вчера гасихме пожар в лятна кухня в с. Тестово. Печката е оставена запалена, до нея имало дърва
+    и вестници, огънят е тръгнал от тавана около комина. Трябва да опиша причината за пожара.
+graders:
+  - name: ne-zarezhda-eptz
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?eptz"'
+    min: 0
+    max: 0
+  - name: zarezhda-spravka
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?spravka-prichina"'
