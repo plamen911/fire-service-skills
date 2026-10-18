@@ -56,7 +56,7 @@ graders:
   - name: ognishteto-v-dvigatelniya-otsek
     type: regex
     target: { source: file, path: report.md }
-    pattern: 'Отговор на въпрос № 2:?[\s\S]{0,500}двигателния отсек'
+    pattern: 'Отговор на въпрос № 2:?[\s\S]{0,500}(двигателния|моторния) отсек'
   - name: predpazliv-izvod
     type: regex
     target: { source: file, path: report.md }
