@@ -28,7 +28,7 @@ phone photos ──► Claude chat (Anthropic) ──► .docx / .xlsx in the sa
 | Protection | How |
 |---|---|
 | No personal data in the public repository | `tools/check_public.py` runs in CI on every push. It blocks the commit on ЕГН, phone numbers, e-mails, car plates, IBANs, street addresses, case and document numbers, Google Drive ids, keys and tokens. It also checks every person's name against the real staff list. |
-| Templates are checked before they are shared | Since v2.22.0, `obraztsi.py zapis` refuses to save a template that still contains an ЕГН, a phone number, a car plate, an exact address, an e-mail or a person's name (`PERSONAL_DATA`, covered by tests). Templates saved before this check are being re-checked and anonymised. |
+| Templates are checked before they are shared | Since v2.22.0, `obraztsi.py zapis` refuses to save a template that still contains an ЕГН, a phone number, a car plate, an exact address, an e-mail or a person's name (`PERSONAL_DATA`, covered by tests). All templates saved before this check were anonymised in October 2026: names replaced by roles, addresses reduced to the settlement, plates, cadastral and case numbers removed. They were then re-checked by the script and by an independent AI audit. |
 | Templates can only be written by the administrator | n8n checks the key's role; everyone else can only read anonymised templates. |
 | Per-person API keys | Every colleague has their own key. n8n stores only a hash of it, and the key is shown once when issued. One key can be revoked without affecting anyone else (`admin.py key revoke`). |
 | Keys never appear in output | The scripts report only whether a key exists and where it came from, never the key itself. |
