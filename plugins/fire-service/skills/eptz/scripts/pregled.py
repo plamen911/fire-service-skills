@@ -188,7 +188,17 @@ def main(argv=None):
     if isinstance(vaprosi, dict):
         vaprosi = vaprosi.get("vaprosi")
     materiali = "\n".join(open(p, encoding="utf-8", errors="ignore").read() for p in a.materiali)
-    print(json.dumps(check(content, meta, vaprosi, materiali), ensure_ascii=False, indent=2))
+    result = check(content, meta, vaprosi, materiali)
+    # the model reliably acts on script output; the semantic review was skipped in half the eval runs
+    # when only SKILL.md asked for it
+    result["sledva"] = (
+        "Това е само механичният преглед. СЛЕДВА смисловият – задължителен, не се пропуска: подагент "
+        "(Agent/Task) с подсказката от references/pregled.md и само пътищата до report.md, meta.json, "
+        "въпросите и материалите; без такъв инструмент – отделна стъпка само върху файловете. Поправи "
+        "веднага: извод, написан като факт; факт или подробност без източник в материалите (напр. "
+        "„затворен капак“, „сухи греди“); думи, приписани на човек, който не ги е казал; версия, "
+        "отхвърлена само с „няма данни“.")
+    print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 
 
