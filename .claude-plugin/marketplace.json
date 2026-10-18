@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "Claude skills for Bulgarian fire service work — investigation reports with an independent review, справки, certificates, duty rosters, incident search, lesson plans, dangerous goods, water sources, firefighting resource calculations and regulatory Q&A.",
-    "version": "2.20.4"
+    "version": "2.21.0"
   },
   "plugins": [
     {
       "name": "fire-service",
       "source": "./plugins/fire-service",
       "description": "ЕПТЗ и сметка с независим преглед, справка по чл. 20 ал. 3, удостоверения и придружителни писма, нормативна уредба на ГДПБЗН и указания по прилагането ѝ, райони на действие на звената, търсене и статистика на произшествия, графици за дежурства, опасни товари (ADR), пожароопасни свойства на веществата с източника им, водоизточници за пожарогасене, разчет на сили и средства за гасене, план-конспекти за занятия и за пожаро-тактически занятия със схема, схеми за разполагане на силите и средствата — общи правила и терминология; данните се четат с личен ключ.",
-      "version": "2.20.4"
+      "version": "2.21.0"
     }
   ]
 }
