@@ -97,3 +97,6 @@ graders:
     type: regex
     target: { source: file, path: report.md }
     pattern: 'Късо съединение[\s\S]{0,1200}предпазител[\s\S]{0,600}отпада'
+  - name: smislov-pregled-ot-podagent
+    type: tool_used
+    tool: Agent
