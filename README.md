@@ -1,5 +1,13 @@
 # fire-service-skills
 
+> **About (EN).** A Claude plugin with 14 skills that automates the paperwork of a regional fire
+> service. Examples are forensic fire reports, incident certificates, duty schedules from photos,
+> regulations lookup and hazardous-materials response. The flagship skill drafts court-grade forensic fire
+> reports from phone photos of the case file: **5–6 hours → 10–15 minutes per report**, with an
+> automated eval suite (LLM judge catches 6/6 planted fabrications; 18/18 behaviour runs pass).
+> Python · n8n · Google Drive · Firebase · MCP. Case study:
+> [docs/case-study-eptz.md](docs/case-study-eptz.md) · Author: Plamen Markov.
+
 Скилове за Claude за работата на РДПБЗН – Плевен: справки за причината за пожар, експертизи,
 удостоверения, графици за дежурства, нормативна уредба, райони на действие, търсене на
 произшествия, водоизточници, опасни товари и план-конспекти за занятия.
@@ -15,7 +23,7 @@
 
 1. **Плъгинът.** Customize → Plugins → Add → Add marketplace → напиши
    `plamen911/fire-service-skills` → Sync. Остави включено „Sync automatically“ – така
-   промените идват сами. В Plugins се появява „Fire service“, а в Skills – единадесетте скила.
+   промените идват сами. В Plugins се появява „Fire service“, а в Skills – скиловете му.
 2. **Изпълнение на код.** Settings → Capabilities → включи „Code execution and file creation“.
 3. **Конекторът с личния ключ.** Customize → Connectors → Add custom connector:
    име `Fire Service`, а за адрес – **личният адрес**, който си получил от администратора
