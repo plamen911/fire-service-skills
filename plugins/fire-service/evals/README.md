@@ -25,8 +25,8 @@ Claude с плъгина върху измислен случай и оценя�
 ```bash
 cd plugins/fire-service
 claude plugin eval . --tag trigger behaviour --ablation none --trust-plugin -j 4
-claude plugin eval . --tag output --runs 1 -j 2 --ablation none --trust-plugin \
-  --allow-tools Bash Write Edit --max-cost-usd 25
+claude plugin eval . --tag output --runs 2 -j 4 --ablation none --trust-plugin \
+  --judge-model sonnet --allow-tools Bash Write Edit --max-cost-usd 25
 ```
 
 Пясъчникът на `plugin eval` може да забрани четенето на папки в домашната директория – тогава
@@ -39,6 +39,10 @@ claude plugin eval . --tag output --runs 1 -j 2 --ablation none --trust-plugin \
 
 ## Как се чете и добавя
 
+- Случаите `output` се съдят със `--judge-model sonnet`. Haiku (по подразбиране) отхвърля и вярно
+  заключение от ~9 000 знака заради дребни изводи; Sonnet хвана 6 от 6 подхвърлени измислени факта
+  и пусна вярното. Критерият за измислени факти дава на съдията материалите дословно – съкратен
+  списък кара съдията да обяви верни факти за измислени.
 - Падне ли случай, първо се чете разговорът: грешката в скила ли е или проверката е твърде строга.
   Поправка в скила се пуска отново с `--runs 6` – един случаен успех не доказва нищо.
 - Нов случай – нова папка с `case.yaml`. Само измислени имена и места (с. Тестово), никога текст от

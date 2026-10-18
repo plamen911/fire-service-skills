@@ -292,11 +292,13 @@ def _chochev_tekst():
             return _chochev["text"]
         sys.path.insert(0, HERE)
         import api_config
+        if not api_config.has_key():  # a colleague with the connector only: api_config would sys.exit(NO_KEY)
+            return None
         files = api_config.post("regs_url", {"action": "list"})["files"]
         f = next(x for x in files if CHOCHEV_FILE in (x.get("path") or "") and x["path"].endswith(".md"))
         _chochev["text"] = api_config.post("regs_url", {"action": "download", "id": f["id"]})["content"]
         open(cache, "w", encoding="utf-8").write(_chochev["text"])
-    except Exception:  # noqa: BLE001 – no key, no network, no file: the check is skipped, never fails
+    except (Exception, SystemExit):  # noqa: BLE001 – no key, no network, no file: the check is skipped, never fails
         _chochev["text"] = None
     return _chochev["text"]
 

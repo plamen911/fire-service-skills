@@ -253,7 +253,26 @@ def test_nachalo():
     check("scripts/nachalo.py --data" in skill, "SKILL.md starts with nachalo.py")
 
 
+def test_bez_klyuch():
+    """A colleague with the connector only (no personal key, no test switch): the Чочев check is
+    skipped, the build does not stop with NO_KEY. Found by evals/eptz – api_config sys.exit()s and
+    `except Exception` does not catch SystemExit."""
+    code = (
+        "import sys; sys.path.insert(0, 'scripts'); sys.path.insert(0, '_shared/scripts')\n"
+        "import api_config; api_config._key_skill_files = lambda: []\n"
+        "api_config.load()['key'] = ''\n"
+        "import svoistva\n"
+        "print('OK' if svoistva._chochev_tekst() is None else 'TEXT')\n"
+    )
+    env = {k: v for k, v in os.environ.items() if k not in ("FIRE_SERVICE_NO_KEY", "FIRE_SERVICE_KEY")}
+    env["TMPDIR"] = tempfile.mkdtemp()   # no cached Чочев from an earlier run
+    r = subprocess.run([sys.executable, "-c", code], cwd=SKILL, env=env, capture_output=True, text=True)
+    check(r.returncode == 0 and r.stdout.strip() == "OK", "no key: the Чочев check is skipped, no NO_KEY exit"
+          + ("" if r.returncode == 0 else " – " + (r.stderr.strip().splitlines() or [""])[-1]))
+
+
 if __name__ == "__main__":
+    test_bez_klyuch()
     test_nachalo()
     test_eptz()
     test_smetka()
