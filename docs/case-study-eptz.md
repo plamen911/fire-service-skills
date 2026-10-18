@@ -69,8 +69,8 @@ data in one place, the expert's own Claude conversation, and enforces the rest i
   Google Drive or Firebase.
 - **Every push is scanned.** A check in CI blocks ЕГН, phones, plates, addresses, case numbers,
   keys and the name of any real staff member.
-- **Templates are anonymised before sharing, enforced in code.** A past report becomes a shared
-  template only if a personal-data check passes, and only the administrator can save one.
+- **Templates are checked before sharing.** A past report becomes a shared template only if a
+  personal-data check passes, and only the administrator can save one.
 - **Each colleague has their own key.** n8n stores only a hash of it, and one key can be revoked
   without affecting anyone else.
 - **The AI provider is configured for case work.** Model training is turned off and chats are

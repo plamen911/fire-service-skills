@@ -6,7 +6,7 @@
 > reports from phone photos of the case file: **5–6 hours → 10–15 minutes per report**, with an
 > automated eval suite (LLM judge catches 6/6 planted fabrications; 18/18 behaviour runs pass).
 > Case data never leaves the expert's own conversation. The public repo is scanned for personal data
-> on every push, and shared templates are anonymised before saving, enforced in code. Each colleague
+> on every push, and shared templates must pass a personal-data check before saving. Each colleague
 > has a revocable API key ([data protection](docs/data-protection.md)).
 > Python · n8n · Google Drive · Firebase · MCP. Case study:
 > [docs/case-study-eptz.md](docs/case-study-eptz.md) · Author: Plamen Markov.
@@ -47,9 +47,10 @@
   Google Drive.
 - **Хранилището е публично и се проверява при всяко качване.** Ако в него попадне ЕГН, телефон,
   регистрационен номер, адрес, номер на преписка, ключ или име на служител, качването спира.
-- **Образците се анонимизират преди запис.** Одобрена справка или експертиза става образец само ако
-  в текста няма имена, ЕГН, телефони, МПС, адреси и имейли. Скриптът проверява това и отказва
-  записа. Записва само администраторът.
+- **Образците се проверяват преди запис.** От версия 2.22.0 одобрена справка или експертиза става
+  образец само ако в текста няма имена, ЕГН, телефони, МПС, адреси и имейли. Скриптът проверява
+  това и отказва записа. Записва само администраторът. По-старите образци се преглеждат и
+  анонимизират.
 - **Личният ключ е само твой.** В n8n се пази само хеш от него. Ако изтече, администраторът го спира,
   без да засяга другите.
 

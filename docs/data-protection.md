@@ -14,21 +14,21 @@ question is how we can be sure that none of it leaks. This page answers it in th
 phone photos ──► Claude chat (Anthropic) ──► .docx / .xlsx in the same chat ──► expert ──► investigator
                         │                                                                (Viber / e-mail)
                         └─► n8n (per-person key) ──► Google Drive / Firebase
-                             reads: staff list, incidents, approved templates (anonymised)
+                             reads: staff list, incidents, approved templates
                              writes: templates – only after an anonymisation check, admin only
 ```
 
 - **The case material never reaches the public repository, n8n, Google Drive or Firebase.** It is
   read and processed inside the expert's own Claude conversation.
 - The only path from a case into shared storage is saving an approved report as a template. That
-  path is guarded in code (see below) and limited to the administrator.
+  path is limited to the administrator and, since v2.22.0, guarded in code (see below).
 
 ## Enforced in code
 
 | Protection | How |
 |---|---|
 | No personal data in the public repository | `tools/check_public.py` runs in CI on every push. It blocks the commit on ЕГН, phone numbers, e-mails, car plates, IBANs, street addresses, case and document numbers, Google Drive ids, keys and tokens. It also checks every person's name against the real staff list. |
-| Templates are anonymised before they are shared | `obraztsi.py zapis` refuses to save a template that still contains an ЕГН, a phone number, a car plate, an exact address, an e-mail or a person's name (`PERSONAL_DATA`, covered by tests). |
+| Templates are checked before they are shared | Since v2.22.0, `obraztsi.py zapis` refuses to save a template that still contains an ЕГН, a phone number, a car plate, an exact address, an e-mail or a person's name (`PERSONAL_DATA`, covered by tests). Templates saved before this check are being re-checked and anonymised. |
 | Templates can only be written by the administrator | n8n checks the key's role; everyone else can only read anonymised templates. |
 | Per-person API keys | Every colleague has their own key. n8n stores only a hash of it, and the key is shown once when issued. One key can be revoked without affecting anyone else (`admin.py key revoke`). |
 | Keys never appear in output | The scripts report only whether a key exists and where it came from, never the key itself. |
