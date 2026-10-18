@@ -60,6 +60,25 @@ cases run against the real model with graders, including an LLM judge:
   - conclusions stated as facts;
   - a review step the model skipped in 3 of 4 runs.
 
+## Data protection
+
+A case file holds names, statements and addresses from a pre-trial proceeding. The design keeps that
+data in one place, the expert's own Claude conversation, and enforces the rest in code:
+
+- **Case material never reaches shared storage.** It does not go to the public repository, n8n,
+  Google Drive or Firebase.
+- **Every push is scanned.** A check in CI blocks ЕГН, phones, plates, addresses, case numbers,
+  keys and the name of any real staff member.
+- **Templates are anonymised before sharing, enforced in code.** A past report becomes a shared
+  template only if a personal-data check passes, and only the administrator can save one.
+- **Each colleague has their own key.** n8n stores only a hash of it, and one key can be revoked
+  without affecting anyone else.
+- **The AI provider is configured for case work.** Model training is turned off and chats are
+  deleted after delivery, which keeps Anthropic's retention at 30 days. For institutional use, a
+  Team or Enterprise plan falls under the commercial terms, where data is not used for training.
+
+Details, including what remains the expert's responsibility: [data-protection.md](data-protection.md).
+
 ## What made it work
 
 - **Evaluation first.** Every rule in the skill traces back to a failure an eval caught, for

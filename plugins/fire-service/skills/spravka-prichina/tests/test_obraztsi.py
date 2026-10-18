@@ -64,5 +64,17 @@ if __name__ == "__main__":
     check(code != 0 and "BAD_INPUT" in err, "Cyrillic file name refused")
     code, _, err = run(store, "zapis", "spravka", a, "--obekt", "o", "--prichina", "p", "--belezhka", "b", "--data", "2026")
     check(code != 0 and "BAD_INPUT" in err, "year alone is not a date")
+    # a template with personal data from the real case is refused (the numbers are built in pieces so that
+    # tools/check_public.py does not take this test for real data)
+    lichni = os.path.join(tmp, "Spravka_C_Pleven_2026-10-04_KS.md")
+    for leak, kind in (("Собственикът Стоян Брезов казва …", "име"), ("ЕГН " + "80010" + "11234", "ЕГН"),
+                       ("тел. " + "0888" + " 123 456", "телефон")):
+        open(lichni, "w", encoding="utf-8").write(f"# C\n\n{leak}\n")
+        code, _, err = run(store, "zapis", "spravka", lichni, *meta)
+        check(code != 0 and "PERSONAL_DATA" in err, f"template with personal data refused ({kind})")
+    open(lichni, "w", encoding="utf-8").write("# C\n\nСобственикът на имота, гр. Червен бряг, ул. „Васил Левски“. "
+                                              "(Веселин Симеонов, 2023)\n")
+    code, _, err = run(store, "zapis", "spravka", lichni, *meta)
+    check(code == 0, "anonymised template with a street name and a cited author is saved")
     print("\nALL PASS" if not failures else f"\n{len(failures)} FAILED")
     sys.exit(1 if failures else 0)

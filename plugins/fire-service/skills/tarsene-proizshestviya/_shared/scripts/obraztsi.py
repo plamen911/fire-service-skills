@@ -22,6 +22,7 @@ obraztsi.py — образците (шаблоните): одобрени спр
     NOT_FOUND: ...        — няма такъв файл (при `index` – още няма записани образци)
     FORBIDDEN: ...        — записът е само за администратора
     BAD_INPUT: ...        — неправилно име, дата или празен файл
+    PERSONAL_DATA: ...    — в образеца има лични данни (ЕГН, телефон, МПС, адрес, имейл, име) – не се записва
 """
 import argparse
 import hashlib
@@ -176,6 +177,10 @@ def main():
         text = f.read()
     if not text.strip():
         sys.exit("BAD_INPUT: файлът е празен")
+    found = lichni_danni(text)
+    if found:
+        lines = "; ".join(f"{kind}: „{m}“" for kind, m in found[:10])
+        sys.exit(f"PERSONAL_DATA: образецът не е анонимизиран – махни и запиши отново: {lines}")
     saved = store.put(a.kind, name, text)
     try:
         index_text, _ = store.get(a.kind, INDEX)
@@ -188,6 +193,28 @@ def main():
     print(json.dumps({"ok": True, "kind": a.kind, "name": name, "link": saved.get("link"),
                       "updated_by": saved.get("updated_by"), "index_changed": new_index != index_text,
                       "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest()}, ensure_ascii=False))
+
+
+# A template is read by everyone with a key, so it must not carry personal data from the real case it was made
+# from. The SKILL.md files ask for anonymisation before `zapis`; this check enforces it. Same patterns as
+# tools/check_public.py (the public repository's guard).
+LICHNI = [
+    ("ЕГН", re.compile(r"(?<![\d.])\d{10}(?![\d.])")),
+    ("телефон", re.compile(r"(?<!\d)(?:\+359|0)\s?8[789]\d[ \-]?\d{3}[ \-]?\d{3}(?!\d)")),
+    ("регистрационен номер на МПС", re.compile(
+        r"(?<![А-ЯA-Z])[АВЕКМНОРСТУХABEKMHOPCTYX]{1,2}\s?\d{4}\s?[АВЕКМНОРСТУХABEKMHOPCTYX]{2}(?![А-ЯA-Zа-я])")),
+    ("точен адрес", re.compile(r"(?:ул|бул|пл)\.\s*[„\"“][^“”\"\n]{2,40}[“”\"]\s*№\s*\d+[А-Яа-я]?")),
+    ("имейл", re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}")),
+]
+IME = re.compile(r"(?<![„\"“])\b([А-Я][а-я]{2,}) ([А-Я][а-я]+(?:ов|ев|ин|ски|ова|ева|ина|ска))\b")
+AVTORI = {"Веселин Симеонов", "Валентин Чочев"}   # authors cited in the literature, not people from the case
+
+
+def lichni_danni(text):
+    """Personal data left in a template: [(kind, match), …]."""
+    found = [(kind, m.group(0)) for kind, rx in LICHNI for m in rx.finditer(text)]
+    found += [("име на човек", m.group(0)) for m in IME.finditer(text) if m.group(0) not in AVTORI]
+    return found
 
 
 if __name__ == "__main__":

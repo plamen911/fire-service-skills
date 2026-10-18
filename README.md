@@ -5,6 +5,9 @@
 > regulations lookup and hazardous-materials response. The flagship skill drafts court-grade forensic fire
 > reports from phone photos of the case file: **5–6 hours → 10–15 minutes per report**, with an
 > automated eval suite (LLM judge catches 6/6 planted fabrications; 18/18 behaviour runs pass).
+> Case data never leaves the expert's own conversation. The public repo is scanned for personal data
+> on every push, and shared templates are anonymised before saving, enforced in code. Each colleague
+> has a revocable API key ([data protection](docs/data-protection.md)).
 > Python · n8n · Google Drive · Firebase · MCP. Case study:
 > [docs/case-study-eptz.md](docs/case-study-eptz.md) · Author: Plamen Markov.
 
@@ -35,6 +38,32 @@
 
 Името, званието и длъжността ти за документите идват от списъка на служителите по твоя ключ –
 нищо не се въвежда на ръка.
+
+## Защита на данните
+
+Материалите по делата съдържат лични данни. Затова:
+
+- **Материалите не напускат твоя разговор с Claude.** Не стигат до това хранилище, до n8n или до
+  Google Drive.
+- **Хранилището е публично и се проверява при всяко качване.** Ако в него попадне ЕГН, телефон,
+  регистрационен номер, адрес, номер на преписка, ключ или име на служител, качването спира.
+- **Образците се анонимизират преди запис.** Одобрена справка или експертиза става образец само ако
+  в текста няма имена, ЕГН, телефони, МПС, адреси и имейли. Скриптът проверява това и отказва
+  записа. Записва само администраторът.
+- **Личният ключ е само твой.** В n8n се пази само хеш от него. Ако изтече, администраторът го спира,
+  без да засяга другите.
+
+Какво правиш ти при работа по истински дела:
+
+1. Settings → Privacy → **изключи „Help improve Claude“**. Тогава Anthropic пази разговорите
+   30 дни и не ги ползва за обучение. Включена, настройката удължава пазенето до 5 години.
+2. **Изтрий разговора**, след като предадеш документа. От сървърите на Anthropic той изчезва до
+   30 дни.
+3. Снимките от делото **изтрий и от телефона**.
+4. Преди работа по истински дела се увери, че обработването на материали от досъдебно
+   производство в облачна услуга е разрешено по реда на службата.
+
+Подробно, на английски: [docs/data-protection.md](docs/data-protection.md).
 
 ## Какво да питаш
 
