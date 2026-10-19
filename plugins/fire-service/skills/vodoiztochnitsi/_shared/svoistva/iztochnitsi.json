@@ -1,10 +1,10 @@
 {
-  "_opisanie": "Каталог на източниците, на които се позовават документите (ЕПТЗ и др.). kratko – позоваването в текста, в скоби; palno – редът в „Използвана литература“; vinagi – влиза в литературата на всяко ЕПТЗ (методическата основа); v_skila – къде са стойностите от източника. Картите ICSC и CHRIS и записите от GESTIS-STAUB-EX не са тук поотделно – редът им се сглобява от таблицата им по шаблона в _shabloni ({id} – номерът или кодът след „:“ в ключа). Стойностите, взети от книги и статии, са в literatura.csv – със страницата; маркерът им е ключът на източника с мястото. В текста на документа позоваването е само автор и година; mesto_v_teksta (регулярен израз) показва и част от мястото – при Чочев приложението.",
+  "_opisanie": "Каталог на източниците, на които се позовават документите (ЕПТЗ и др.). kratko – позоваването в текста, в скоби; palno – редът в „Използвана литература“; vinagi – влиза в литературата на всяко ЕПТЗ (методическата основа); v_skila – къде са стойностите от източника. Картите ICSC и CHRIS и записите от GESTIS-STAUB-EX не са тук поотделно – редът им се сглобява от таблицата им по шаблона в _shabloni ({id} – номерът или кодът след „:“ в ключа). Стойностите, взети от книги и статии, са в literatura.csv – със страницата; маркерът им е ключът на източника с мястото. В текста на документа позоваването е само автор и година; mesto_v_teksta (регулярен израз) показва и част от мястото – при Чочев приложението. В „Използвана литература“ се печата само кратък адрес на сайта; пълният адрес на картата или записа остава в таблицата (url) за проверка.",
   "_shabloni": {
     "icsc": {
       "tablitsa": "stoinosti.csv",
       "kratko": "ICSC {id}",
-      "palno": "Международна карта за химична безопасност ICSC {id} – {ime_en}, Международна организация на труда и Световна здравна организация (ILO/WHO), версия от {karta_versiya}, сверена на {proveren} на адрес {url};",
+      "palno": "Международна карта за химична безопасност ICSC {id} – {ime_en}, Международна организация на труда и Световна здравна организация (ILO/WHO), версия от {karta_versiya}, сверена на {proveren} на адрес https://chemicalsafety.ilo.org;",
       "v_skila": "_shared/svoistva/stoinosti.csv – всяка стойност е свалена от картата с tools/icsc_fetch.py"
     },
     "chris": {
@@ -16,15 +16,16 @@
     "gestis-staub": {
       "tablitsa": "prahove.csv",
       "kratko": "GESTIS-STAUB-EX, № {id}",
-      "palno": "Запис № {id} – {ime_en}, база данни GESTIS-STAUB-EX (горимост и взривни характеристики на прахове), Институт за безопасност на труда (IFA) към Германското социално осигуряване срещу злополуки (DGUV), сверен на {proveren} на адрес {url};",
+      "palno": "Запис № {id} – {ime_en}, база данни GESTIS-STAUB-EX (горимост и взривни характеристики на прахове), Институт за безопасност на труда (IFA) към Германското социално осигуряване срещу злополуки (DGUV), сверен на {proveren} на адрес https://staubex.ifa.dguv.de;",
       "v_skila": "_shared/svoistva/prahove.csv – праховете (проба по проба); свалени с tools/gestis_staub_fetch.py"
     }
   },
   "_metar": {
     "kratko": "METAR {icao}",
-    "palno": "Метеорологични съобщения (METAR) на летище {ime} ({icao}), архив на Iowa Environmental Mesonet, Iowa State University, https://mesonet.agron.iastate.edu/request/download.phtml?network=BG__ASOS;",
+    "palno": "Метеорологични съобщения (METAR) на летище {ime} ({icao}), архив на Iowa Environmental Mesonet, Iowa State University, https://mesonet.agron.iastate.edu;",
     "mesto_v_teksta": "\\d{2}\\.\\d{2}\\.\\d{4}(?:\\s*[–-]\\s*\\d{2}\\.\\d{2}\\.\\d{4})?",
-    "v_skila": "_shared/scripts/vreme.py – времето по часове от съобщенията на летището; ключът е metar:ICAO, мястото – датата и часовете: [[metar:LBPL: 04.08.2026, 16:00–19:00 ч.]]; скриптът сверява температурата и вятъра с архива"
+    "v_skila": "_shared/scripts/vreme.py – времето по часове от съобщенията на летището; ключът е metar:ICAO, мястото – датата и часовете: [[metar:LBPL: 04.08.2026, 16:00–19:00 ч.]]; скриптът сверява температурата и вятъра с архива",
+    "url_arhiv": "https://mesonet.agron.iastate.edu/request/download.phtml?network=BG__ASOS"
   },
   "iztochnitsi": {
     "simeonov": {
@@ -90,8 +91,9 @@
     },
     "nwcg-pms412": {
       "kratko": "NWCG PMS 412, 2025",
-      "palno": "„Guide to Wildland Fire Origin and Cause Determination“, PMS 412, National Wildfire Coordinating Group, март 2025 г., https://fs-prod-nwcg.s3.us-gov-west-1.amazonaws.com/s3fs-public/publication/pms412.pdf;",
-      "v_skila": "_shared/svoistva/literatura.csv – фокусирането на слънчевите лъчи от стъкло (ефектът на лупата) – кои предмети запалват, кои не, как се изследва; страницата е отпечатаната в долния колонтитул („208 of 241“): [[nwcg-pms412: с. 208]]"
+      "palno": "„Guide to Wildland Fire Origin and Cause Determination“, PMS 412, National Wildfire Coordinating Group, март 2025 г., https://www.nwcg.gov/publications/412;",
+      "v_skila": "_shared/svoistva/literatura.csv – фокусирането на слънчевите лъчи от стъкло (ефектът на лупата) – кои предмети запалват, кои не, как се изследва; страницата е отпечатаната в долния колонтитул („208 of 241“): [[nwcg-pms412: с. 208]]",
+      "url_pdf": "https://fs-prod-nwcg.s3.us-gov-west-1.amazonaws.com/s3fs-public/publication/pms412.pdf"
     },
     "nfpa-921": {
       "kratko": "NFPA 921",
