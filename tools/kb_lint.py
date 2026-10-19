@@ -25,6 +25,10 @@ import yaml
 
 TIERS = {"tier-a": "A", "tier-a-repealed": "A-REPEALED", "tier-b": "B", "tier-c": "C"}
 OTHER_FOLDERS = {"указания-и-писма"}          # written by the Zen assistant; outside the schema
+ASSETS = "assets"                               # pictures the text files point to with ![…](assets/NAME)
+IMAGE_EXT = (".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif")
+ASSET_NAME_RX = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*_fig\d{2}[a-z]?\.(?:png|jpe?g|svg|webp|gif)$")
+ASSET_REF_RX = re.compile(r"!\[([^\]]*)\]\((assets/[^)\s]+)\)")
 IN_FORCE = ["да", "не", "отменен", "остарял", "непроверен", "неприложимо"]
 REQUIRED = ["title", "tier", "issuer", "act_type", "in_force", "text_source", "keywords"]
 REQUIRED_A = ["act_id", "subject", "articles", "in_force_source"]
@@ -116,6 +120,10 @@ def map_target(rec):
     return m.group(1) if m else None
 
 
+def asset_refs(f):
+    return [path for _, path in ASSET_REF_RX.findall(f.get("body") or "")]
+
+
 def build_catalog(files):
     maps = {}
     for f in files:
@@ -135,7 +143,7 @@ def build_catalog(files):
             "edition_date": None if fm.get("edition_date") is None else str(fm.get("edition_date")),
             "superseded_by": fm.get("superseded_by"), "subject": fm.get("subject"),
             "keywords": fm.get("keywords") or [], "articles": None if fm.get("articles") is None else str(fm.get("articles")),
-            "map": maps.get(f["path"]), "bytes": f["bytes"],
+            "map": maps.get(f["path"]), "assets": asset_refs(f), "bytes": f["bytes"],
         })
     return {"generated_by": "tools/kb_lint.py --catalog", "files": out}
 
@@ -157,6 +165,7 @@ def counts(files):
         "tier_b": sum(1 for f in files if f["folder"] == "tier-b"),
         "tier_c": sum(1 for f in files if f["folder"] == "tier-c"),
         "maps": sum(1 for f in files if f["folder"] == "" and f["name"].startswith("_MAP_")),
+        "assets": sum(1 for f in files if f["folder"] == ASSETS),
     }
 
 
@@ -169,7 +178,7 @@ def counts_block(c):
         f"- Актуалност на действащите редакции: {status}",
         f"- Адресируеми члена в действащите редакции (заглавия „## Чл. N“): {c['articles']}",
         f"- Отменени актове (tier-a-repealed): {c['repealed']}",
-        f"- tier-b: {c['tier_b']} файла · tier-c: {c['tier_c']} файла · секционни карти: {c['maps']}",
+        f"- tier-b: {c['tier_b']} файла · tier-c: {c['tier_c']} файла · секционни карти: {c['maps']} · картинки (assets): {c['assets']}",
         f"- Машинният каталог на всички файлове е `index.json` в корена.",
         COUNTS_END,
     ])
@@ -194,6 +203,14 @@ def check(root, files):
             continue
         if folder in OTHER_FOLDERS:
             continue
+        if folder == ASSETS:
+            if "/" in p[len(ASSETS) + 1:] or not f["name"].lower().endswith(IMAGE_EXT):
+                E(p, "в assets/ стоят само картинки (png, jpg, svg, webp, gif), без подпапки")
+            elif not f["name"].isascii() or not ASSET_NAME_RX.match(f["name"]):
+                E(p, "името на картинката е <име на файла, който сочи към нея, без .md>_figNN.png")
+            elif not any(p in asset_refs(g) for g in files if g["path"].endswith(".md")):
+                W(p, "картинката не е посочена в нито един файл (![…](assets/…))")
+            continue
         if folder not in TIERS:
             E(p, f"папката „{folder}“ не е част от базата")
             continue
@@ -210,6 +227,9 @@ def check(root, files):
         if fm is None:
             E(p, "няма front matter")
             continue
+        for ref in asset_refs(f):
+            if ref not in paths:
+                E(p, f"сочи към картинка, която я няма в базата: {ref}")
         tier = TIERS[folder]
         need = REQUIRED + (REQUIRED_A if tier in ("A", "A-REPEALED") else REQUIRED_B if tier == "B" else [])
         for k in need:

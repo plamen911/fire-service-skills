@@ -28,6 +28,8 @@ Fire Service: инструментите `keys`, `staff_update` и `samples_save
     python3 tools/admin.py regs index _INDEX_pozharna_bezopasnost_2026-10-08v.md   # новата редакция на индекса:
                                                  # съдържанието отива в текущия _INDEX_ файл и той се преименува
     python3 tools/admin.py regs list --tier c
+    python3 tools/admin.py regs put kb/assets/ИМЕ_fig01.png --tier assets   # картинка в assets/ (файлът сочи към нея
+                                                 # с ![Фиг. 1. …](assets/ИМЕ_fig01.png))
 
 Файлове (Google Drive през n8n): видове spravka, eptz, raioni, admin, regs, regs-a, regs-b, regs-c, regs-r
     python3 tools/admin.py files rename regs СТАРО_ИМЕ.md НОВО_ИМЕ.md
@@ -42,6 +44,7 @@ Fire Service: инструментите `keys`, `staff_update` и `samples_save
 добавя плъгина от Customize → Plugins → Add marketplace.
 """
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -66,8 +69,18 @@ def show(obj):
     print(json.dumps(obj, ensure_ascii=False, indent=1))
 
 
+IMAGES = (".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif")
+
+
 def put(kind, path, name=None):
-    """Create the file, or replace its content when a file with this name is already there."""
+    """Create the file, or replace its content when a file with this name is already there.
+    A picture (kind regs-assets) goes base64-encoded, with its size and sha256 for the check in n8n."""
+    if path.lower().endswith(IMAGES):
+        with open(path, "rb") as f:
+            data = f.read()
+        return call("samples_url", {"action": "put", "kind": kind, "name": name or os.path.basename(path),
+                                    "base64": base64.b64encode(data).decode("ascii"), "bytes": len(data),
+                                    "sha256": hashlib.sha256(data).hexdigest()})
     with open(path, encoding="utf-8") as f:
         text = f.read()
     return call("samples_url", {"action": "put", "kind": kind, "name": name or os.path.basename(path), "text": text,
@@ -83,6 +96,14 @@ def pull(folder):
         json.dump(files, f, ensure_ascii=False, indent=1)
     got, skipped = 0, []
     for item in files:
+        if item.get("folder") == "assets" and item["name"].lower().endswith(IMAGES):
+            res = call("samples_url", {"action": "get", "kind": "regs-assets", "name": item["name"]})
+            path = os.path.join(folder, item["path"])
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "wb") as f:
+                f.write(base64.b64decode(res["base64"]))
+            got += 1
+            continue
         if not item["name"].lower().endswith((".md", ".json", ".csv", ".txt")):
             skipped.append(item["path"])
             continue
@@ -128,10 +149,10 @@ def main():
     p = files.add_parser("rename"); p.add_argument("kind"); p.add_argument("name"); p.add_argument("new_name")
 
     regs = sub.add_parser("regs").add_subparsers(dest="cmd", required=True)
-    p = regs.add_parser("put"); p.add_argument("file"); p.add_argument("--tier", choices=["a", "b", "c", "r"], required=True)
+    p = regs.add_parser("put"); p.add_argument("file"); p.add_argument("--tier", choices=["a", "b", "c", "r", "assets"], required=True)
     p.add_argument("--name")
     p = regs.add_parser("index"); p.add_argument("file")
-    p = regs.add_parser("list"); p.add_argument("--tier", choices=["a", "b", "c", "r"])
+    p = regs.add_parser("list"); p.add_argument("--tier", choices=["a", "b", "c", "r", "assets"])
     p = regs.add_parser("pull"); p.add_argument("folder", help="папка за копието (създава се)")
     a = ap.parse_args()
 

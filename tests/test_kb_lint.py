@@ -118,6 +118,28 @@ with tempfile.TemporaryDirectory() as tmp:
     code, res = lint(tmp)
     check("missing article caught", any("липсват заглавия" in m for _, m in res["errors"]), res["errors"])
 
+with tempfile.TemporaryDirectory() as tmp:
+    # pictures in assets/: a reference to a missing one is an error, an unreferenced one a warning
+    write_base(tmp)
+    stem = REF[:-3]
+    ref = os.path.join(tmp, "tier-c", REF)
+    with open(ref, "a", encoding="utf-8") as fh:
+        fh.write(f"\n![Фиг. 1. Проба](assets/{stem}_fig01.png)\n")
+    lint(tmp, "--catalog")
+    code, res = lint(tmp)
+    check("missing picture caught", any("сочи към картинка" in m for _, m in res["errors"]), res["errors"])
+    os.makedirs(os.path.join(tmp, "assets"))
+    for name in (f"{stem}_fig01.png", f"{stem}_fig02.png"):
+        open(os.path.join(tmp, "assets", name), "wb").write(b"\x89PNG\r\n\x1a\n")
+    code, res = lint(tmp, "--catalog")
+    check("picture present passes", code == 0, res["errors"])
+    check("unreferenced picture warned", any("не е посочена" in m for _, m in res["warnings"]), res["warnings"])
+    cat = json.load(open(os.path.join(tmp, "index.json"), encoding="utf-8"))
+    check("assets in catalog", any(r["assets"] == [f"assets/{stem}_fig01.png"] for r in cat["files"]), cat)
+    open(os.path.join(tmp, "assets", "snimka.png"), "wb").write(b"x")
+    code, res = lint(tmp, "--catalog")
+    check("bad picture name caught", any("името на картинката" in m for _, m in res["errors"]), res["errors"])
+
 if failures:
     print("FAIL\n" + "\n".join(failures))
     sys.exit(1)
