@@ -3,6 +3,8 @@
 """
 build_smetka.py — попълва СМЕТКА по чл. 23, ал. 3 от Наредба № Н-1/14.02.2023 г.
 (възнаграждение за ЕПТЗ) върху шаблона assets/smetka_template.xlsx и я записва като .xlsx (по подразбиране).
+Шаблонът е оригиналният образец на дирекцията (Приложение № 1) – шапката е текст в A2, както в
+образеца, на три реда; директорът се попълва от списъка на служителите.
 
 Употреба:
     python3 build_smetka.py smetka.json -o /mnt/user-data/outputs/Smetka_....xlsx
@@ -41,6 +43,7 @@ smetka.json:
 искане) изисква LibreOffice (soffice).
 """
 import argparse
+import copy
 import json
 import os
 import re
@@ -50,6 +53,7 @@ import sys
 import tempfile
 
 import openpyxl
+from openpyxl.cell.rich_text import CellRichText, TextBlock
 from openpyxl.styles import PatternFill
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_shared", "scripts"))
@@ -57,9 +61,6 @@ from docx_common import typo  # noqa: E402  (the common typography rules)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, "..", "assets", "smetka_template.xlsx")
-# шапката – картина на шапката от бланките .docx (един и същ вид във всички документи;
-# Excel няма разредка и сгъстяване на буквите, затова не е текст)
-LETTERHEAD = os.path.join(HERE, "..", "assets", "letterhead.png")
 
 RATE = 0.035 * 620.2          # E11 – the same formula stands in the template; the test compares the two
 NUMBERS = ("pages", "copies", "hours", "a4_bw", "a4_color", "a3_bw", "hours_weekend", "hours_holiday", "complex_addon")
@@ -187,27 +188,10 @@ def compute(d):
     return round(labour + overhead + cons + addons, 2)
 
 
-def add_letterhead(ws):
-    """The letterhead picture in row 2, 509 pt wide like the .docx letterhead, centred on columns A–F."""
-    from openpyxl.drawing.image import Image
-    from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor
-    from openpyxl.drawing.xdr import XDRPositiveSize2D
-    from openpyxl.utils.units import pixels_to_EMU
-    img = Image(LETTERHEAD)
-    w_px = round(509 / 72 * 96)                       # 509 pt = the width of the .docx letterhead
-    h_px = round(w_px * img.height / img.width)
-    cols_px = sum(round((ws.column_dimensions[c].width or 9.14) * 7 + 5) for c in "ABCDEF")
-    left = max((cols_px - w_px) // 2, 0)
-    ws.row_dimensions[2].height = round(h_px * 0.75) + 6
-    marker = AnchorMarker(col=0, colOff=pixels_to_EMU(left), row=1, rowOff=pixels_to_EMU(4))
-    img.anchor = OneCellAnchor(_from=marker, ext=XDRPositiveSize2D(pixels_to_EMU(w_px), pixels_to_EMU(h_px)))
-    ws.add_image(img)
-
-
 def fill(d, xlsx_out):
-    wb = openpyxl.load_workbook(TEMPLATE)
+    # rich_text=True keeps the header in A2 as in the original form (three lines, 16/12/10 pt)
+    wb = openpyxl.load_workbook(TEMPLATE, rich_text=True)
     ws = wb.active
-    add_letterhead(ws)
     dots = lambda v, fallback: v if v else fallback
     title = (d.get("expert_title") or DEFAULT_TITLE).strip()
     ws["A7"] = (
@@ -246,11 +230,22 @@ def fill(d, xlsx_out):
         for c in row:
             if c.fill is not None and c.fill.fill_type and str(c.fill.fgColor.rgb).upper() == "FFFFFF00":
                 c.fill = PatternFill(fill_type=None)
-    # типографски правила (_shared/conventions.md): тирето е „–“ (не „-“ и не „—“), „№ 4“
+    # типографски правила (_shared/conventions.md): тирето е „–“ (не „-“ и не „—“), „№ 4“;
+    # без получер (вътрешно правило – пести консумативи при печат)
     for row in ws.iter_rows():
         for c in row:
             if isinstance(c.value, str) and not c.value.startswith("="):
                 c.value = typo(c.value)
+            elif isinstance(c.value, CellRichText):
+                for part in c.value:
+                    if isinstance(part, TextBlock):
+                        part.text = typo(part.text)
+                        if part.font is not None and part.font.b:
+                            part.font.b = False
+            if c.font is not None and c.font.b:
+                f = copy.copy(c.font)
+                f.b = False
+                c.font = f
     wb.save(xlsx_out)
     return total
 
