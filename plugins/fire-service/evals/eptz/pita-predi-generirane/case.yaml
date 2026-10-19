@@ -3,7 +3,7 @@ name: eptz-pita-predi-generirane
 description: >-
   Фаза 3, т. 1 – дори с всички материали скилът не генерира заключението сам, а пита изрично
   „Искате ли да генерирам …“ и чака съгласие.
-tags: [eptz, behaviour]
+tags: [eptz, behaviour, regresiya]
 runs: 3
 execution:
   max_turns: 25

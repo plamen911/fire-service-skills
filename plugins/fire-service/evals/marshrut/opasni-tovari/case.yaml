@@ -1,0 +1,27 @@
+schema_version: "1.1"
+name: marshrut-opasni-tovari
+description: Произшествие с опасен товар по табела – опасни товари.
+tags: [marshrut, trigger, regresiya]
+runs: 3
+execution:
+  max_turns: 4
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: |
+    На магистралата е обърната цистерна с оранжева табела 33/1203 и тече. На какво разстояние да отцепим?
+graders:
+  - name: zarezhda-opasni-tovari
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?opasni-tovari"'
+  - name: ne-zarezhda-normativna-uredba
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?normativna-uredba"'
+    min: 0
+    max: 0
+  - name: ne-zarezhda-svoistva-veshtestva
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?svoistva-veshtestva"'
+    min: 0
+    max: 0

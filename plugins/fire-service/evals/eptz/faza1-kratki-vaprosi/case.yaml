@@ -1,7 +1,7 @@
 schema_version: "1.1"
 name: eptz-faza1-kratki-vaprosi
 description: Фаза 1 – на първото съобщение без материали отговорът е кратък, с 1–2 въпроса, без лекция.
-tags: [eptz, behaviour]
+tags: [eptz, behaviour, regresiya]
 runs: 3
 execution:
   max_turns: 6

@@ -1,0 +1,22 @@
+schema_version: "1.1"
+name: marshrut-normativna-uredba
+description: Въпрос какво гласи акт за хидрантите – нормативна уредба, не водоизточници.
+tags: [marshrut, trigger, regresiya]
+runs: 3
+execution:
+  max_turns: 4
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: |
+    Какво казва наредбата за пожарната безопасност колко най-много може да е разстоянието между
+    пожарните хидранти по улиците?
+graders:
+  - name: zarezhda-normativna-uredba
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?normativna-uredba"'
+  - name: ne-zarezhda-vodoiztochnitsi
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?vodoiztochnitsi"'
+    min: 0
+    max: 0

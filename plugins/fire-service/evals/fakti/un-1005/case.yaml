@@ -1,0 +1,23 @@
+schema_version: "1.1"
+name: fakti-un-1005
+description: UN 1005 е безводен амоняк, клас 2 – от данните, не по памет.
+tags: [fakti, regresiya]
+runs: 3
+execution:
+  max_turns: 10
+  allowed_tools: [Read, Glob, Grep, Skill, Bash]
+  prompt: |
+    Какво вещество е UN 1005 и от кой клас е?
+graders:
+  - name: amonyak
+    type: regex
+    pattern: 'амоняк'
+    flags: i
+  - name: klas-2
+    type: regex
+    pattern: 'клас\s*2'
+    flags: i
+  - name: polzva-adr
+    type: tool_used
+    tool: Bash
+    input_match: 'adr.py'

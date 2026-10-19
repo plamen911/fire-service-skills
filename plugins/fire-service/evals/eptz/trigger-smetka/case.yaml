@@ -1,7 +1,7 @@
 schema_version: "1.1"
 name: eptz-trigger-smetka
 description: Искане само за сметката за експертиза – и тя е в eptz.
-tags: [eptz, trigger]
+tags: [eptz, trigger, regresiya]
 runs: 3
 execution:
   max_turns: 4

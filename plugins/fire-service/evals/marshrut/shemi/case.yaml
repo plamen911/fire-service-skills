@@ -1,0 +1,21 @@
+schema_version: "1.1"
+name: marshrut-shemi
+description: Само схема, без конспект – shemi.
+tags: [marshrut, trigger, regresiya]
+runs: 3
+execution:
+  max_turns: 4
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: |
+    Начертай ми схема: сграда 20 на 10 м, две пожарни коли от юг, хидрант на 40 м и една линия до входа.
+graders:
+  - name: zarezhda-shemi
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?shemi"'
+  - name: ne-zarezhda-plan-konspekt-ptz
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?plan-konspekt-ptz"'
+    min: 0
+    max: 0

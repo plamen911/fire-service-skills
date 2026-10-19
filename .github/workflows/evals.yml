@@ -1,0 +1,61 @@
+name: evals
+# Регресия на evals (виж plugins/fire-service/evals/README.md): пуска случаите с таг `regresiya`
+# и ги сравнява с evals/baseline.json. Струва пари (~9 USD на пускане: 25 случая по 3 опита, ~5 мин), затова върви само когато:
+#   - е пуснат ръчно (Actions → evals → Run workflow), или
+#   - при качване променя SKILL.md, справочниците или самите случаи –
+# и само ако в хранилището има секрет ANTHROPIC_API_KEY. Без секрета работата се пропуска.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "plugins/fire-service/skills/*/SKILL.md"
+      - "plugins/fire-service/skills/*/references/**"
+      - "plugins/fire-service/shared/*.md"
+      - "plugins/fire-service/evals/**/case.yaml"
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      FIRE_SERVICE_NO_METRICS: "1"
+    steps:
+      - name: Has the API key?
+        id: key
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else
+            echo "::notice::No ANTHROPIC_API_KEY secret – evals skipped."; echo "ok=false" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v4
+        if: steps.key.outputs.ok == 'true'
+      - uses: actions/setup-python@v5
+        if: steps.key.outputs.ok == 'true'
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        if: steps.key.outputs.ok == 'true'
+        with:
+          node-version: "22"
+      - name: Install
+        if: steps.key.outputs.ok == 'true'
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q bubblewrap socat
+          pip install -r requirements-dev.txt
+          npm install -g @anthropic-ai/claude-code
+      - name: Run the regression cases
+        if: steps.key.outputs.ok == 'true'
+        working-directory: plugins/fire-service
+        run: |
+          mkdir -p evals/results
+          claude plugin eval . --tag regresiya --ablation none --trust-plugin --no-publish \
+            --allow-tools Bash -j 4 --max-cost-usd 12 --threshold 0 \
+            --json evals/results/ci.json --report evals/results/report.html
+      - name: Compare with the baseline
+        if: steps.key.outputs.ok == 'true'
+        working-directory: plugins/fire-service
+        run: python3 evals/regresiya.py evals/results/ci.json --bez-istoriya
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.key.outputs.ok == 'true'
+        with:
+          name: eval-report
+          path: plugins/fire-service/evals/results/

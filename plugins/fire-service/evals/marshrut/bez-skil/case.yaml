@@ -1,0 +1,17 @@
+schema_version: "1.1"
+name: marshrut-bez-skil
+description: Въпрос извън пожарната служба – не се зарежда нито един скил на плъгина.
+tags: [marshrut, trigger, regresiya]
+runs: 3
+execution:
+  max_turns: 4
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: |
+    Колко е 15 процента от 240?
+graders:
+  - name: bez-skil-na-plagina
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?(?:eptz|spravka-prichina|udostovereniya-pozhari|tarsene-proizshestviya|normativna-uredba|vodoiztochnitsi|raioni-na-deistvie|grafik-dezhurstva|opasni-tovari|svoistva-veshtestva|sili-i-sredstva|shemi|plan-konspekt-ptz|plan-konspekti)"'
+    min: 0
+    max: 0

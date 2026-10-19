@@ -1,0 +1,21 @@
+schema_version: "1.1"
+name: marshrut-svoistva-veshtestva
+description: Пламна температура с източник – свойства на веществата, не опасни товари.
+tags: [marshrut, trigger, regresiya]
+runs: 3
+execution:
+  max_turns: 4
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: |
+    Каква е пламната температура на дизеловото гориво и какъв източник да напиша в експертизата?
+graders:
+  - name: zarezhda-svoistva-veshtestva
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?svoistva-veshtestva"'
+  - name: ne-zarezhda-opasni-tovari
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?opasni-tovari"'
+    min: 0
+    max: 0
