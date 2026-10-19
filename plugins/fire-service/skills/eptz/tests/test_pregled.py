@@ -111,7 +111,12 @@ ok(any("дословно" in g for g in r["greshki"]), "a question not verbatim"
 r = check(GOOD.replace("### Изследване на въпрос № 2:", "### Изследване на въпрос № 3:"), META)
 ok(any("по ред" in g for g in r["greshki"]), "answers out of order")
 r = check(GOOD.replace("**В). Самозапалване.**\n\nНяма порест материал с натрупване на топлина. Извод: Версията отпада.\n\n", ""), META)
-ok(any("самозапалване" in g for g in r["greshki"]), "a missing standard version")
+ok(not any("стандартните версии" in g for g in r["greshki"]), "самозапалване is not required")
+r = check(GOOD.replace("**Б). Късо съединение.**\n\nПостройката няма ел. инсталация. Извод: Версията отпада.\n\n", ""), META)
+ok(any("късо съединение" in g for g in r["greshki"]), "a missing standard version")
+for word in ("Обвиняемият прави самопризнания.", "Деецът е избягал.", "Има заповед за защита."):
+    r = check(GOOD + "\n" + word + "\n", META)
+    ok(not r["ok"], f"„{word}“ is flagged")
 r = check(GOOD.replace("Постройката няма ел. инсталация. Извод: Версията отпада.", "Постройката няма ел. инсталация."), META)
 ok(any("Б)" in z for z in r["za_proverka"]), "a version without a verdict")
 r = check(GOOD.replace("Най-вероятната причина е небрежност", "Причината е късо съединение, а не небрежност"), META)
