@@ -162,9 +162,18 @@ def build(content, meta, out, final, template):
     new += [clone(P_HDR, "I. Основание за провеждане на експертизата."),
             clone(P_BODY, f"{post[0].upper()+post[1:]} за назначаване на СЪДЕБНА ПОЖАРО-ТЕХНИЧЕСКА ЕКСПЕРТИЗА на {m(meta,'naznachil')} във връзка със {zm} и {dp}."),
             clone(P_BLANK),
-            clone(P_HDR, "II. Представен доказателствен материал."),
-            clone(P_BODY, m(meta, "predstaven_material",
-                  f"Материали по ДП № {m(meta,'dp_no')} по описа на {prok} и ЗМ № {m(meta,'zm_no')} г. по описа на {m(meta,'zm_opis')}."))]
+            clone(P_HDR, "II. Представен доказателствен материал.")]
+    obshto = f"Материали по ДП № {m(meta,'dp_no')} по описа на {prok} и ЗМ № {m(meta,'zm_no')} г. по описа на {m(meta,'zm_opis')}"
+    material = meta.get("predstaven_material")
+    if isinstance(material, list) and [x for x in material if str(x).strip()]:
+        # списък с документите от делото (от снимките): оглед, албум, разпити, телефонограма, експертизи …
+        items = [str(x).strip().rstrip(";").rstrip() for x in material if str(x).strip()]
+        new.append(clone(P_BODY, f"{obshto}, както следва:"))
+        # „г.“ в края остава: „… 29.09.2026 г.;“ и последната точка – „… г.“
+        new += [clone(P_BODY, f"{i}. {x}" + ("" if i == len(items) and x.endswith(".") else "." if i == len(items) else ";"))
+                for i, x in enumerate(items, 1)]
+    else:
+        new.append(clone(P_BODY, m(meta, "predstaven_material", f"{obshto}.")))
     # [[ключ]] → „(Кратко, място)“; литературата – задължителните + цитираните (_shared/svoistva/)
     for s_ in bez_iztochnik(re.sub(r"^#+ .*$", "", re.sub(r"<!--.*?-->", "", content, flags=re.S), flags=re.M)):
         print(f"⚠ число без позоваване – ако не е от материалите по делото, сложи [[ключ]]: {s_[:120]}")
