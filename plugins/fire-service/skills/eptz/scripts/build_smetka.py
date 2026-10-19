@@ -4,7 +4,8 @@
 build_smetka.py — попълва СМЕТКА по чл. 23, ал. 3 от Наредба № Н-1/14.02.2023 г.
 (възнаграждение за ЕПТЗ) върху шаблона assets/smetka_template.xlsx и я записва като .xlsx (по подразбиране).
 Шаблонът е оригиналният образец на дирекцията (Приложение № 1) – шапката е текст в A2, както в
-образеца, на три реда; директорът се попълва от списъка на служителите.
+образеца, на три реда; получерът е като в образеца (изключение от правилото „без получер“);
+директорът се попълва от списъка на служителите.
 
 Употреба:
     python3 build_smetka.py smetka.json -o /mnt/user-data/outputs/Smetka_....xlsx
@@ -43,7 +44,6 @@ smetka.json:
 искане) изисква LibreOffice (soffice).
 """
 import argparse
-import copy
 import json
 import os
 import re
@@ -230,8 +230,8 @@ def fill(d, xlsx_out):
         for c in row:
             if c.fill is not None and c.fill.fill_type and str(c.fill.fgColor.rgb).upper() == "FFFFFF00":
                 c.fill = PatternFill(fill_type=None)
-    # типографски правила (_shared/conventions.md): тирето е „–“ (не „-“ и не „—“), „№ 4“;
-    # без получер (вътрешно правило – пести консумативи при печат)
+    # типографски правила (_shared/conventions.md): тирето е „–“ (не „-“ и не „—“), „№ 4“.
+    # Получерът остава както в образеца – сметката е изключение от правилото „без получер“.
     for row in ws.iter_rows():
         for c in row:
             if isinstance(c.value, str) and not c.value.startswith("="):
@@ -240,12 +240,6 @@ def fill(d, xlsx_out):
                 for part in c.value:
                     if isinstance(part, TextBlock):
                         part.text = typo(part.text)
-                        if part.font is not None and part.font.b:
-                            part.font.b = False
-            if c.font is not None and c.font.b:
-                f = copy.copy(c.font)
-                f.b = False
-                c.font = f
     wb.save(xlsx_out)
     return total
 

@@ -189,9 +189,13 @@ def check_no_bold():
     """No bold in the templates of the documents (a rule of the directorate – shared/conventions.md)."""
     import zipfile
     rx = re.compile(r"<w:b(Cs)?[ /]|<b/>|<b val=\"(1|true)\"")
+    # the сметка keeps the bold of the directorate's original form (shared/conventions.md)
+    BOLD_ALLOWED = {"smetka_template.xlsx"}
     bad = 0
     for f in glob.glob(os.path.join(SKILLS, "*", "assets", "*.docx")) + glob.glob(os.path.join(SKILLS, "*", "assets", "*.xlsx")) \
             + glob.glob(os.path.join(SKILLS, "*", "assets", "*.xml")):
+        if os.path.basename(f) in BOLD_ALLOWED:
+            continue
         if f.endswith(".xml"):
             texts = [open(f, encoding="utf-8").read()]
         else:

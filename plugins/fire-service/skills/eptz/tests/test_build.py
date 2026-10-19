@@ -232,10 +232,10 @@ def test_smetka():
                    "РЕГИОНАЛНА ДИРЕКЦИЯ „ПОЖАРНА БЕЗОПАСНОСТ И ЗАЩИТА НА НАСЕЛЕНИЕТО” – ПЛЕВЕН"],
           "the header is text in A2 as in the original form, three lines")
     check(not wr._images, "no header picture")
-    bold = [c.coordinate for r in wr.iter_rows() for c in r if c.font is not None and c.font.b]
-    bold += [c.coordinate for r in wr.iter_rows() for c in r if hasattr(c.value, "__iter__")
-             and not isinstance(c.value, str) and any(getattr(getattr(p, "font", None), "b", False) for p in c.value)]
-    check(not bold, f"no bold {bold}")
+    bold = {c.coordinate for r in wr.iter_rows() for c in r if c.font is not None and c.font.b}
+    check({"B9", "B10", "B27", "F27"} <= bold, "bold kept as in the original form (the сметка is the exception)")
+    iban = [p for p in wr["A31"].value if "BG96" in str(p)]
+    check(iban and iban[0].font.b, "IBAN in bold as in the original form")
 
     other = dict(data, izvarshena_ot="Георги Малинов", expert_title="старши пожарникар",
                  expert_position="старши пожарникар в РСПБЗН – Левски", izgotvil_short="Г. Малинов")
