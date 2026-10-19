@@ -48,6 +48,9 @@ from lxml import etree
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_shared", "scripts"))
 from docx_common import report, typo, typo_all  # noqa: E402  (the common typography rules and the final check)
 
+# Arson wording is not written in a справка – „злонамерено внесен външен източник“ instead.
+ARSON = re.compile(r"\bпалеж\w*|\bумис[ъл]\w*|\bумишлен\w*", re.I)
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, "..", "assets", "template.docx")
 MODEL = os.path.join(HERE, "..", "assets", "body_paragraph_model.xml")
@@ -241,6 +244,10 @@ def build(data, out_path):
 
     for text in lines:
         anchor.addprevious(make_body_paragraph(model_xml, text))
+    for text in lines:
+        m = ARSON.search(text)
+        if m:
+            print(f"⚠ „{m.group(0)}“ – в справката се пише „злонамерено внесен външен източник“", file=sys.stderr)
 
     typo_all(doc, W + "t")
     doc.save(out_path)
