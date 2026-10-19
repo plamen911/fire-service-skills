@@ -95,7 +95,7 @@ def test_citiraj():
           "mandatory first, then cited in order, each once")
     check(lit[-1].endswith(".") and all(x.endswith(";") for x in lit[:-1]), "punctuation of the list")
     t, lit, _ = s.citiraj("Ръчно (Чочев, 2003, прил. № 2) и [[icsc:0087; simeonov]].")
-    check(t.endswith("(ICSC 0087; Симеонов, 2023)."), "several sources in one marker")
+    check(t.endswith("(ICSC 0087; Симеонов, 2007)."), "several sources in one marker")
     check(any("Чочев" in x for x in lit), "a hand-typed reference is listed too")
     for bad, why in (("[[nqma]]", "unknown key"), ("[[icsc:9999]]", "card not in the table"),
                      ("(ICSC 9999)", "hand-typed unknown card")):
