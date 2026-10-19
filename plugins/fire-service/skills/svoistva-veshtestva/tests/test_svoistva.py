@@ -210,6 +210,8 @@ def test_proveri():
     check(len(s.proveri_chisla("Сеното тлее при 204 °C [[korolchenko: ч. II, с. 396]].")) == 1, "wrong page caught")
     check(s.proveri_chisla("Алуминият – 600 ÷ 660 °C [[chochev: прил. № 7, с. 223]].") == [], "no data for Чочев – not checked")
     check(s.proveri_chisla("Огнището е в ъгъла [[simeonov]].") == [], "no number – nothing to check")
+    check(s.proveri_chisla("разрядът често надвишава 20 000 °C [[simeonov: с. 71]].") == [], "Симеонов с. 71 – 20 000 °C is there")
+    check(s.proveri_chisla("разрядът надвишава 30 000 °C [[simeonov: с. 71]].") != [], "Симеонов с. 71 – 30 000 °C is not")
     ilb = {"ilb-r": {"kratko": "ИЛБ на „Р 650“, 2024", "palno": "ИЛБ;", "stoinosti": "пламна температура 23 °C; самовъзпламеняване 245 °C"}}
     check(s.proveri_chisla("Разредителят – 23 °C [[ilb-r: раздел 9]].", ilb) == [], "ИЛБ: value from its section 9 passes")
     check(len(s.proveri_chisla("Разредителят – 32 °C [[ilb-r: раздел 9]].", ilb)) == 1, "ИЛБ: other value caught")

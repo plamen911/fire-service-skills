@@ -386,12 +386,14 @@ def danni_za(kluch, mesto, rows):
     hit = [r for r in found if (lambda rp: (not part or rp[0] == part) and (not pages or rp[1] & pages))(_stranitsi(r["mesto"]))]
     if not hit:
         return set()
-    return set().union(*(_chisla(r["stoinost"] + " " + r["usloviya"]) for r in hit))
+    # „20 000“ in a book value → „20000“, as in the checked text
+    return set().union(*(_chisla(re.sub(r"(?<=\d)[ \u00a0\u202f](?=\d{3}\b)", "", r["stoinost"]) + " " + r["usloviya"])
+                         for r in hit))
 
 
 def proveri_chisla(text, extra=None):
     """The value with a unit right before a [[…]] marker, when the cited place does not give it.
-    Sources without data in the plugin (Чочев, Симеонов, a per-case ИЛБ) are not checked."""
+    Sources without data in the plugin (Чочев, Симеонов without a checked page, a per-case ИЛБ) are not checked."""
     rows = stoinosti()
     problems, start = [], 0
     for m in MARKER_RE.finditer(text):
