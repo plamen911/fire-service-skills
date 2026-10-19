@@ -13,6 +13,14 @@ regs.py — нормативната база (Fire Safety Regulatory Documents)
     python3 scripts/regs.py get _MAP_pg_sd.md          # сваля файл по име, път, част от името или Drive ID
     python3 scripts/regs.py get tier-a/…_2026_ed2026-02-27.md -o work
     python3 scripts/regs.py katalog --q 8121з-1006            # статусът от index.json: in_force, superseded_by, map …
+    python3 scripts/regs.py figuri RDPBZN-Pleven_Lesson-Plan_ASD-PTP-Hibridni-Avtomobili_2021.md -o fig
+                                                       # картинките, към които сочи файлът (![…](assets/…))
+    python3 scripts/regs.py get assets/…_fig01.png -o fig    # една картинка от папката assets/
+
+Картинките на базата стоят в папката `assets/` в корена; файлът сочи към тях с
+`![Фиг. N. Надпис](assets/ИМЕ.png)`. `figuri` ги сваля всичките и отпечатва JSON
+{"count", "figuri": [{"fig", "caption", "path", "bytes"}]} – полето "fig" отива направо във фигура на
+документ (напр. {"fig": …, "caption": …} в изложението на план-конспекта).
 
 Свалените файлове отиват в папката от -o (по подразбиране `regs/` в текущата папка). Скриптът
 отпечатва JSON {"file", "path", "id", "modified_at", "bytes", "link"} – после четеш файла `file`
@@ -26,6 +34,7 @@ regs.py — нормативната база (Fire Safety Regulatory Documents)
     UNSUPPORTED: ...       — файлът не е текстов (PDF оригинал) и не се сваля
 """
 import argparse
+import base64
 import json
 import os
 import re
@@ -95,6 +104,48 @@ def download(f, out_dir):
                      ensure_ascii=False))
 
 
+ASSET_RE = re.compile(r"!\[([^\]]*)\]\((assets/[^)\s]+)\)")
+
+
+def download_asset(f, out_dir):
+    """One picture from assets/ – n8n hands it out base64-encoded through the files endpoint."""
+    try:
+        res = api_config.post("samples_url", {"action": "get", "kind": "regs-assets", "name": f["name"]})
+    except urllib.error.HTTPError as e:
+        text = e.read().decode(errors="ignore")[:200]
+        if "NOT_FOUND" in text:
+            sys.exit(f"NOT_FOUND: няма картинка „{f['name']}“ в assets/")
+        sys.exit(f"N8N_UNAVAILABLE: HTTP {e.code} {text}")
+    except (OSError, KeyError, ValueError) as e:
+        sys.exit(f"N8N_UNAVAILABLE: {type(e).__name__}: {e}"[:300])
+    if not isinstance(res, dict) or not isinstance(res.get("base64"), str):
+        sys.exit("N8N_UNAVAILABLE: unexpected response shape (n8n не дава картинки)")
+    data = base64.b64decode(res["base64"])
+    os.makedirs(out_dir, exist_ok=True)
+    target = os.path.join(out_dir, f["name"])
+    with open(target, "wb") as fh:
+        fh.write(data)
+    return {"file": target, "path": "assets/" + f["name"], "id": f["id"], "bytes": len(data),
+            "link": f"https://drive.google.com/file/d/{f['id']}/view"}
+
+
+def figuri(files, what, out_dir):
+    """Every picture a file of the base points to with ![caption](assets/NAME), in the order of the text."""
+    f = resolve(files, what)
+    res = call({"action": "download", "id": f["id"]})
+    text = res.get("content") if isinstance(res, dict) else None
+    if not isinstance(text, str):
+        sys.exit("N8N_UNAVAILABLE: unexpected response shape")
+    out, seen = [], set()
+    for caption, path in ASSET_RE.findall(text):
+        if path in seen:
+            continue
+        seen.add(path)
+        got = download_asset(resolve([x for x in files if x.get("folder") == "assets"], path), out_dir)
+        out.append({"fig": got["file"], "caption": caption.strip(), "path": path, "bytes": got["bytes"]})
+    print(json.dumps({"file": f["path"], "count": len(out), "figuri": out}, ensure_ascii=False, indent=1))
+
+
 def katalog(files, q, out_dir):
     """Records of index.json (the generated catalogue in the root) whose path, title, act_id, subject or
     keywords contain q; without q – all of them."""
@@ -131,6 +182,9 @@ def main():
     p = sub.add_parser("katalog", help="записите от index.json – статус, заменена редакция, карта")
     p.add_argument("--q", help="търси в пътя, заглавието, act_id, subject и keywords")
     p.add_argument("-o", "--output", default="regs", help="папка за index.json (по подразбиране regs)")
+    p = sub.add_parser("figuri", help="сваля картинките, към които сочи файлът (assets/)")
+    p.add_argument("what", help="име, път, част от името или Drive ID на текстовия файл")
+    p.add_argument("-o", "--output", default="fig", help="папка за картинките (по подразбиране fig)")
     p = sub.add_parser("get", help="сваля един файл")
     p.add_argument("what", help="име, път, част от името или Drive ID")
     p.add_argument("-o", "--output", default="regs", help="папка за свалените файлове (по подразбиране regs)")
@@ -153,8 +207,14 @@ def main():
             sys.exit("NOT_FOUND: в корена на базата няма файл, започващ с _INDEX_")
         idx.sort(key=lambda f: (f.get("modified_at") or "", f.get("name") or ""))
         download(idx[-1], a.output)
+    elif a.cmd == "figuri":
+        figuri(files, a.what, a.output)
     else:
-        download(resolve(files, a.what), a.output)
+        f = resolve(files, a.what)
+        if f.get("folder") == "assets":
+            print(json.dumps(download_asset(f, a.output), ensure_ascii=False))
+        else:
+            download(f, a.output)
 
 
 if __name__ == "__main__":
