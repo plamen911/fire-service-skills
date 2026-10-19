@@ -1,0 +1,21 @@
+schema_version: "1.1"
+name: marshrut-plan-konspekti
+description: Семинар/лекция по тема – plan-konspekti, не ПТЗ.
+tags: [marshrut, trigger, regresiya]
+runs: 3
+execution:
+  max_turns: 4
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: |
+    Направи ми план-конспект за семинара през ноември на тема дихателна защита и ВДА.
+graders:
+  - name: zarezhda-plan-konspekti
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?plan-konspekti"'
+  - name: ne-zarezhda-plan-konspekt-ptz
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?plan-konspekt-ptz"'
+    min: 0
+    max: 0

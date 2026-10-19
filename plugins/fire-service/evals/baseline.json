@@ -1,0 +1,206 @@
+{
+  "data": "2026-10-19",
+  "sluchai": {
+    "eptz-faza1-kratki-vaprosi": {
+      "cost": 0.3506,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 11.3,
+      "turns": 3.0
+    },
+    "eptz-no-trigger-normativna": {
+      "cost": 0.3504,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 16.3,
+      "turns": 5.7
+    },
+    "eptz-no-trigger-spravka": {
+      "cost": 0.414,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 15.7,
+      "turns": 5.0
+    },
+    "eptz-pita-predi-generirane": {
+      "cost": 0.5376,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 26.3,
+      "turns": 5.3
+    },
+    "eptz-trigger-postanovlenie": {
+      "cost": 0.3503,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 7.3,
+      "turns": 3.0
+    },
+    "eptz-trigger-smetka": {
+      "cost": 0.4524,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 19.0,
+      "turns": 5.0
+    },
+    "fakti-plamna-dizel": {
+      "cost": 0.2774,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 13.0,
+      "turns": 4.0
+    },
+    "fakti-plamna-izmisleno-nyama": {
+      "cost": 0.2895,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 18.3,
+      "turns": 4.0
+    },
+    "fakti-tabela-33-1203": {
+      "cost": 0.3954,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 18.0,
+      "turns": 5.0
+    },
+    "fakti-un-1005": {
+      "cost": 0.3009,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 12.7,
+      "turns": 4.3
+    },
+    "fakti-un-9999-nyama": {
+      "cost": 0.3187,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 16.7,
+      "turns": 4.3
+    },
+    "marshrut-bez-skil": {
+      "cost": 0.2046,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 4.0,
+      "turns": 1.0
+    },
+    "marshrut-grafik-dezhurstva": {
+      "cost": 0.3761,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 17.7,
+      "turns": 4.3
+    },
+    "marshrut-normativna-uredba": {
+      "cost": 0.3311,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 17.7,
+      "turns": 5.7
+    },
+    "marshrut-opasni-tovari": {
+      "cost": 0.3982,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 21.7,
+      "turns": 5.3
+    },
+    "marshrut-plan-konspekt-ptz": {
+      "cost": 0.2698,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 12.3,
+      "turns": 3.0
+    },
+    "marshrut-plan-konspekti": {
+      "cost": 0.3807,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 12.0,
+      "turns": 5.0
+    },
+    "marshrut-raioni-na-deistvie": {
+      "cost": 0.321,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 16.0,
+      "turns": 5.0
+    },
+    "marshrut-shemi": {
+      "cost": 0.4108,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 23.7,
+      "turns": 5.0
+    },
+    "marshrut-sili-i-sredstva": {
+      "cost": 0.2779,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 12.3,
+      "turns": 3.0
+    },
+    "marshrut-spravka-prichina": {
+      "cost": 0.5024,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 20.0,
+      "turns": 5.0
+    },
+    "marshrut-svoistva-veshtestva": {
+      "cost": 0.3164,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 17.7,
+      "turns": 5.0
+    },
+    "marshrut-tarsene-proizshestviya": {
+      "cost": 0.3734,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 16.0,
+      "turns": 5.0
+    },
+    "marshrut-udostovereniya-pozhari": {
+      "cost": 0.3864,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 12.0,
+      "turns": 5.0
+    },
+    "marshrut-vodoiztochnitsi": {
+      "cost": 0.339,
+      "errors": 0,
+      "passRate": 1.0,
+      "runs": 3,
+      "seconds": 11.3,
+      "turns": 4.7
+    }
+  },
+  "versiya": "2.27.0"
+}

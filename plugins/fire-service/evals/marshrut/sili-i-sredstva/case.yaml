@@ -1,0 +1,21 @@
+schema_version: "1.1"
+name: marshrut-sili-i-sredstva
+description: Разчет на струйници – сили и средства.
+tags: [marshrut, trigger, regresiya]
+runs: 3
+execution:
+  max_turns: 4
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: |
+    Колко струйника трябват за пожар в склад 30 на 20 метра, ако времето за свободно развитие е 15 минути?
+graders:
+  - name: zarezhda-sili-i-sredstva
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?sili-i-sredstva"'
+  - name: ne-zarezhda-normativna-uredba
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?normativna-uredba"'
+    min: 0
+    max: 0

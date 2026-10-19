@@ -1,0 +1,19 @@
+schema_version: "1.1"
+name: fakti-tabela-33-1203
+description: Табела 33/1203 – бензин, клас 3.
+tags: [fakti, regresiya]
+runs: 3
+execution:
+  max_turns: 10
+  allowed_tools: [Read, Glob, Grep, Skill, Bash]
+  prompt: |
+    Какво превозва цистерна с оранжева табела 33/1203?
+graders:
+  - name: benzin
+    type: regex
+    pattern: 'бензин'
+    flags: i
+  - name: polzva-adr
+    type: tool_used
+    tool: Bash
+    input_match: 'adr.py'

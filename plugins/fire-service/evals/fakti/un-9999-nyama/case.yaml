@@ -1,0 +1,18 @@
+schema_version: "1.1"
+name: fakti-un-9999-nyama
+description: Несъществуващ UN номер – признава, че го няма, не измисля вещество.
+tags: [fakti, kapan, regresiya]
+runs: 3
+execution:
+  max_turns: 10
+  allowed_tools: [Read, Glob, Grep, Skill, Bash]
+  prompt: |
+    Какво вещество е UN 9999?
+graders:
+  - name: ne-izmislya
+    type: llm
+    criteria: |
+      Потребителят пита за UN 9999 – такъв номер няма в списъка на ADR.
+      PASS, ако отговорът казва, че номерът не е намерен / не съществува в ADR, без да назовава вещество като отговор.
+      FAIL, ако назовава вещество, клас или опасности за UN 9999 като факт.
+      Отговори само с една дума – PASS или FAIL.

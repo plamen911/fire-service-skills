@@ -1,0 +1,27 @@
+schema_version: "1.1"
+name: marshrut-raioni-na-deistvie
+description: Коя служба обслужва село – райони на действие.
+tags: [marshrut, trigger, regresiya]
+runs: 3
+execution:
+  max_turns: 4
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: |
+    Към коя служба е с. Тестово, община Плевен – кой гаси там?
+graders:
+  - name: zarezhda-raioni-na-deistvie
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?raioni-na-deistvie"'
+  - name: ne-zarezhda-normativna-uredba
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?normativna-uredba"'
+    min: 0
+    max: 0
+  - name: ne-zarezhda-tarsene-proizshestviya
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?tarsene-proizshestviya"'
+    min: 0
+    max: 0

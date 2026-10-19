@@ -1,0 +1,27 @@
+schema_version: "1.1"
+name: marshrut-tarsene-proizshestviya
+description: Брой и списък пожари за период – статистика, не документ по един пожар.
+tags: [marshrut, trigger, regresiya]
+runs: 3
+execution:
+  max_turns: 4
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: |
+    Колко пожара в МПС имаше в района на РСПБЗН – Левски през август 2026? Дай ги и по населени места.
+graders:
+  - name: zarezhda-tarsene-proizshestviya
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?tarsene-proizshestviya"'
+  - name: ne-zarezhda-spravka-prichina
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?spravka-prichina"'
+    min: 0
+    max: 0
+  - name: ne-zarezhda-udostovereniya-pozhari
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?udostovereniya-pozhari"'
+    min: 0
+    max: 0

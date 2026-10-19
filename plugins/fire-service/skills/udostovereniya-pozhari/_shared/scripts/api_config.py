@@ -131,36 +131,110 @@ def request(url_field, body, timeout=60):
         {"Content-Type": "application/json", cfg["header"]: cfg["key"]})
 
 
+METRICS_TIMEOUT = 2   # seconds; a metrics event must never slow a skill down noticeably
+
+
+def _plugin_version():
+    """The plugin version from .claude-plugin/plugin.json above this file, or "?"."""
+    folder = HERE
+    for _ in range(6):
+        folder = os.path.dirname(folder)
+        path = os.path.join(folder, ".claude-plugin", "plugin.json")
+        if os.path.exists(path):
+            try:
+                with open(path, encoding="utf-8") as f:
+                    return str(json.load(f).get("version") or "?")
+            except (OSError, ValueError):
+                return "?"
+    return "?"
+
+
+def _caller():
+    """(skill, script) of the script that is running – from its path, e.g. skills/spravka-prichina/scripts/…"""
+    path = os.path.abspath(sys.argv[0]) if sys.argv and sys.argv[0] else ""
+    parts = path.replace("\\", "/").split("/")
+    skill = parts[parts.index("skills") + 1] if "skills" in parts[:-1] else ""
+    return skill, os.path.basename(path)
+
+
+def metrics_event(url_field, body, ms, outcome):
+    """The event sent for one call: what was called, how long it took and how it ended – never the data.
+
+    Only the endpoint name, the `action`/`kind` words of the request and the outcome go out; the request
+    body (names, addresses, case facts) and the answer never do."""
+    skill, script = _caller()
+    body = body if isinstance(body, dict) else {}
+    return {"event": "call", "skill": skill, "script": script, "endpoint": url_field,
+            "action": str(body.get("action") or ""), "kind": str(body.get("kind") or ""),
+            "ms": int(ms), "outcome": outcome, "version": _plugin_version()}
+
+
+def send_metrics(event):
+    """POST one event to `metrics_url` when it is configured; silently does nothing otherwise or on any error."""
+    if os.environ.get("FIRE_SERVICE_NO_METRICS") or os.environ.get("FIRE_SERVICE_NO_KEY"):
+        return False
+    try:
+        cfg = load()
+    except (OSError, ValueError):
+        return False
+    url = cfg.get("metrics_url")
+    if not url or not cfg.get("key"):
+        return False
+    try:
+        req = urllib.request.Request(url, json.dumps(event, ensure_ascii=False).encode(),
+                                     {"Content-Type": "application/json", cfg["header"]: cfg["key"]})
+        with urllib.request.urlopen(req, timeout=METRICS_TIMEOUT) as r:
+            r.read()
+        return True
+    except Exception:   # metrics are best-effort: a failure here must never break the skill
+        return False
+
+
 def post(url_field, body, timeout=60):
     """POST to an endpoint → parsed JSON. A rejected key ends with KEY_REJECTED; other HTTP errors are raised.
 
     One more attempt is made, after a short pause, only when the request certainly did not reach n8n – the
     connection could not be opened, or the proxy in front answered 502/503. A timeout is never repeated: the
-    request may have been carried out (a second write would duplicate it)."""
-    for attempt in (1, 2):
-        try:
-            with urllib.request.urlopen(request(url_field, body), timeout=timeout) as r:
-                raw = r.read()
-            break
-        except urllib.error.HTTPError as e:
-            if e.code in (401, 403):
-                sys.exit(f"KEY_REJECTED: n8n не приема личния ключ (от {load()['key_source']}) – "
-                         "провери реда `key:` в скила fire-service-key или поискай нов ключ от администратора.")
-            if e.code in (502, 503) and attempt == 1:
-                time.sleep(RETRY_PAUSE)
-                continue
-            raise
-        except urllib.error.URLError as e:
-            refused = isinstance(e.reason, (ConnectionRefusedError, socket.gaierror))
-            if refused and attempt == 1:
-                time.sleep(RETRY_PAUSE)
-                continue
-            raise
+    request may have been carried out (a second write would duplicate it).
+
+    Every call that reaches the network also sends one metrics event (see `metrics_event`) when
+    `metrics_url` is set in incident_api.json – the online half of the evals (evals/README.md)."""
+    started, outcome = time.monotonic(), "ok"
     try:
-        return json.loads(raw)
-    except ValueError:
-        start = raw[:80].decode("utf-8", "replace").replace("\n", " ")
-        raise ValueError(f"сървърът върна отговор, който не е JSON (започва с „{start}“)") from None
+        for attempt in (1, 2):
+            try:
+                with urllib.request.urlopen(request(url_field, body), timeout=timeout) as r:
+                    raw = r.read()
+                break
+            except urllib.error.HTTPError as e:
+                outcome = f"http_{e.code}"
+                if e.code in (401, 403):
+                    sys.exit(f"KEY_REJECTED: n8n не приема личния ключ (от {load()['key_source']}) – "
+                             "провери реда `key:` в скила fire-service-key или поискай нов ключ от администратора.")
+                if e.code in (502, 503) and attempt == 1:
+                    time.sleep(RETRY_PAUSE)
+                    continue
+                raise
+            except urllib.error.URLError as e:
+                outcome = "timeout" if isinstance(e.reason, socket.timeout) else "unreachable"
+                refused = isinstance(e.reason, (ConnectionRefusedError, socket.gaierror))
+                if refused and attempt == 1:
+                    time.sleep(RETRY_PAUSE)
+                    continue
+                raise
+            except socket.timeout:
+                outcome = "timeout"
+                raise
+        outcome = "ok"
+        try:
+            return json.loads(raw)
+        except ValueError:
+            outcome = "not_json"
+            start = raw[:80].decode("utf-8", "replace").replace("\n", " ")
+            raise ValueError(f"сървърът върна отговор, който не е JSON (започва с „{start}“)") from None
+    finally:
+        if has_key():   # no key → the call never left the machine; nothing to measure
+            send_metrics(metrics_event(url_field, body, (time.monotonic() - started) * 1000, outcome))
 
 
 if __name__ == "__main__":

@@ -1,0 +1,21 @@
+schema_version: "1.1"
+name: marshrut-grafik-dezhurstva
+description: Кой е дежурен на дата – графици, не райони/служители.
+tags: [marshrut, trigger, regresiya]
+runs: 3
+execution:
+  max_turns: 4
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: |
+    Кои са дежурни в ОЦ на 4 ноември 2026?
+graders:
+  - name: zarezhda-grafik-dezhurstva
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?grafik-dezhurstva"'
+  - name: ne-zarezhda-raioni-na-deistvie
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?raioni-na-deistvie"'
+    min: 0
+    max: 0
