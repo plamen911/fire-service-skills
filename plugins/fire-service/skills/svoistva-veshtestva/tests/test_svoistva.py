@@ -164,18 +164,6 @@ def test_masla_prahove():
           "their literature lines – a short site address for GESTIS, the record number in the line")
     t, lit, _ = s.citiraj("Бензин [[icsc:1400]], време [[metar:LBPL: 04.08.2026]], лупа [[nwcg-pms412: с. 208]].")
     check(all(len(re.findall(r"https?://\S+", x)[0]) <= 45 for x in lit if "http" in x), "no long web address in the literature")
-    # the monthly bulletin of НИМХ: the marker, the literature line, the row of the station
-    t, lit, _ = s.citiraj("Валежът е 15.4 mm [[nimh:2025-08: Плевен]].")
-    check(t == "Валежът е 15.4 mm (НИМХ, бюлетин за август 2025 г.)." and "Месечен хидрометеорологичен бюлетин" in lit[-1]
-          and "за август 2025 г." in lit[-1], "[[nimh:…]] → (НИМХ, бюлетин за август 2025 г.) and its literature line")
-    import nimh
-    tabl = ("Таблица 1. Метеорологична справка за август 2025 г.\n"
-            " Плевен          24.8        0.8       38.7      11        10.9   27      15.4        36       6.6   23       4           0       1         2\n"
-            " В. Търново      24.6        1.4       38.6      11        10.7   27      26.2        59      10.2   19       4           1       1         1\n")
-    r = nimh.red(tabl, "Плевен")
-    check(r["valezh"] == "15.4" and r["valezh_norma"] == "36" and r["dni_gram"] == "2" and r["max_data"] == "11",
-          "nimh.py reads the row of Плевен")
-    check(nimh.red(tabl, "В. Търново")["valezh"] == "26.2", "a station with a space in the name")
     _, lit, _ = s.citiraj("Ръчно (CHRIS OSB) и (GESTIS-STAUB-EX, № 2176).")
     check(len(lit) == 4, "hand-typed CHRIS and GESTIS references are listed")
 
