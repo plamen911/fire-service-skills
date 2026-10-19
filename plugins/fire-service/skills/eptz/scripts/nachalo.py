@@ -57,7 +57,7 @@ def proizshestviya(data, mesto):
 
 
 def vreme_za(r):
-    """METAR from an hour before the signal to the signal, at the nearest airport."""
+    """METAR from an hour before the signal to the signal, at Долна Митрополия (LBPL)."""
     try:
         import vreme
         m = re.search(r"GPS\s*(\d{2})[,.](\d+)\s*;\s*(\d{2})[,.](\d+)", r.get("address", ""))
@@ -65,7 +65,7 @@ def vreme_za(r):
             lat, lon = float(f"{m.group(1)}.{m.group(2)}"), float(f"{m.group(3)}.{m.group(4)}")
         else:
             lat, lon = map(float, vreme.koordinati(r.get("location", "")).split(","))
-        icao, km = vreme.nay_blizka(lat, lon)
+        icao, km = vreme.za_raiona(lat, lon)   # the area of РДПБЗН – Плевен → always Долна Митрополия
         t = datetime.datetime.strptime(r["dat"], "%Y-%m-%d %H:%M:%S")
         ot, do = (t - datetime.timedelta(hours=1)).strftime("%H:%M"), t.strftime("%H:%M")
         if (t - datetime.timedelta(hours=1)).date() != t.date():
