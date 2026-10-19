@@ -24,9 +24,9 @@ smetka.json:
   "expert_position": "инспектор IV ст. в група ОЦ на сектор ПГ и СД към РДПБЗН – Плевен при ГДПБЗН – МВР",
                                            // длъжността след тирето – expert_position от профила на експерта
   "pages": 6,                              // страници на ЕПТЗ → часове труд = pages - 2 (ако няма "hours")
-  "copies": 2,                             // екземпляри → листа А4 = pages × copies (ако няма "a4_bw")
+  "copies": 2,                             // екземпляри – не влияе на листата (вж. a4_bw)
   "hours": 4,                              // часове труд — по подразбиране pages - 2
-  "a4_bw": 12,                             // отпечатани листа А4 черно-бяло — по подразбиране pages × copies
+  "a4_bw": 6,                              // отпечатани листа А4 черно-бяло — по подразбиране = pages (само екземплярът за възложителя)
   "a4_color": 0,
   "a3_bw": 0,
   "ogled": false,                          // true → ред 3.4 (ръкавици, дезинфектант, маска) = 1
@@ -140,7 +140,8 @@ def amount_words(total):
 # ---------- сметка ----------
 def apply_defaults(d):
     """Правило на експерта: часове труд = страниците на ЕПТЗ - 2 (напр. 6 стр. → 4 ч.);
-    листа А4 = страници × екземпляри. Изрично подадени "hours"/"a4_bw" имат предимство."""
+    листа А4 = страниците на заключението – само екземплярът за възложителя (клиента), не всички
+    екземпляри. Изрично подадени "hours"/"a4_bw" имат предимство."""
     d = dict(d)
     for k in NUMBERS:                      # numbers may come as text ("4", "4,5") or as null
         v = d.get(k)
@@ -159,7 +160,7 @@ def apply_defaults(d):
     if pages and "hours" not in d:
         d["hours"] = max(pages - 2, 1)
     if pages and "a4_bw" not in d:
-        d["a4_bw"] = pages * int(d.get("copies") or 2)
+        d["a4_bw"] = pages                 # only the client's copy is charged
     if not d.get("hours"):
         sys.exit('BAD_INPUT: няма часове труд – подай "pages" (страниците на заключението) или "hours"')
     return d
