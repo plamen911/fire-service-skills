@@ -241,8 +241,32 @@ def fill(d, xlsx_out):
                 for part in c.value:
                     if isinstance(part, TextBlock):
                         part.text = typo(part.text)
+    fit_one_page(ws)
     wb.save(xlsx_out)
     return total
+
+
+def fit_one_page(ws):
+    """One A4 page even where „fit to page“ is ignored (Google Sheets, Numbers, the phone's preview):
+    at 100 % the form is 821.5 pt high and with the margins 864 pt – more than A4 (842 pt), so it
+    stayed on one page only through fitToPage. The empty spacer rows are made lower and the two empty
+    rows at the bottom are dropped; the text and the table keep their heights."""
+    for r in range(1, ws.max_row + 1):
+        empty = all(c.value in (None, "") for c in ws[r])
+        h = ws.row_dimensions[r].height
+        if empty and r > 45:
+            ws.row_dimensions[r].height = 2
+        elif empty and h is not None and h > 4:
+            ws.row_dimensions[r].height = 4
+    ws.sheet_properties.pageSetUpPr.fitToPage = True      # the original setting stays as well
+    ws.page_setup.fitToWidth = ws.page_setup.fitToHeight = 1
+
+
+def natural_height(ws):
+    """The height of the form at 100 % with the top and bottom margins, in pt."""
+    dh = ws.sheet_format.defaultRowHeight or 12.75
+    rows = sum(ws.row_dimensions[r].height or dh for r in range(1, ws.max_row + 1))
+    return rows + (ws.page_margins.top + ws.page_margins.bottom) * 72
 
 
 def main():

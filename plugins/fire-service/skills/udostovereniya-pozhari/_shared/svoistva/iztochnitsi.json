@@ -45,7 +45,12 @@
       "v_skila": "нормативната база в Drive, tier-c/Ogneborets_Reference_Chochev-… – с номера на приложението и страницата",
       "mesto_v_teksta": "прил\\. № \\d+",
       "greshki": [
-        {"duma": "олов", "v_knigata": "232", "pravilno": "327,5 °C [[icsc:0052]]", "belezhka": "грешка в книгата (прил. № 7, с. 223) – 232 °C е топенето на калая"}
+        {
+          "duma": "олов",
+          "v_knigata": "232",
+          "pravilno": "327,5 °C [[icsc:0052]]",
+          "belezhka": "грешка в книгата (прил. № 7, с. 223) – 232 °C е топенето на калая"
+        }
       ]
     },
     "spravochnik-1980": {
@@ -97,6 +102,12 @@
       "kratko": "SFPE Handbook, 2016",
       "palno": "„SFPE Handbook of Fire Protection Engineering“, 5-то издание, Springer, New York, 2016;",
       "v_skila": "няма го – само ако експертът е взел стойността от книгата, с главата и таблицата"
+    },
+    "naredba-8121z-647": {
+      "kratko": "Наредба № 8121з-647/2014",
+      "palno": "Наредба № 8121з-647 от 1 октомври 2014 г. за правилата и нормите за пожарна безопасност при експлоатация на обектите (обн. ДВ, бр. 89 от 2014 г., изм. и доп. ДВ, бр. 37 от 2021 г. и бр. 43 от 2025 г.);",
+      "v_skila": "нормативната база в Drive, tier-a/MVR-MIP_Ordinance_8121z-647_… (скилът normativna-uredba); изискванията към отоплителните уреди – eptz/references/technical_reference/general_causes.md",
+      "mesto_v_teksta": "чл\\. ?\\d+[а-я]?(?:, ал\\. ?\\d+)?(?:, т\\. ?\\d+)?"
     }
   }
 }

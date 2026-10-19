@@ -132,6 +132,9 @@ r = check(GOOD.replace("2. Къде се е намирало огнището?",
 ok(not any("злонамерено внесен" in g for g in r["greshki"]), "the question repeated in section IV may say „умисъл“")
 r = check(GOOD + "\nНе може да се изключи умисъл.\n", META)
 ok(any("злонамерено внесен" in g for g in r["greshki"]), "„умисъл“ instead of „злонамерено внесен външен огнеизточник“")
+r = check(GOOD.replace("1. Каква е причината за пожара?", "1. Каква е причината за пожара по чл. 330 от НК?").replace(
+    "Отговор на първи въпрос: Каква е причината за пожара?", "Отговор на първи въпрос: Каква е причината за пожара по чл. 330 от НК?"), META)
+ok(not any("НК" in g for g in r["greshki"]), "a question quoting НК is not a legal qualification")
 r = check(GOOD + "\nДеянието е по чл. 330 от НК.\n", META)
 ok(any("НК" in g for g in r["greshki"]), "a legal qualification")
 r = check(GOOD + "\nПо данни на Иван Георгиев Дъбов.\n", META)
