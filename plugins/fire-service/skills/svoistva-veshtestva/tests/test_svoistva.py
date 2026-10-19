@@ -160,7 +160,10 @@ def test_masla_prahove():
     check({r["ime"] for r in s.tarsi("олио")} >= {"растително олио (общо)", "соево олио"}, "„олио“ → the oils")
     t, lit, _ = s.citiraj("Слама [[gestis-staub:2213]], олио [[chris:ovg]].")
     check(t == "Слама (GESTIS-STAUB-EX, № 2213), олио (CHRIS OVG).", "dust and oil markers rendered")
-    check("staubex.ifa.dguv.de/explokomp.aspx?nr=2213" in lit[2] and "chris/OVG.pdf" in lit[3], "their literature lines")
+    check("Запис № 2213" in lit[2] and lit[2].endswith("https://staubex.ifa.dguv.de;") and "chris/OVG.pdf" in lit[3],
+          "their literature lines – a short site address for GESTIS, the record number in the line")
+    t, lit, _ = s.citiraj("Бензин [[icsc:1400]], време [[metar:LBPL: 04.08.2026]], лупа [[nwcg-pms412: с. 208]].")
+    check(all(len(re.findall(r"https?://\S+", x)[0]) <= 45 for x in lit if "http" in x), "no long web address in the literature")
     _, lit, _ = s.citiraj("Ръчно (CHRIS OSB) и (GESTIS-STAUB-EX, № 2176).")
     check(len(lit) == 4, "hand-typed CHRIS and GESTIS references are listed")
 
