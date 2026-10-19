@@ -136,6 +136,15 @@ def check_literatura(tmp, mp):
     check(lit and all(x.endswith(";") for x in lit[:-1]) and lit[-1].endswith("."), "„;“ between, „.“ at the end")
     check(not any("Справочник за пожарната опасност" in x for x in lit), "an uncited book is not listed")
 
+    # a requirement of Наредба № 8121з-647 is cited by its article in the text and listed
+    open(md, "w", encoding="utf-8").write(text.replace("### Изследване на въпрос № 2:\n",
+        "### Изследване на въпрос № 2:\n\nДървата са били на по-малко от 0,5 m от печката "
+        "[[naredba-8121z-647: чл. 40, ал. 1, т. 10]].\n", 1))
+    build(md, mp, out)
+    t = doc_text(out)
+    check("(Наредба № 8121з-647/2014, чл. 40, ал. 1, т. 10)" in t, "[[naredba-8121z-647: …]] → the article in the text")
+    check(any("8121з-647 от 1 октомври 2014" in x for x in literatura(out)), "the ordinance in the literature")
+
     # an unknown source stops the build instead of listing a book nobody cited
     open(md, "w", encoding="utf-8").write(text.replace("[[icsc:1400]]", "[[babrauskaz]]"))
     r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "build_eptz_docx.py"),
@@ -235,6 +244,9 @@ def test_smetka():
                    "РЕГИОНАЛНА ДИРЕКЦИЯ „ПОЖАРНА БЕЗОПАСНОСТ И ЗАЩИТА НА НАСЕЛЕНИЕТО” – ПЛЕВЕН"],
           "the header is text in A2 as in the original form, three lines")
     check(not wr._images, "no header picture")
+    check(build_smetka.natural_height(ws) <= 842 - 20, f"one A4 page at 100 % too – without „fit to page“ "
+          f"(Google Sheets, Numbers): {build_smetka.natural_height(ws):.0f} pt of 842")
+    check(ws.sheet_properties.pageSetUpPr.fitToPage and ws.page_setup.fitToHeight == 1, "„fit to one page“ kept")
     bold = {c.coordinate for r in wr.iter_rows() for c in r if c.font is not None and c.font.b}
     check({"B9", "B10", "B27", "F27"} <= bold, "bold kept as in the original form (the сметка is the exception)")
     iban = [p for p in wr["A31"].value if "BG96" in str(p)]

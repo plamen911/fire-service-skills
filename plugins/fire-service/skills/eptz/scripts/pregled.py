@@ -135,7 +135,11 @@ def check(content, meta, vaprosi=None, materiali=""):
                 greshki.append(f"въпрос № {i} не е дословно като в постановлението: „{l[:80]}“")
 
     # ── versions in answer 1 ──
-    ans1 = section(research, rf"^###\s*{RESEARCH}1\s*:?", r"^###\s|^---\s*$|^##\s")
+    # the versions stand in the research of the question about the cause – usually № 1, but not always
+    parts = [(int(mm.group(1)), section(research, rf"^###\s*{RESEARCH}{mm.group(1)}\s*:?", r"^###\s|^---\s*$|^##\s"))
+             for mm in re.finditer(rf"^###\s*{RESEARCH}(\d+)", research, re.M)]
+    with_versions = [(n, p) for n, p in parts if p and VERSION.search(p)]
+    q_cause, ans1 = with_versions[0] if with_versions else (1, dict(parts).get(1))
     if ans1 is not None:
         found = {}
         for m in VERSION.finditer(ans1):
@@ -143,7 +147,7 @@ def check(content, meta, vaprosi=None, materiali=""):
         titles = " | ".join(found.values()).lower()
         missing = [name for name, rx in STANDARD if not re.search(rx, titles)]
         if missing:
-            greshki.append("в изследването на въпрос № 1 липсват стандартните версии: " + ", ".join(missing))
+            greshki.append(f"в изследването на въпрос № {q_cause} липсват стандартните версии: " + ", ".join(missing))
         letters = list(found)
         if letters and letters != [chr(ord("А") + i) for i in range(len(letters))]:
             za_proverka.append("буквите на версиите не са по ред А), Б), В)…: " + ", ".join(letters))
@@ -163,7 +167,7 @@ def check(content, meta, vaprosi=None, materiali=""):
                                + " е след версия, която не отпада")
         summary = section(ans1, r"^\s*\*\*(?:Извод|Обобщен отговор)[^\n]*\*\*\s*$", r"^---\s*$|^###\s")
         if summary is None:
-            greshki.append("изследването на въпрос № 1 не завършва с „**Извод:**“")
+            greshki.append(f"изследването на въпрос № {q_cause} не завършва с „**Извод:**“")
         else:
             s = norm(summary)
             for letter in rejected:
@@ -186,9 +190,12 @@ def check(content, meta, vaprosi=None, materiali=""):
         if n > SECTION_I_MAX:
             greshki.append(f"раздел I е {n} знака – най-много половин страница (~{SECTION_I_MAX})")
 
-    # ── forbidden wording ──
+    # ── forbidden wording – outside the questions, which are quoted verbatim (in section II and in the
+    #    headings of section IV) ──
+    bez_q = re.sub(r"(?ms)^[#*\[\s]*[IVX]+\.\s*Поставени въпроси.*?(?=^[#*\[\s]*[IVX]+\.\s)", "", text)
+    bez_q = re.sub(r"(?m)^###\s*Отговор на [а-я]+ въпрос.*$", "", bez_q)
     for rx, msg in FORBIDDEN:
-        m = re.search(rx, text, re.I)
+        m = re.search(rx, bez_q, re.I)
         if m:
             greshki.append(f"{msg}: „{m.group(0)[:60]}“")
     bez_vaprosi = re.sub(r"(?ms)^[#*\[\s]*[IVX]+\.\s*Поставени въпроси.*?(?=^[#*\[\s]*[IVX]+\.\s)", "", text)
