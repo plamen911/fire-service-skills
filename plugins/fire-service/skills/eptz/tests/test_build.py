@@ -188,10 +188,10 @@ def test_smetka():
     d = {"hours": 4, "a4_bw": 6, "ogled": False}
     check(compute(d) == 97.61, f"total for 4 h + 6 sheets = 97.61 (got {compute(d)})")
     dd = apply_defaults({"pages": 6, "copies": 2})
-    check(dd["hours"] == 4 and dd["a4_bw"] == 12, "pages 6, copies 2 → 4 h, 12 sheets")
+    check(dd["hours"] == 4 and dd["a4_bw"] == 6, "pages 6, copies 2 → 4 h, 6 sheets (client's copy only)")
     check(apply_defaults({"pages": 6, "hours": 5})["hours"] == 5, "explicit hours win")
     check(apply_defaults({"pages": 6, "hours": None})["hours"] == 4, "hours: null → taken from the pages")
-    check(apply_defaults({"pages": "6", "copies": "2"})["a4_bw"] == 12, "numbers given as text are accepted")
+    check(apply_defaults({"pages": "6", "copies": "2"})["a4_bw"] == 6, "numbers given as text are accepted")
     for bad, why in (({}, "neither pages nor hours"), ({"hours": 0}, "zero hours"), ({"hours": "много"}, "hours is not a number")):
         try:
             apply_defaults(bad)
