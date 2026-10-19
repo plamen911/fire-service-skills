@@ -25,7 +25,8 @@ meta.json: виж assets/eptz_meta.example.json. Прокуратурата се
 (напр. "ОП – Плевен"); без него се ползва "РП – {rp_grad}".
 
 Съдържанието (.md) е това между REPORT_START/END: ## I. Обстоятелства…,
-## II. Поставени въпроси…, ## III. Пожаро-техническо изследване…, ### Отговор на въпрос № N:
+## II. Поставени въпроси…, ## III. Пожаро-техническо изследване. (### Изследване на въпрос № N:),
+## IV. Общи изводи… (### Отговор на първи въпрос: …) – в документа те са раздели III–VI.
 Раздели I–II на документа (Основание, Представен материал) идват от meta.json.
 """
 import argparse, copy, json, os, re, sys
@@ -106,6 +107,9 @@ def parse_md(md):
         if line.startswith("## "):
             title = line[3:].lower()
             cur = ("circ" if "обстоятелства" in title else
+                   # „## IV. Общи изводи …“ – the short answers; the old combined title
+                   # „Пожаро-техническо изследване, общи изводи …“ is still the research section
+                   "concl" if "общи изводи" in title and "пожаро" not in title else
                    "q" if "въпрос" in title and "изследване" not in title else
                    "res" if "изследване" in title else None)
             secs[cur] = []
@@ -193,15 +197,22 @@ def build(content, meta, out, final, template):
                        ("q", "IV. Поставени въпроси пред експерта.")):
         new += [clone(P_BLANK), clone(P_HDR, title)]
         new += [clone(P_BODY, t) for k, t in secs.get(key, []) if k == "p"]
-    new += [clone(P_BLANK), clone(P_HDR, "V. Пожаро-техническо изследване, общи изводи от проведеното изследване на поставените въпроси.")]
-    first = True
-    for k, t in secs.get("res", []):
-        if k == "ans":
-            if not first:
-                new.append(clone(P_BLANKJ))
-            new.append(clone(P_ANS, t)); first = False
-        else:
-            new.append(clone(P_BODY, t))
+    # V – the research; VI – the general conclusions (each question restated, a short answer).
+    # A report without „## IV. Общи изводи …“ keeps the old combined section V.
+    concl = secs.get("concl")
+    sections = ([("res", "V. Пожаро-техническо изследване."),
+                 ("concl", "VI. Общи изводи от проведеното изследване на поставените въпроси:")] if concl else
+                [("res", "V. Пожаро-техническо изследване, общи изводи от проведеното изследване на поставените въпроси.")])
+    for key, title in sections:
+        new += [clone(P_BLANK), clone(P_HDR, title)]
+        first = True
+        for k, t in secs.get(key, []):
+            if k == "ans":
+                if not first:
+                    new.append(clone(P_BLANKJ))
+                new.append(clone(P_ANS, t)); first = False
+            else:
+                new.append(clone(P_BODY, t))
     for el in new:
         anchor.addprevious(el)
 
