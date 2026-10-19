@@ -114,6 +114,8 @@ r = check(GOOD.replace("**В). Самозапалване.**\n\nНяма пор�
 ok(not any("стандартните версии" in g for g in r["greshki"]), "самозапалване is not required")
 r = check(GOOD.replace("**Б). Късо съединение.**\n\nПостройката няма ел. инсталация. Извод: Версията отпада.\n\n", ""), META)
 ok(any("късо съединение" in g for g in r["greshki"]), "a missing standard version")
+r = check(GOOD + "\nВъзможно е подпалване.\n", META)
+ok(any("злонамерено внесен" in g for g in r["greshki"]), "„подпалване“ is arson wording too")
 for word in ("Обвиняемият прави самопризнания.", "Деецът е избягал.", "Има заповед за защита."):
     r = check(GOOD + "\n" + word + "\n", META)
     ok(not r["ok"], f"„{word}“ is flagged")

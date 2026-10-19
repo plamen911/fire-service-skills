@@ -27,7 +27,7 @@ import unicodedata
 SECTION_I_MAX = 1900  # characters ≈ half a page in the template (Times New Roman 12, 1.15)
 
 # Arson wording: checked outside the „Поставени въпроси“ section, where the questions are quoted verbatim from the постановление.
-ARSON = (r"\bпалеж|\bумис[ъл]|\bумишлен", "вместо „палеж“, „умисъл“ и „умишлени действия“ се пише „злонамерено внесен външен огнеизточник“")
+ARSON = (r"\bпалеж|\bподпал|\bумис[ъл]|\bумишлен", "вместо „палеж“, „умисъл“ и „умишлени действия“ се пише „злонамерено внесен външен огнеизточник“")
 
 FORBIDDEN = [
     (r"оглед[а-я ]{0,40}не е извършен|не е (бил )?извършен[а-я ]{0,40}оглед", "„оглед … не е извършен“ звучи като пропуск на вещото лице – пиши „В материалите по делото няма представен протокол за оглед …“"),
@@ -61,6 +61,7 @@ ORDINAL = ["първи", "втори", "трети", "четвърти", "пет
            "единадесети", "дванадесети"]
 RESEARCH = r"(?:Изследване на|Отговор на) въпрос №\s*"
 SECTION_VI_MAX = 3800  # ≈ one page – the general conclusions are short answers, not the research again
+CAUSE_Q = r"причин|по какъв начин е възникнал|как е възникнал|как е предизвикан|начин(ът)? на възникване|от какво е възникнал"
 NO_TIMES = re.compile(r"час(ът|овете)[а-я ,]{0,40}(не са|не е|няма)[а-я ]{0,15}(отразен|посочен|данни)|няма (точни )?час", re.I)
 VERDICT = re.compile(r"отпада|не може да бъде (изключена|отхвърлена)|подкрепя|приема се|потвържда|най-вероятн|малко вероятн|установена|има вероятност", re.I)
 
@@ -149,7 +150,9 @@ def check(content, meta, vaprosi=None, materiali=""):
             found[m.group(1)] = m.group(2).strip().rstrip(".")
         titles = " | ".join(found.values()).lower()
         missing = [name for name, rx in STANDARD if not re.search(rx, titles)]
-        if missing:
+        # versions are needed only when a question asks about the cause (not e.g. „би ли се запалил …“)
+        pita_prichina = not listed or any(re.search(CAUSE_Q, q, re.I) for q in listed)
+        if missing and (found or pita_prichina):
             greshki.append(f"в изследването на въпрос № {q_cause} липсват стандартните версии: " + ", ".join(missing))
         letters = list(found)
         if letters and letters != [chr(ord("А") + i) for i in range(len(letters))]:
