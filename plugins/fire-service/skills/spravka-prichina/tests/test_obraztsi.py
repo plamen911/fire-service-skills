@@ -73,7 +73,7 @@ if __name__ == "__main__":
         code, _, err = run(store, "zapis", "spravka", lichni, *meta)
         check(code != 0 and "PERSONAL_DATA" in err, f"template with personal data refused ({kind})")
     open(lichni, "w", encoding="utf-8").write("# C\n\nСобственикът на имота, гр. Червен бряг, ул. „Васил Левски“. "
-                                              "(Веселин Симеонов, 2023)\n")
+                                              "(Веселин Симеонов, 2007)\n")
     code, _, err = run(store, "zapis", "spravka", lichni, *meta)
     check(code == 0, "anonymised template with a street name and a cited author is saved")
     print("\nALL PASS" if not failures else f"\n{len(failures)} FAILED")
