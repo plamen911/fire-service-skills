@@ -113,5 +113,14 @@ if __name__ == "__main__":
     check(body_alignments(base) == {"JUSTIFY (3)"}, "body text is justified")
     t_nc = build(dict(base, addressee_chief=False))
     check("ВАСИЛ СМЪРЧЕВ" not in t_nc and "РСПБЗН – ПЛЕВЕН" in t_nc, "addressee_chief false")
+    # who caused the fire is not written: the builder warns
+    tmp = tempfile.mkdtemp()
+    dp, out = os.path.join(tmp, "w.json"), os.path.join(tmp, "w.docx")
+    bad = dict(base, section3=["Собственикът прави самопризнания, че е запалил отпадъците.", "Възможно е подпалване."])
+    json.dump(bad, open(dp, "w", encoding="utf-8"), ensure_ascii=False)
+    r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "build_spravka.py"), dp, "-o", out],
+                       capture_output=True, text=True)
+    check("самопризна" in r.stderr and "без причинители" in r.stderr, "a self-admission is warned about")
+    check("подпалване" in r.stderr and "злонамерено внесен" in r.stderr, "„подпалване“ is warned about")
     print("\nALL PASS" if not failures else f"\n{len(failures)} FAILED")
     sys.exit(1 if failures else 0)

@@ -49,7 +49,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from docx_common import report, typo, typo_all  # noqa: E402  (the common typography rules and the final check)
 
 # Arson wording is not written in a справка – „злонамерено внесен външен огнеизточник“ instead.
-ARSON = re.compile(r"\bпалеж\w*|\bумис[ъл]\w*|\bумишлен\w*", re.I)
+ARSON = re.compile(r"\bпалеж\w*|\bподпал\w*|\bумис[ъл]\w*|\bумишлен\w*", re.I)
+# who caused the fire is not written – the fact is written impersonally, with its source
+VINOVNIK = re.compile(r"\bизвършител\w*|\b(?:деец|деецът|дееца)\b|\bобвиняем\w*|\bзаподозр\w*|\bподсъдим\w*"
+                      r"|самопризна\w*|\bпризна(?:л|ла|ва|ние)\w*|\bпо вина на\b|заповед за защита", re.I)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, "..", "assets", "template.docx")
@@ -248,6 +251,10 @@ def build(data, out_path):
         m = ARSON.search(text)
         if m:
             print(f"⚠ „{m.group(0)}“ – в справката се пише „злонамерено внесен външен огнеизточник“", file=sys.stderr)
+        m = VINOVNIK.search(text)
+        if m:
+            print(f"⚠ „{m.group(0)}“ – без причинители и самопризнания: фактът безлично, с източника "
+                  "(„По информация на собственика в двора са изгаряни отпадъци.“)", file=sys.stderr)
 
     typo_all(doc, W + "t")
     doc.save(out_path)
