@@ -27,7 +27,7 @@ import unicodedata
 SECTION_I_MAX = 1900  # characters ≈ half a page in the template (Times New Roman 12, 1.15)
 
 # Arson wording: checked outside the „Поставени въпроси“ section, where the questions are quoted verbatim from the постановление.
-ARSON = (r"\bпалеж|\bумис[ъл]|\bумишлен", "вместо „палеж“, „умисъл“ и „умишлени действия“ се пише „злонамерено внесен външен източник“")
+ARSON = (r"\bпалеж|\bумис[ъл]|\bумишлен", "вместо „палеж“, „умисъл“ и „умишлени действия“ се пише „злонамерено внесен външен огнеизточник“")
 
 FORBIDDEN = [
     (r"оглед[а-я ]{0,40}не е извършен|не е (бил )?извършен[а-я ]{0,40}оглед", "„оглед … не е извършен“ звучи като пропуск на вещото лице – пиши „В материалите по делото няма представен протокол за оглед …“"),
@@ -49,9 +49,17 @@ EGN = re.compile(r"(?<!\d)\d{10}(?!\d)")
 PHONE = re.compile(r"(?<![\d/])(?:\+359|0)\s?8[7-9]\d[\s-]?\d{3}[\s-]?\d{3}(?!\d)")
 DATE = re.compile(r"(?<!\d)(\d{1,2})\.(\d{1,2})\.(\d{4})(?!\d)")
 TIME = re.compile(r"(?<![\d.,])([01]?\d|2[0-3])[:.,]([0-5]\d)\s*(?:ч\b|часа)")
-VERSION = re.compile(r"^\s*(?:\*\*)?([А-Я])\)\.?\s*(.+?)(?:\*\*)?\s*$", re.M)
-STANDARD = ["А", "Б", "В", "Г", "Д"]
-VERDICT = re.compile(r"отпада|не може да бъде (изключена|отхвърлена)|подкрепя|приема се|потвържда|най-вероятн|установена", re.I)
+# a version heading is bold („**А). Късо съединение.**“); the plain list of the versions before them is not
+VERSION = re.compile(r"^\s*\*\*([А-Я])\)\.?\s*(.+?)\*\*\s*$", re.M)
+# the standard versions – by topic, since the letters follow the order from the least to the most probable
+STANDARD = [("злонамерено внесен външен огнеизточник", r"злонамерен|внесен"), ("късо съединение", r"късо съединение|електр"),
+            ("природни сили", r"природни|мълния"), ("самозапалване", r"самозапал"), ("небрежност", r"небрежност")]
+ORDINAL = ["първи", "втори", "трети", "четвърти", "пети", "шести", "седми", "осми", "девети", "десети",
+           "единадесети", "дванадесети"]
+RESEARCH = r"(?:Изследване на|Отговор на) въпрос №\s*"
+SECTION_VI_MAX = 3800  # ≈ one page – the general conclusions are short answers, not the research again
+NO_TIMES = re.compile(r"час(ът|овете)[а-я ,]{0,40}(не са|не е|няма)[а-я ]{0,15}(отразен|посочен|данни)|няма (точни )?час", re.I)
+VERDICT = re.compile(r"отпада|не може да бъде (изключена|отхвърлена)|подкрепя|приема се|потвържда|най-вероятн|малко вероятн|установена|има вероятност", re.I)
 
 
 def norm(text):
@@ -90,15 +98,35 @@ def check(content, meta, vaprosi=None, materiali=""):
     # ── structure: questions and answers ──
     sec2 = section(text, r"^##\s*II\.", r"^##\s")
     listed = [q.strip() for q in re.findall(r"^\s*\d+[.)]\s+(.+)$", sec2 or "", re.M)]
-    answers = [int(n) for n in re.findall(r"^###\s*Отговор на въпрос №\s*(\d+)", text, re.M)]
+    sec4 = section(text, r"^##\s*IV\.\s*Общи изводи", r"^##\s")
+    research = text if sec4 is None else text[:text.find(sec4)]
+    answers = [int(n) for n in re.findall(rf"^###\s*{RESEARCH}(\d+)", research, re.M)]
     if sec2 is None:
         greshki.append("няма раздел „II. Поставени въпроси пред експерта.“")
     if not answers:
-        greshki.append("няма нито един „Отговор на въпрос № N“")
+        greshki.append("няма нито едно „Изследване на въпрос № N“")
     elif answers != list(range(1, len(answers) + 1)):
         greshki.append(f"отговорите не са по ред 1…N: {answers}")
     if listed and answers and len(listed) != len(answers):
-        greshki.append(f"въпросите в раздел II са {len(listed)}, а отговорите – {len(answers)}")
+        greshki.append(f"въпросите в раздел II са {len(listed)}, а изследванията – {len(answers)}")
+    if sec4 is None:
+        greshki.append("няма раздел „## IV. Общи изводи от проведеното изследване на поставените въпроси.“ – "
+                       "всеки въпрос се повтаря дословно с кратък отговор")
+    else:
+        heads = re.findall(r"^###\s*Отговор на ([а-я]+) въпрос\s*:?\s*(.*)$", sec4, re.M)
+        got = [h[0] for h in heads]
+        if got != ORDINAL[:len(got)]:
+            greshki.append("в общите изводи отговорите трябва да са „Отговор на първи въпрос: …“, „… втори …“ – по ред: "
+                           + ", ".join(got))
+        if listed and len(heads) != len(listed):
+            greshki.append(f"въпросите в раздел II са {len(listed)}, а отговорите в общите изводи – {len(heads)}")
+        for i, ((_, q), l) in enumerate(zip(heads, listed), 1):
+            if norm(q) != norm(l):
+                za_proverka.append(f"в общите изводи въпрос № {i} не е повторен дословно: „{q[:80]}“")
+        n4 = len(re.sub(r"\s+", " ", sec4).strip())
+        if n4 > SECTION_VI_MAX:
+            za_proverka.append(f"общите изводи са {n4} знака – около страница е достатъчно (~{SECTION_VI_MAX}); "
+                               "там са кратките отговори, не изследването отново")
     if vaprosi:
         if len(vaprosi) != len(listed):
             greshki.append(f"в постановлението въпросите са {len(vaprosi)}, в раздел II – {len(listed)}")
@@ -107,35 +135,49 @@ def check(content, meta, vaprosi=None, materiali=""):
                 greshki.append(f"въпрос № {i} не е дословно като в постановлението: „{l[:80]}“")
 
     # ── versions in answer 1 ──
-    ans1 = section(text, r"^###\s*Отговор на въпрос №\s*1\s*:?", r"^###\s|^---\s*$")
+    ans1 = section(research, rf"^###\s*{RESEARCH}1\s*:?", r"^###\s|^---\s*$|^##\s")
     if ans1 is not None:
         found = {}
         for m in VERSION.finditer(ans1):
             found[m.group(1)] = m.group(2).strip().rstrip(".")
-        missing = [l for l in STANDARD if l not in found]
+        titles = " | ".join(found.values()).lower()
+        missing = [name for name, rx in STANDARD if not re.search(rx, titles)]
         if missing:
-            greshki.append("в отговора на въпрос № 1 липсват стандартните версии " + ", ".join(f"{l})" for l in missing)
-                           + " (А – злонамерено внесен външен източник, Б – късо съединение, В – природни сили, Г – самозапалване, Д – небрежност)")
+            greshki.append("в изследването на въпрос № 1 липсват стандартните версии: " + ", ".join(missing))
         letters = list(found)
-        blocks = re.split(r"^\s*(?:\*\*)?[А-Я]\)\.?.*$", ans1, flags=re.M)[1:]
+        if letters and letters != [chr(ord("А") + i) for i in range(len(letters))]:
+            za_proverka.append("буквите на версиите не са по ред А), Б), В)…: " + ", ".join(letters))
+        blocks = re.split(r"^\s*\*\*[А-Я]\)\.?.*\*\*\s*$", ans1, flags=re.M)[1:]
         rejected = []
         for letter, body in zip(letters, blocks):
-            body = body.split("Обобщен отговор")[0]
+            body = re.split(r"Обобщен отговор|^\s*\*\*Извод[^\n]*\*\*\s*$", body, flags=re.M)[0]
             if not VERDICT.search(body):
                 za_proverka.append(f"версия {letter}) „{found[letter]}“ няма ясен извод (отпада / не може да бъде изключена / подкрепя се)")
-            if re.search(r"Версията отпада", body):
+            if re.search(r"Версията отпада|версията отпада", body):
                 rejected.append(letter)
-        summary = section(text, r"Обобщен отговор на въпрос №\s*1", r"^---\s*$|^###\s")
+        # the order – from the least to the most probable: the rejected versions come first
+        kept = [l for l in letters if l not in rejected]
+        if kept and rejected and max(letters.index(l) for l in rejected) > min(letters.index(l) for l in kept):
+            za_proverka.append("версиите трябва да са от най-малко към най-вероятната – отхвърлената версия "
+                               + ", ".join(f"{l})" for l in rejected if letters.index(l) > min(letters.index(k) for k in kept))
+                               + " е след версия, която не отпада")
+        summary = section(ans1, r"^\s*\*\*(?:Извод|Обобщен отговор)[^\n]*\*\*\s*$", r"^---\s*$|^###\s")
         if summary is None:
-            greshki.append("няма „Обобщен отговор на въпрос № 1“")
+            greshki.append("изследването на въпрос № 1 не завършва с „**Извод:**“")
         else:
             s = norm(summary)
             for letter in rejected:
                 key = " ".join(norm(found[letter]).split("–")[0].split()[:2])
                 if key and key in s:
-                    za_proverka.append(f"обобщеният отговор споменава „{key}“, а версия {letter}) е отхвърлена – провери дали не си противоречат")
+                    za_proverka.append(f"изводът споменава „{key}“, а версия {letter}) е отхвърлена – провери дали не си противоречат")
             if len(rejected) == len(letters) and letters:
-                za_proverka.append("всички версии отпадат, а обобщеният отговор трябва да назове причина или да каже, че тя не може да се установи")
+                za_proverka.append("всички версии отпадат, а изводът трябва да назове причина или да каже, че тя не може да се установи")
+
+    # ── the times of localisation and liquidation are asked for, not written off as missing ──
+    m = NO_TIMES.search(text)
+    if m:
+        za_proverka.append(f"„{m.group(0)[:60]}“ – попитай експерта за часовете (локализиране, ликвидиране) от "
+                           "телефонограмата, преди да пишеш, че ги няма")
 
     # ── section I length ──
     sec1 = section(text, r"^##\s*I\.", r"^##\s")
@@ -150,6 +192,8 @@ def check(content, meta, vaprosi=None, materiali=""):
         if m:
             greshki.append(f"{msg}: „{m.group(0)[:60]}“")
     bez_vaprosi = re.sub(r"(?ms)^[#*\[\s]*[IVX]+\.\s*Поставени въпроси.*?(?=^[#*\[\s]*[IVX]+\.\s)", "", text)
+    # the general conclusions repeat each question verbatim in its heading
+    bez_vaprosi = re.sub(r"(?m)^###\s*Отговор на [а-я]+ въпрос.*$", "", bez_vaprosi)
     m = re.search(ARSON[0], bez_vaprosi, re.I)
     if m:
         greshki.append(f"{ARSON[1]}: „{m.group(0)[:60]}“")

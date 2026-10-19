@@ -84,15 +84,15 @@ graders:
   - name: otgovor-na-tri-vaprosa
     type: regex
     target: { source: file, path: report.md }
-    pattern: 'Отговор на въпрос № 1[\s\S]+Отговор на въпрос № 2[\s\S]+Отговор на въпрос № 3'
+    pattern: 'Изследване на въпрос № 1[\s\S]+Изследване на въпрос № 2[\s\S]+Изследване на въпрос № 3[\s\S]+Общи изводи[\s\S]+Отговор на първи въпрос'
   - name: ognishteto-pri-komina
     type: regex
     target: { source: file, path: report.md }
-    pattern: 'Отговор на въпрос № 2:?[\s\S]{0,700}комин'
+    pattern: 'Изследване на въпрос № 2:?[\s\S]{0,700}комин'
   - name: prichinata-e-kominat
     type: regex
     target: { source: file, path: report.md }
-    pattern: 'Обобщен отговор на въпрос № 1:?[\s\S]{0,500}комин'
+    pattern: 'Отговор на първи въпрос[^\n]*[\s\S]{0,700}комин'
   - name: kasoto-otpada-s-dannite
     type: regex
     target: { source: file, path: report.md }

@@ -73,9 +73,12 @@ def test_eptz():
     build(content, mp, final, final=True)
     t_d, t_f = doc_text(draft), doc_text(final)
 
-    for h in ["I. Основание", "II. Представен", "III. Обстоятелства", "IV. Поставени", "V. Пожаро"]:
+    for h in ["I. Основание", "II. Представен", "III. Обстоятелства", "IV. Поставени", "V. Пожаро-техническо изследване.",
+              "VI. Общи изводи"]:
         check(h in t_f, f"section '{h}' present")
-    check("Отговор на въпрос № 3" in t_f, "all 3 answers present")
+    check("Изследване на въпрос № 3" in t_f and "Отговор на трети въпрос" in t_f, "all 3 research parts and answers present")
+    check(t_f.index("Изследване на въпрос № 3") < t_f.index("VI. Общи изводи") < t_f.index("Отговор на първи въпрос"),
+          "the research comes before the general conclusions")
     check("ЧЕРНОВА" not in t_d, "no ЧЕРНОВА notice without --final")
     check("ЧЕРНОВА" not in t_f, "no ЧЕРНОВА notice with --final")
     check(t_d == t_f, "--final changes nothing")
@@ -112,8 +115,8 @@ def literatura(path):
 def check_literatura(tmp, mp):
     print("позоваванията [[…]] и литературата")
     src = open(FIXTURE, encoding="utf-8").read()
-    text = src.replace("### Отговор на въпрос № 1:\n",
-                       "### Отговор на въпрос № 1:\n\nПламната температура на дизеловото гориво е 52 °C "
+    text = src.replace("### Изследване на въпрос № 1:\n",
+                       "### Изследване на въпрос № 1:\n\nПламната температура на дизеловото гориво е 52 °C "
                        "[[icsc:1561]], а алуминиевите сплави се топят при 600 ÷ 660 °C "
                        "[[chochev: прил. № 7, с. 223]]. Бензинът [[icsc:1400]] и пак дизелът [[icsc:1561]].\n", 1)
     check(text != src, "fixture has an answer to put the citations in")
@@ -140,8 +143,8 @@ def check_literatura(tmp, mp):
     check(r.returncode != 0 and "babrauskas" in (r.stderr + r.stdout), "unknown key stops the build and suggests the right one")
 
     # a temperature without a marker is reported (a warning, the document is still built)
-    open(md, "w", encoding="utf-8").write(text.replace("### Отговор на въпрос № 2:\n",
-                                                       "### Отговор на въпрос № 2:\n\nГорещият газ е около 777 °C.\n", 1))
+    open(md, "w", encoding="utf-8").write(text.replace("### Изследване на въпрос № 2:\n",
+                                                       "### Изследване на въпрос № 2:\n\nГорещият газ е около 777 °C.\n", 1))
     r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "build_eptz_docx.py"),
                         "--content", md, "--meta", mp, "--out", out], capture_output=True, text=True)
     check(r.returncode == 0 and "777 °C" in r.stdout and "⚠" in r.stdout, "a number without a source is warned about")

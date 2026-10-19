@@ -56,12 +56,12 @@ graders:
   - name: ognishteto-v-dvigatelniya-otsek
     type: regex
     target: { source: file, path: report.md }
-    pattern: 'Отговор на въпрос № 2:?[\s\S]{0,500}(двигателния|моторния) отсек'
+    pattern: 'Изследване на въпрос № 2:?[\s\S]{0,500}(двигателния|моторния) отсек'
   - name: predpazliv-izvod
     type: regex
     target: { source: file, path: report.md }
     # без протокол за оглед причината не се твърди категорично
-    pattern: 'Обобщен отговор на въпрос № 1:?[\s\S]{0,900}(не може да бъде (потвърдена|установена)|не могат да бъдат изключени|не може да се установи|не може категорично)'
+    pattern: 'Отговор на първи въпрос[^\n]*[\s\S]{0,900}(не може да бъде (потвърдена|установена)|не могат да бъдат изключени|не може да се установи|не може категорично)'
   - name: smislov-pregled-ot-podagent
     type: tool_used
     tool: Agent
