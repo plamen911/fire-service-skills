@@ -73,12 +73,14 @@ def test_eptz():
     build(content, mp, final, final=True)
     t_d, t_f = doc_text(draft), doc_text(final)
 
-    for h in ["I. Основание", "II. Представен", "III. Обстоятелства", "IV. Поставени", "V. Пожаро-техническо изследване.",
+    for h in ["I. Основание", "II. Представен", "III. Обстоятелства", "IV. Поставени", "V. Пожаро-техническо изследване",
               "VI. Общи изводи"]:
         check(h in t_f, f"section '{h}' present")
     check("Изследване на въпрос № 3" in t_f and "Отговор на трети въпрос" in t_f, "all 3 research parts and answers present")
     check(t_f.index("Изследване на въпрос № 3") < t_f.index("VI. Общи изводи") < t_f.index("Отговор на първи въпрос"),
           "the research comes before the general conclusions")
+    check("1. Отговор на първи въпрос" in t_f and "3. Отговор на трети въпрос" in t_f, "the answers in VI are numbered")
+    check(t_f.count("Вещото лице запазва правото си") == 1, "the reservation of the expert is there once")
     check("ЧЕРНОВА" not in t_d, "no ЧЕРНОВА notice without --final")
     check("ЧЕРНОВА" not in t_f, "no ЧЕРНОВА notice with --final")
     check(t_d == t_f, "--final changes nothing")

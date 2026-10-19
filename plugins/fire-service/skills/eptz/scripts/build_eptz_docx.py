@@ -40,6 +40,8 @@ from svoistva import Problem, bez_iztochnik, chochev_neprovereni, citiraj, prove
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_TEMPLATE = os.path.join(HERE, "..", "assets", "eptz_template.docx")
 PH = "[...]"
+RESERVATION = ("Вещото лице запазва правото си, при възникване на нови доказателствени средства, да промени "
+               "своето заключение при необходимост.")
 CITATION_RE = re.compile(r"\s*\[\s*Източник\s*:[^\]]*\]", re.I)
 
 def m(meta, k, default=PH):
@@ -200,19 +202,28 @@ def build(content, meta, out, final, template):
     # V – the research; VI – the general conclusions (each question restated, a short answer).
     # A report without „## IV. Общи изводи …“ keeps the old combined section V.
     concl = secs.get("concl")
-    sections = ([("res", "V. Пожаро-техническо изследване."),
+    sections = ([("res", "V. Пожаро-техническо изследване"),
                  ("concl", "VI. Общи изводи от проведеното изследване на поставените въпроси:")] if concl else
                 [("res", "V. Пожаро-техническо изследване, общи изводи от проведеното изследване на поставените въпроси.")])
     for key, title in sections:
         new += [clone(P_BLANK), clone(P_HDR, title)]
-        first = True
+        first, n_ans = True, 0
         for k, t in secs.get(key, []):
-            if k == "ans":
+            if k == "ans" and key == "concl":
+                # as in the expert's own conclusions: „1. Отговор на първи въпрос: …“ – numbered, not underlined
+                n_ans += 1
+                if not first:
+                    new.append(clone(P_BLANKJ))
+                new.append(clone(P_BODY, f"{n_ans}. {t}")); first = False
+            elif k == "ans":
                 if not first:
                     new.append(clone(P_BLANKJ))
                 new.append(clone(P_ANS, t)); first = False
             else:
                 new.append(clone(P_BODY, t))
+    # the closing reservation of every expertise of the directorate
+    if not re.search(r"запазва правото си", content):
+        new += [clone(P_BLANK), clone(P_BODY, RESERVATION)]
     for el in new:
         anchor.addprevious(el)
 
