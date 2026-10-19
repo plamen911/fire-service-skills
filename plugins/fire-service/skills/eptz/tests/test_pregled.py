@@ -94,6 +94,8 @@ r = check(GOOD + "\nВ материалите по делото няма пре�
 ok(r["ok"], "the allowed wording about a missing протокол за оглед is not flagged")
 r = check(GOOD + "\nПожарът е резултат от палеж.\n", META)
 ok(any("злонамерено внесен" in g for g in r["greshki"]), "„палеж“ instead of „злонамерено внесен външен източник“")
+r = check(GOOD.replace("2. Къде се е намирало огнището?", "2. Касае ли се за умишлени действия?"), META)
+ok(not any("злонамерено внесен" in g for g in r["greshki"]), "a question quoted verbatim in section II may say „умишлени действия“")
 r = check(GOOD + "\nНе може да се изключи умисъл.\n", META)
 ok(any("злонамерено внесен" in g for g in r["greshki"]), "„умисъл“ instead of „злонамерено внесен външен източник“")
 r = check(GOOD + "\nДеянието е по чл. 330 от НК.\n", META)
