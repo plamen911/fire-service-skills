@@ -69,6 +69,16 @@ def km(a, b):
     return 6371 * 2 * math.asin(math.sqrt(h))
 
 
+# in the area of РДПБЗН – Плевен the weather is always taken from Долна Митрополия (the expert's choice),
+# even where Горна Оряховица is a few km nearer (Левски)
+RAION_LETISHTE = "LBPL"
+
+
+def za_raiona(lat, lon):
+    """(ICAO, km) for a place in the РДПБЗН – Плевен area – always LBPL."""
+    return RAION_LETISHTE, round(km((lat, lon), STANTSII[RAION_LETISHTE][1:]))
+
+
 def nay_blizka(lat, lon):
     icao = min(STANTSII, key=lambda k: km((lat, lon), STANTSII[k][1:]))
     return icao, round(km((lat, lon), STANTSII[icao][1:]))
@@ -253,8 +263,9 @@ def main():
         args = list(a.args)
         razst = None
         if a.mesto:
-            a.blizo = koordinati(a.mesto)
-        if a.blizo:
+            lat, lon = (float(x) for x in koordinati(a.mesto).split(","))
+            icao, razst = za_raiona(lat, lon)
+        elif a.blizo:
             lat, lon = (float(x) for x in a.blizo.split(","))
             icao, razst = nay_blizka(lat, lon)
         elif args and args[0].upper() in STANTSII:

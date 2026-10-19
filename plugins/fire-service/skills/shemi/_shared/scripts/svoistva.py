@@ -42,7 +42,7 @@ DATA = os.path.join(HERE, "..", "svoistva")
 STOINOSTI = os.path.join(DATA, "stoinosti.csv")
 KATALOG = os.path.join(DATA, "iztochnitsi.json")
 MARKER_RE = re.compile(r"\s*\[\[([^\[\]]*)\]\]")
-KEY = r"icsc:\d{4}|chris:[a-z]{3}|gestis-staub:\d+|metar:[A-Za-z]{4}|[a-z0-9][a-z0-9-]*"
+KEY = r"icsc:\d{4}|chris:[a-z]{3}|gestis-staub:\d+|metar:[A-Za-z]{4}|nimh:\d{4}-\d{2}|[a-z0-9][a-z0-9-]*"
 ITEM_RE = re.compile(r"^\s*(" + KEY + r")\s*(?:[:,]\s*(.+?))?\s*$")
 # a reference typed by hand instead of a marker
 HAND_RE = re.compile(r"ICSC (\d{4})|CHRIS ([A-Z]{3})\b|GESTIS-STAUB-EX, № (\d+)")
@@ -204,6 +204,14 @@ def iztochnik(kluch, extra=None, rows=None):
             raise Problem(f"UNKNOWN_SOURCE: {kluch} – летището не е в списъка ({', '.join(vreme.STANTSII)})")
         d = {"icao": icao, "ime": vreme.STANTSII[icao][0]}
         return {"kratko": k["_metar"]["kratko"].format(**d), "palno": k["_metar"]["palno"].format(**d)}
+    if prefix == "nimh":
+        sys.path.insert(0, HERE)
+        import nimh
+        ym = kluch.split(":", 1)[1] if ":" in kluch else ""
+        if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", ym):
+            raise Problem(f"UNKNOWN_SOURCE: {kluch} – ключът е nimh:ГГГГ-ММ, напр. nimh:2025-08")
+        d = {"mesets": nimh.mesets(ym)}
+        return {"kratko": k["_nimh"]["kratko"].format(**d), "palno": k["_nimh"]["palno"].format(**d)}
     if ":" in kluch and prefix in k["_shabloni"]:
         rows = rows if rows is not None else stoinosti()
         r = next((x for x in rows if x["kluch"] == kluch), None)
@@ -363,6 +371,19 @@ def _metar_chisla(icao, mesto):
     return out or None
 
 
+def _nimh_chisla(ym, mesto):
+    """The values of the station („Плевен“) in Таблица 1 of the bulletin; None offline – then not checked."""
+    if os.environ.get("FIRE_SERVICE_OFFLINE") or os.environ.get("FIRE_SERVICE_NO_KEY"):
+        return None
+    sys.path.insert(0, HERE)
+    import nimh
+    try:
+        row = nimh.red(nimh.svali(ym), (mesto or "Плевен").strip())
+    except Exception:  # noqa: BLE001 – no network or no bulletin: the check is skipped, never fails
+        return None
+    return _chisla(" ".join(row.values()))
+
+
 def danni_za(kluch, mesto, rows):
     """The numbers the source gives at that place, or None when the plugin has no data for it."""
     if kluch == "chochev":
@@ -373,6 +394,8 @@ def danni_za(kluch, mesto, rows):
         return tables[pril.group(1)]
     if kluch.split(":")[0] == "metar":
         return _metar_chisla(kluch.split(":", 1)[1], mesto)
+    if kluch.split(":")[0] == "nimh":
+        return _nimh_chisla(kluch.split(":", 1)[1], mesto)
     if kluch.split(":")[0] in ("icsc", "chris", "gestis-staub"):
         r = next((x for x in rows if x["kluch"] == kluch), None)
         if r is None:
@@ -539,6 +562,8 @@ def main():
                 print(f"{'':26} {v['v_skila']}")
             for p, sh in k["_shabloni"].items():
                 print(f"{p + ':…':26} ({sh['kratko'].format(id='…')}) – {sh['v_skila']}")
+            print(f"{'metar:ICAO':26} ({k['_metar']['kratko'].format(icao='ICAO')}) – {k['_metar']['v_skila']}")
+            print(f"{'nimh:ГГГГ-ММ':26} ({k['_nimh']['kratko'].format(mesets='… г.')}) – {k['_nimh']['v_skila']}")
             return
         rows = stoinosti()
         if a.spisak:
