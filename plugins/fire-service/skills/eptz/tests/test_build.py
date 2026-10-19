@@ -225,6 +225,17 @@ def test_smetka():
           "expert title and position from the profile")
     check(ws["A43"].value == "/ инспектор И. Дъбов /", "„Изготвил“")
     check(ws["D44"].value == "КОМИСАР" and ws["D45"].value.strip() == "Стоян Кестенов", "director from the staff list")
+    wr = openpyxl.load_workbook(out, rich_text=True).active
+    head = [str(x) for x in "".join(str(p) for p in wr["A2"].value).split("\n")]
+    check(head == ["МИНИСТЕРСТВО НА ВЪТРЕШНИТЕ РАБОТИ",
+                   "ГЛАВНА ДИРЕКЦИЯ „ПОЖАРНА БЕЗОПАСНОСТ И ЗАЩИТА НА НАСЕЛЕНИЕТО”",
+                   "РЕГИОНАЛНА ДИРЕКЦИЯ „ПОЖАРНА БЕЗОПАСНОСТ И ЗАЩИТА НА НАСЕЛЕНИЕТО” – ПЛЕВЕН"],
+          "the header is text in A2 as in the original form, three lines")
+    check(not wr._images, "no header picture")
+    bold = [c.coordinate for r in wr.iter_rows() for c in r if c.font is not None and c.font.b]
+    bold += [c.coordinate for r in wr.iter_rows() for c in r if hasattr(c.value, "__iter__")
+             and not isinstance(c.value, str) and any(getattr(getattr(p, "font", None), "b", False) for p in c.value)]
+    check(not bold, f"no bold {bold}")
 
     other = dict(data, izvarshena_ot="Георги Малинов", expert_title="старши пожарникар",
                  expert_position="старши пожарникар в РСПБЗН – Левски", izgotvil_short="Г. Малинов")
