@@ -4,7 +4,8 @@ nachalo.py — всичко за началото на ЕПТЗ с една ко
 
   - папката на скила (командите се пускат от нея);
   - профилът на потребителя (експертът) – `sluzhiteli.py --profil`;
-  - произшествията на датата по мястото – само полетата, нужни за заключението;
+  - произшествията на датата по мястото – само полетата, нужни за заключението, с часовете
+    (пристигане, локализиране, ликвидиране) и техниката от `ops`;
   - времето по METAR около часа на всяко произшествие (по GPS от адреса, иначе по населеното място);
   - одобрените експертизи – само име, обект и причина от INDEX.md;
   - еталонът Буковлък – свален, с пътя до файла.
@@ -31,6 +32,8 @@ sys.path.insert(0, SH)
 ETALON = "Ekspertiza_Stopanski_Postroyki_Bukovlak_2025-07-22_Suha_Treva.md"
 POLETA = ["num_event", "datetime", "type", "address", "object_place", "other_data", "unit", "forces", "reason_fire"]
 DETAIL = ["activity_area", "destroyed", "saved", "extinguishing_agent"]
+DEYNOST = ["activity", "arrival", "action_start", "localized", "extinguished", "area_found_m2", "localized_area_m2"]
+TEHNIKA = ["vehicle", "departure", "personnel"]
 OBR = os.path.join(tempfile.gettempdir(), "fire-service-obraztsi")  # not in the skill folder – it may be read-only
 
 
@@ -51,8 +54,22 @@ def proizshestviya(data, mesto):
     for r in json.loads(run(*args)):
         d = {k: r.get(k, "").strip() for k in POLETA if r.get(k, "").strip()}
         d.update({k: r["detail"][k] for k in DETAIL if (r.get("detail") or {}).get(k)})
+        d.update(ops(r))
         d["vreme"] = vreme_za(r)
         out.append(d)
+    return out
+
+
+def ops(r):
+    """The times and vehicles of the telephonogram (`ops`, after the nightly sync) – only what the report uses."""
+    o = r.get("ops") or {}
+    out = {}
+    if o.get("activities"):
+        out["deynosti"] = [{k: a[k] for k in DEYNOST if a.get(k) not in (None, "")} for a in o["activities"]]
+    if o.get("vehicles"):
+        out["tehnika"] = [{k: v[k] for k in TEHNIKA if v.get(k) not in (None, "")} for v in o["vehicles"]]
+    if not out:
+        out["deynosti"] = "няма в базата (още не е синхронизирано) – часовете от телефонограмата или питай"
     return out
 
 
