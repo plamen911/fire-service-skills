@@ -93,6 +93,11 @@ def test_events(base):
     check(ok.get("ok") is True, "an unreachable metrics webhook never breaks the skill")
 
     api_config._cache["cfg"] = dict(cfg, metrics_url=base + "metrics")
+    received.clear()
+    api_config.post("metrics_url", {"op": "export", "dni": 7})
+    check(len(metrics()) == 1 and metrics()[0].get("op") == "export",
+          "a call to the metrics endpoint itself is not measured (no event about the event)")
+
     os.environ["FIRE_SERVICE_NO_METRICS"] = "1"
     received.clear()
     api_config.post("staff_url", {"action": "find"})
@@ -133,6 +138,27 @@ def test_regresiya():
         check(len(rows) == 1 + 6 and rows[0].startswith("data,versiya"), "every run is appended to the history")
 
 
+def test_report():
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import metrics_report
+    rows = [{"time": "2026-10-20T08:00:00Z", "skill": "spravka-prichina", "endpoint": "url", "action": "",
+             "ms": 800, "outcome": "ok", "version": "2.27.1"},
+            {"time": "2026-10-20T08:01:00Z", "skill": "spravka-prichina", "endpoint": "url", "action": "",
+             "ms": 4000, "outcome": "timeout", "version": "2.27.1"},
+            {"time": "2026-10-20T08:02:00Z", "skill": "", "endpoint": "staff_url", "action": "",
+             "ms": 300, "outcome": "ok", "version": "2.27.1"}]
+    text = metrics_report.report(rows)
+    check("spravka-prichina · url" in text and "50%" in text and "timeout" in text,
+          "the report groups by skill and call and shows the error share and outcome")
+    check("инструмент · staff_url" in text, "a call from a repository tool (no skill) is labelled as a tool")
+    real = metrics_report.from_n8n
+    metrics_report.from_n8n = lambda days: rows
+    try:
+        check(metrics_report.main(["--dni", "7"]) == 0, "without a file the report reads the events from n8n")
+    finally:
+        metrics_report.from_n8n = real
+
+
 def main():
     srv = http.server.HTTPServer(("127.0.0.1", 0), Stub)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -141,6 +167,7 @@ def main():
     try:
         test_events(base)
         test_regresiya()
+        test_report()
     finally:
         srv.shutdown()
     if failures:
