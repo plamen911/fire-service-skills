@@ -199,7 +199,7 @@ python3 scripts/build_spravka.py /път/до/data.json -o "/mnt/user-data/outpu
   кодът за причина е от `_shared/terminology.md`. Примери:
   `Pozhar_Sklad_VIK_Kara_Kolyo_20251008.docx`,
   `Pozhar_LA_BMW_Skobelev_Znepolska_Umisal_20240131.docx`.
-- Покажи текста в чата и предай файла с `SendUserFile`.
+- Покажи текста в чата и предай файла с `SendUserFile` (или `present_files`).
 
 ## Правила за съдържанието
 

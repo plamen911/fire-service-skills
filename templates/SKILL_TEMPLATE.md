@@ -46,7 +46,7 @@ python3 scripts/<builder>.py <вход> -o "/mnt/user-data/outputs/<Име>.docx
 
 - Име на файла: `<Префикс>_{Обект}_{Място}_{Дата}_{Причина}.docx` (кодове в
   `_shared/terminology.md`).
-- Покажи текста в чата и предай файла с `SendUserFile`.
+- Покажи текста в чата и предай файла с `SendUserFile` (или `present_files`).
 
 ## Правила за съдържанието
 

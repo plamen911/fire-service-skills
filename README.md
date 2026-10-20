@@ -22,11 +22,16 @@
 
 ## За колегите: инсталиране
 
-Работи и с безплатен акаунт в Claude (claude.ai в браузър, приложението на телефон).
+Работи и с безплатен акаунт в Claude (claude.ai в браузър, приложението на телефон). Стъпки 1–3 се
+правят веднъж, на claude.ai в браузър (на компютър или телефон); после всичко работи и в
+приложението на телефона.
 
 1. **Плъгинът.** Customize → Plugins → Add → Add marketplace → напиши
    `plamen911/fire-service-skills` → Sync. Остави включено „Sync automatically“ – така
    промените идват сами. В Plugins се появява „Fire service“, а в Skills – скиловете му.
+   Ако в Customize няма „Plugins“ (по помощната страница на Claude плъгините са за платените
+   планове), кажи на администратора – той ще ти даде скиловете като отделни файлове за
+   Settings → Capabilities → Skills. Тогава промените не идват сами.
 2. **Изпълнение на код.** Settings → Capabilities → включи „Code execution and file creation“.
 3. **Конекторът с личния ключ.** Customize → Connectors → Add custom connector:
    име `Fire Service`, а за адрес – **личният адрес**, който си получил от администратора

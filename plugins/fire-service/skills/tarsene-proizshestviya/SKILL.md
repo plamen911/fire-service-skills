@@ -191,7 +191,7 @@ python3 scripts/export_incidents_xlsx.py pozhari_2026.json --stats stats.json -o
 - Графика: `Grafika_{Вид}_{Разбивка}_{период}.svg`; карта: `Karta_{Вид}_{ГГГГ-ММ-ДД}_{ГГГГ-ММ-ДД}.svg`.
 - Име на файла: `{Вид}_{Обхват}_{ГГГГ-ММ-ДД}_{ГГГГ-ММ-ДД}.xlsx` на латиница
   (`Pozhari_RSPBZN_Levski_2026-08-01_2026-08-31.xlsx`, `Proizshestviya_RDPBZN_Pleven_…`).
-- Предай файла с `SendUserFile`; в чата – едно изречение какво съдържа.
+- Предай файла с `SendUserFile` (или `present_files`); в чата – едно изречение какво съдържа.
 
 ## Правила за съдържанието
 

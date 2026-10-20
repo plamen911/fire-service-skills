@@ -489,6 +489,26 @@ def test_incident(tmp):
     print("  ok  incident: the shift at the hour of the signal, by unit")
 
 
+def test_sravni_prepisi(tmp):
+    """Second reading without a subagent: the two readings are compared cell by cell by a script."""
+    script = os.path.join(SKILL, "scripts", "sravni_prepisi.py")
+    a = {"grafik": "oc", "mesec": "2026-10",
+         "redove": [{"ime": "Иван Дъбов", "dni": {"Д": [3, 7], "о": "10-12"}}, {"ime": "Петър Бор", "dni": {}}]}
+    b = {"grafik": "oc", "mesec": "2026-10",
+         "redove": [{"ime": "Иван  Дъбов", "dni": {"Д": "3, 7", "о": [10, 11, 12]}},
+                    {"ime": "Петър Бор", "dni": {"Д": [5]}}]}
+    fa, fb = os.path.join(tmp, "r1.json"), os.path.join(tmp, "r2.json")
+    for path, data in ((fa, a), (fb, b)):
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+    r = subprocess.run([sys.executable, script, fa, fa], capture_output=True, text=True)
+    assert r.returncode == 0 and json.loads(r.stdout)["sapadat"], r.stdout
+    r = subprocess.run([sys.executable, script, fa, fb], capture_output=True, text=True)
+    out = json.loads(r.stdout)
+    assert r.returncode == 1 and not out["sapadat"], r.stdout
+    assert out["razliki"] == [{"red": 2, "ime": "Петър Бор", "kod": "Д", "samo_v_1": [], "samo_v_2": [5]}], out
+
+
 def test_conditional_save(tmp):
     """Through n8n the write is conditional: put sends the md5 that get saw ("new" when there was no file);
     on 409 CONFLICT the month is read again, merged again and saved with the fresh md5."""
@@ -559,6 +579,7 @@ def main():
         test_conditional_save(tmp)
         test_former_employee(tmp)
         test_incident(tmp)
+        test_sravni_prepisi(tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("OK grafik-dezhurstva")
