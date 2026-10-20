@@ -129,7 +129,7 @@ python3 scripts/build_udostoverenie.py data.json -o "/mnt/user-data/outputs/{и�
   - писмо – `Pismo_{Получател}_{Обект}_{Място}_{ГГГГ-ММ-ДД}.docx`
     (`Pismo_RU_D_Mitropoliya_Kashta_Komarevo_2026-05-16.docx`).
   Датата е на произшествието.
-- Покажи текста в чата и предай файла с `SendUserFile`.
+- Покажи текста в чата и предай файла с `SendUserFile` (или `present_files`).
 
 ## Правила за съдържанието
 
