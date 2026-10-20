@@ -19,7 +19,6 @@ jobs:
     timeout-minutes: 40
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      FIRE_SERVICE_NO_METRICS: "1"
     steps:
       - name: Has the API key?
         id: key

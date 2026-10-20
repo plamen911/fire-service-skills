@@ -3,18 +3,16 @@
 """
 metrics_report.py — онлайн показателите на плъгина: какво става с истинските извиквания към n8n.
 
-Чете събитията, които скриптовете пращат на `metrics_url` (по едно на извикване – виж
-`shared/scripts/api_config.py`, `metrics_event`). n8n ги пише в таблицата с данни
-„fire_service_metrics“; отчетът ги взима оттам с администраторски ключ – или от файл (CSV или
-JSON Lines), свален от таблицата. Дава
-по скил и по извикване: брой, дял грешки, медиана и 95-и персентил на времето, и кои версии на
-плъгина са ползвани. Данни от делата в събитията няма – само име на скил, извикване, време и изход.
+n8n записва по един ред за всяка отговорена заявка – от скриптовете и от конектора по един и същи
+начин (възелът „Log call“ в работния поток „Fire Service API (skills)“) – в таблицата с данни
+„fire_service_calls“: крайна точка, действие, време, изход и дали е скрипт или конектор. Данни от
+делата и имена там няма. Отчетът ги взима с администраторски ключ (или от свален CSV / JSON Lines
+файл) и дава по извикване: брой, дял грешки, медиана и 95-и персентил на времето.
 
     python3 tools/metrics_report.py --dni 7                 # последните 7 дни, направо от n8n
     python3 tools/metrics_report.py sabitiya.csv --dni 7    # от свален файл (с колона "time")
 
-Колони (CSV) или ключове (JSONL): skill, script, endpoint, action, kind, ms, outcome, version и по
-желание time (ISO дата и час, слага я n8n при записа).
+Колони: time, route, action, kind, ms, outcome, via (script | connector).
 """
 import argparse
 import csv
@@ -71,7 +69,7 @@ def since(events, days):
 def report(events):
     groups = defaultdict(list)
     for e in events:
-        label = f"{e.get('skill') or 'инструмент'} · {e.get('endpoint') or '?'}" + (f"/{e['action']}" if e.get("action") else "")
+        label = f"{e.get('via') or '?'} · {e.get('route') or '?'}" + (f"/{e['action']}" if e.get("action") else "")
         groups[label].append(e)
     rows = []
     for label, evs in groups.items():
@@ -84,11 +82,11 @@ def report(events):
     lines = [f"{'извикване'.ljust(width)}  брой  грешки  медиана  p95   изходи при грешка"]
     for label, n, err, p50, p95, outcomes in rows:
         lines.append(f"{label.ljust(width)}  {n:4d}  {err:6.0%}  {p50:5d} ms {p95:5d} ms  {', '.join(outcomes)}")
-    versions = defaultdict(int)
+    via = defaultdict(int)
     for e in events:
-        versions[str(e.get("version") or "?")] += 1
+        via[str(e.get("via") or "?")] += 1
     lines.append("")
-    lines.append("Версии: " + ", ".join(f"{v} ({n})" for v, n in sorted(versions.items(), reverse=True)))
+    lines.append("Откъде: " + ", ".join(f"{v} ({n})" for v, n in sorted(via.items())))
     total_bad = sum(1 for e in events if (e.get("outcome") or "ok") != "ok")
     lines.append(f"Общо: {len(events)} извиквания, {total_bad / len(events):.1%} с грешка.")
     return "\n".join(lines)
