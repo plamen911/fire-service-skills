@@ -33,6 +33,7 @@ phone photos ──► Claude chat (Anthropic) ──► .docx / .xlsx in the sa
 | Per-person API keys | Every colleague has their own key. n8n stores only a hash of it, and the key is shown once when issued. One key can be revoked without affecting anyone else (`admin.py key revoke`). |
 | Keys never appear in output | The scripts report only whether a key exists and where it came from, never the key itself. |
 | Minimum personal data in the documents | The independent review (`pregled.py`) blocks ЕГН and phone numbers in a report. People are named with first name and surname only, never three names. |
+| Usage metrics carry no case data and no names | Since v2.27.1 every call a script makes to n8n also sends one metrics event to `/webhook/fire-metrics`: skill, script, endpoint, action word, duration, outcome and plugin version – nothing else. n8n accepts only those fields, each a short plain word (a name or address is refused with `BAD_REQUEST`), and does not store who made the call. The client side is covered by `tests/test_metrics.py`. Only an administrator key can read the table back. |
 | No guessing beyond the materials | The review and the evaluation suite reject facts that are not in the case materials (see the [case study](case-study-eptz.md)). |
 
 ## Depends on the AI provider (Anthropic) and its settings

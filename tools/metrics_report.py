@@ -4,12 +4,14 @@
 metrics_report.py — онлайн показателите на плъгина: какво става с истинските извиквания към n8n.
 
 Чете събитията, които скриптовете пращат на `metrics_url` (по едно на извикване – виж
-`shared/scripts/api_config.py`, `metrics_event`), записани от n8n като CSV или JSON Lines, и дава
+`shared/scripts/api_config.py`, `metrics_event`). n8n ги пише в таблицата с данни
+„fire_service_metrics“; отчетът ги взима оттам с администраторски ключ – или от файл (CSV или
+JSON Lines), свален от таблицата. Дава
 по скил и по извикване: брой, дял грешки, медиана и 95-и персентил на времето, и кои версии на
 плъгина са ползвани. Данни от делата в събитията няма – само име на скил, извикване, време и изход.
 
-    python3 tools/metrics_report.py sabitiya.csv            # всички събития
-    python3 tools/metrics_report.py sabitiya.csv --dni 7    # само последните 7 дни (ако има колона "time")
+    python3 tools/metrics_report.py --dni 7                 # последните 7 дни, направо от n8n
+    python3 tools/metrics_report.py sabitiya.csv --dni 7    # от свален файл (с колона "time")
 
 Колони (CSV) или ключове (JSONL): skill, script, endpoint, action, kind, ms, outcome, version и по
 желание time (ISO дата и час, слага я n8n при записа).
@@ -22,6 +24,9 @@ import os
 import sys
 from collections import defaultdict
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "plugins", "fire-service", "shared", "scripts"))
+
 
 def read_events(path):
     with open(path, encoding="utf-8") as f:
@@ -29,6 +34,12 @@ def read_events(path):
     if os.path.splitext(path)[1].lower() in (".jsonl", ".json") or text.lstrip().startswith("{"):
         return [json.loads(line) for line in text.splitlines() if line.strip()]
     return list(csv.DictReader(text.splitlines()))
+
+
+def from_n8n(days):
+    """The events of the last `days` days from the data table in n8n (administrator key)."""
+    import api_config
+    return api_config.post("metrics_url", {"op": "export", "dni": days or 30}, timeout=120).get("rows") or []
 
 
 def percentile(values, p):
@@ -60,7 +71,7 @@ def since(events, days):
 def report(events):
     groups = defaultdict(list)
     for e in events:
-        label = f"{e.get('skill') or '?'} · {e.get('endpoint') or '?'}" + (f"/{e['action']}" if e.get("action") else "")
+        label = f"{e.get('skill') or 'инструмент'} · {e.get('endpoint') or '?'}" + (f"/{e['action']}" if e.get("action") else "")
         groups[label].append(e)
     rows = []
     for label, evs in groups.items():
@@ -85,10 +96,10 @@ def report(events):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Summarise the plugin's metrics events")
-    ap.add_argument("events", help="CSV or JSON Lines export of the metrics events")
+    ap.add_argument("events", nargs="?", help="CSV or JSON Lines file; without it the events come from n8n")
     ap.add_argument("--dni", type=int, default=0, help="only the last N days (needs a 'time' column)")
     a = ap.parse_args(argv)
-    events = since(read_events(a.events), a.dni)
+    events = since(read_events(a.events), a.dni) if a.events else from_n8n(a.dni)
     if not events:
         sys.exit("Няма събития за този период.")
     print(report(events))

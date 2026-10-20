@@ -233,7 +233,7 @@ def post(url_field, body, timeout=60):
             start = raw[:80].decode("utf-8", "replace").replace("\n", " ")
             raise ValueError(f"сървърът върна отговор, който не е JSON (започва с „{start}“)") from None
     finally:
-        if has_key():   # no key → the call never left the machine; nothing to measure
+        if has_key() and url_field != "metrics_url":   # no key → nothing left the machine; never measure the metrics
             send_metrics(metrics_event(url_field, body, (time.monotonic() - started) * 1000, outcome))
 
 
