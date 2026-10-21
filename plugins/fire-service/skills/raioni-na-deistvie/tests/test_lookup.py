@@ -87,7 +87,13 @@ def main():
     ok(p["ime"] == "Георги Малинов" and p["spravka_izgotvil"] == "мл. експерт" and p["izgotvil_short"] == "Г. Малинов", p)
     ok(p["spravka_uvod"] == "командир на екип в група „ПГ и СД” при РСПБЗН – Плевен", p)
     ok(p["expert_title"] == "мл. експерт" and p["obrazovanie"] == "Висше" and p["specialnost"] == "Пожарна и аварийна безопасност", p)
-    ok(p["expert_position"] == "командир на екип в група ПГ и СД на РСПБЗН – Плевен към РДПБЗН – Плевен при ГДПБЗН – МВР", p)
+    ok(p["expert_position"] == "командир на екип в група ПГ и СД на РСПБЗН – Плевен към РДПБЗН – Плевен", p)
+    # an older override in the personal skill is cleaned to group and unit only
+    clean = out("-c", "import sys; sys.path.insert(0, sys.argv[1]); import sluzhiteli as s; "
+                "import json; print(json.dumps([s.expert_position_clean(x) for x in sys.argv[2:]], ensure_ascii=False))",
+                os.path.dirname(ST), "инспектор IV ст. в група ОЦ на сектор ПГ и СД към РДПБЗН – Плевен при ГДПБЗН – МВР",
+                "инспектор IV ст. в група ОЦ на сектор „ПГ и СД” към РДПБЗН – Плевен", "инспектор IV ст. в група ОЦ към РДПБЗН – Плевен")
+    ok(clean == ["инспектор IV ст. в група ОЦ към РДПБЗН – Плевен"] * 3, clean)
     ok(out(ST, "--spravka", "--zapis", json.dumps(row, ensure_ascii=False), env=NO_DATA)["rows"][0]["izgotvil"] == "мл. експерт", "--spravka --zapis")
     r = run(ST, "--profil", env=NO_DATA)
     ok(r.returncode != 0 and "NO_KEY" in r.stderr and "whoami" in r.stderr, r.stderr)

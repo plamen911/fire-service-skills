@@ -62,7 +62,7 @@ def test_eptz():
         "rp_grad": "Плевен", "prokuratura": "ОП – Плевен",
         "postanovlenie_no": "1234р-56789", "postanovlenie_date": "03.09.2026 г.",
         "naznachil": "разследващ полицай Тест Тестов", "expert_name": "Иван Дъбов", "expert_rank": "инспектор", "izgotvil_position": "инспектор IV ст.",
-        "expert_position": "инспектор в група „ОЦ“ на сектор „ПГ и СД“ при РДПБЗН – Плевен",
+        "expert_position": "инспектор IV ст. в група ОЦ към РДПБЗН – Плевен",
         "izgotvil_date": "21.09.2026 г.", "copies": ["деловодство", "Първо РУ – Плевен"],
     }
     mp = os.path.join(tmp, "meta.json")
@@ -221,7 +221,7 @@ def test_smetka():
     tmp = tempfile.mkdtemp()
     data = dict(d, naznachil="разследващ полицай Тест", pri="Първо РУ – Плевен",
                 delo_no="1234/2025", po_opisa_na="РП – Плевен", izvarshena_ot="Иван Дъбов", expert_title="инспектор", izgotvil_short="И. Дъбов",
-                expert_position="инспектор IV ст. в група ОЦ към РДПБЗН – Плевен при ГДПБЗН – МВР",
+                expert_position="инспектор IV ст. в група ОЦ към РДПБЗН – Плевен",
                 date="21.09.2026")
     dp = os.path.join(tmp, "s.json")
     json.dump(data, open(dp, "w", encoding="utf-8"), ensure_ascii=False)
