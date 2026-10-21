@@ -290,14 +290,24 @@ def profil_fields(r, admin=None):
         "zveno": zv, "uchastak": r["uchastak"], "podrazdelenie": r["podrazdelenie"], "email": r.get("email", ""),
         "spravka_uvod": f["uvod"], "spravka_izgotvil": f["izgotvil"],
         "izgotvil_position": f["izgotvil"], "izgotvil_short": f"{first[:1]}. {last}" if last else r["ime_kratko"],
-        "expert_title": rank, "expert_position": f"{d} {where_} при ГДПБЗН – МВР",
+        "expert_title": rank, "expert_position": f"{d} {where_}",
         "obrazovanie": DEFAULT_OBRAZOVANIE, "specialnost": DEFAULT_SPECIALNOST,
     }
     if admin is not None:
         out["admin"] = bool(admin)
     own = {k: v for k, v in api_config.profile().items() if k in out and k != "admin"}
     out.update(own)
+    out["expert_position"] = expert_position_clean(out["expert_position"])
     return out
+
+
+def expert_position_clean(text):
+    """The expert's position in ЕПТЗ and the сметка: group and unit only – no „на сектор …“ above
+    the group and no „при ГДПБЗН – МВР“ (also from an older override in the personal skill):
+    „инспектор IV ст. в група ОЦ към РДПБЗН – Плевен“."""
+    text = re.sub(r"\s+при\s+ГДПБЗН\s*[–-]\s*МВР\s*$", "", text.strip())
+    text = re.sub(r"(в група [^,]+?)\s+на сектор\s+[„“\"]?[^„“\"]+?[”“\"]?\s+(към|при|на)\s", r"\1 \2 ", text)
+    return text
 
 
 def nachalnik(unit):
