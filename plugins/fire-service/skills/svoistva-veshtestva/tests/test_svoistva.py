@@ -91,6 +91,12 @@ def test_citiraj():
     check(t == "А е 52 °C (ICSC 1561). Б (Чочев, 2003, прил. № 7), пак (ICSC 1561).", "markers rendered, no page in the text")
     t, _, _ = s.citiraj("x [[korolchenko: ч. II, с. 395; korolchenko: ч. I, с. 538]].")
     check(t == "x (Корольченко, 2004).", "same source twice in one marker → once, author and year only")
+    t, _, _ = s.citiraj("Версията се проверява по т. 7.6 [[metodichesko-rakovodstvo: т. 7.6]] и "
+                        "[[metodichesko-rakovodstvo: т. 9.2]]. Пак [[metodichesko-rakovodstvo: т. 4.1]].")
+    check(t == "Версията се проверява по т. 7.6 (Методическо ръководство, 2007). Пак (Методическо ръководство, 2007).",
+          "two points of one source side by side → one reference; the next sentence keeps its own")
+    t, _, _ = s.citiraj("А [[simeonov: с. 5]], а Б [[simeonov: с. 9]].")
+    check(t == "А (Симеонов, 2007), а Б.", "the same reference twice in one sentence → once")
     check(len(lit) == 4 and "Симеонов" in lit[0] and "ICSC 1561" in lit[2] and "Чочев" in lit[3],
           "mandatory first, then cited in order, each once")
     check(lit[-1].endswith(".") and all(x.endswith(";") for x in lit[:-1]), "punctuation of the list")
