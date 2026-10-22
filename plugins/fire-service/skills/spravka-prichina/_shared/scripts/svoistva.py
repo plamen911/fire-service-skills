@@ -437,6 +437,37 @@ def proveri_chisla(text, extra=None):
     return problems
 
 
+_IZRECHENIE_RE = re.compile(r"(?<=[.!?])(\s+)(?=[А-ЯA-Z„\"(\d–-])")
+
+
+def _bez_povtoreni(out, rendered):
+    """Drop a citation that repeats the one just before it in the same sentence.
+
+    The text shows only author and year, so two markers for different points of one source –
+    „[[metodichesko-rakovodstvo: т. 7.6]] и [[metodichesko-rakovodstvo: т. 9.2]]“ – would read
+    „(Методическо ръководство, 2007) и (Методическо ръководство, 2007)“. Adjacent repeats joined by
+    „и“, „,“ or „;“ collapse into one; a later repeat in the same sentence is removed. A repeat in
+    the next sentence stays – each sentence keeps its own reference."""
+    if not rendered:
+        return out
+    cit = "|".join(re.escape(r) for r in sorted(rendered, key=len, reverse=True))
+    adj = re.compile(r"\((" + cit + r")\)\s*(?:и|или|,|;)?\s*\(\1\)")
+    while adj.search(out):
+        out = adj.sub(r"(\1)", out)
+    one = re.compile(r" ?\((" + cit + r")\)")
+    parts = _IZRECHENIE_RE.split(out)
+    for i in range(0, len(parts), 2):
+        seen = set()
+
+        def drop(m):
+            if m.group(1) in seen:
+                return ""
+            seen.add(m.group(1))
+            return m.group(0)
+        parts[i] = one.sub(drop, parts[i])
+    return "".join(parts)
+
+
 def citiraj(text, extra=None, dop_literatura=None):
     """Replace the [[…]] markers with „(Кратко, място)“ and build the literature list.
 
@@ -463,9 +494,13 @@ def citiraj(text, extra=None, dop_literatura=None):
             shown = src["kratko"] + (f", {v_teksta(kluch, mesto, extra)}" if v_teksta(kluch, mesto, extra) else "")
             if shown not in parts:
                 parts.append(shown)
-        return f" ({'; '.join(parts)})" if parts else ""
+        if not parts:
+            return ""
+        rendered.add("; ".join(parts))
+        return f" ({'; '.join(parts)})"
 
-    out = MARKER_RE.sub(sub, text)
+    rendered = set()
+    out = _bez_povtoreni(MARKER_RE.sub(sub, text), rendered)
     if errors:
         raise Problem("; ".join(dict.fromkeys(errors)))
     # a reference typed by hand – „(Чочев, 2003, …)“, „(ICSC 1561)“ – counts as a citation too
