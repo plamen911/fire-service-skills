@@ -127,6 +127,13 @@ r = check(GOOD.replace("**В). Самозапалване.**\n\nНяма пор�
 ok(not any("стандартните версии" in g for g in r["greshki"]), "самозапалване is not required")
 r = check(GOOD.replace("**Б). Късо съединение.**\n\nПостройката няма ел. инсталация. Извод: Версията отпада.\n\n", ""), META)
 ok(any("късо съединение" in g for g in r["greshki"]), "a missing standard version")
+NO_KS = GOOD.replace("**Б). Късо съединение.**\n\nПостройката няма ел. инсталация. Извод: Версията отпада.\n\n", "")
+outdoor = NO_KS.replace("пожар в стопанска постройка в тестово село.", "пожар в суха тревна растителност в тестово село.")
+r = check(outdoor, META)
+ok(not any("стандартните версии" in g for g in r["greshki"]), "outdoor fire: късо съединение is not required")
+asked = outdoor.replace("1. Каква е причината за пожара?", "1. Каква е причината за пожара и има ли връзка с ел. инсталацията?")
+r = check(asked, META)
+ok(any("късо съединение" in g for g in r["greshki"]), "outdoor fire, but a question asks about the ел. инсталация")
 r = check(GOOD + "\nВъзможно е подпалване.\n", META)
 ok(any("злонамерено внесен" in g for g in r["greshki"]), "„подпалване“ is arson wording too")
 for word in ("Обвиняемият прави самопризнания.", "Деецът е избягал.", "Има заповед за защита."):
