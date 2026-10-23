@@ -9,8 +9,10 @@ dnevnik.py — дневникът на ползването: един ред з�
 - кога (дата и час, местно време), кой експерт, по кое дело, какво, колко страници, каква сума;
 - как са подадени материалите: снимки, PDF файлове и страници (от тях сканирани – без текстов
   слой), други файлове, текст в чата; общият обем в MB и средната резолюция на снимките;
-- с какво са заснети или сканирани: марка и модел на телефона от EXIF на снимките, програмата,
-  създала PDF файла (напр. скенерът на iPhone, Adobe Scan, CamScanner);
+- с какво са заснети или сканирани: размерът в пиксели и цветовият профил на снимките (Display P3 –
+  устройство на Apple), дали EXIF е оцелял при качването и ако да – марката и моделът на телефона,
+  програмата, създала PDF файла (напр. скенерът на iPhone, Adobe Scan, CamScanner). Приложението на
+  Claude маха EXIF и смалява снимките при качване, затова размерът и профилът са надеждните признаци;
 - колко минути са минали от качването на материалите до сметката;
 - средата: версия на плъгина, къде работи скриптът (claude.ai, Claude Code, компютър), моделът,
   устройството на потребителя, ако е известно, режимът (скрипт или конектор), находките от прегледа.
@@ -117,7 +119,9 @@ def pdf_info(path):
 
 
 def image_info(path):
-    """(megapixels, "Make Model") of a photo; GPS and dates are never read."""
+    """Facts about a photo that survive the upload: size in pixels, colour profile, whether EXIF
+    still names the camera ("Make Model"). GPS and dates are never read."""
+    out = {"mp": None, "px": "", "profil": "", "cam": "", "exif": False}
     try:
         from PIL import Image
         try:
@@ -126,13 +130,30 @@ def image_info(path):
         except Exception:  # noqa: BLE001
             pass
         with Image.open(path) as im:
-            mp = im.size[0] * im.size[1] / 1e6
+            w, h = im.size
+            out["mp"], out["px"] = w * h / 1e6, f"{w}×{h}"
             ex = im.getexif() or {}
             make, model = str(ex.get(271, "")).strip(), str(ex.get(272, "")).strip()
-        cam = model if make and model.lower().startswith(make.lower()) else f"{make} {model}".strip()
-        return mp, cam[:40]
+            icc = im.info.get("icc_profile")
+        out["exif"] = bool(make or model)
+        out["cam"] = (model if make and model.lower().startswith(make.lower()) else f"{make} {model}".strip())[:40]
+        if icc:
+            try:
+                import io
+                from PIL import ImageCms
+                out["profil"] = ImageCms.getProfileDescription(ImageCms.ImageCmsProfile(io.BytesIO(icc))).strip()[:30]
+            except Exception:  # noqa: BLE001
+                out["profil"] = "ICC"
+        else:
+            out["profil"] = "без профил"
     except Exception:  # noqa: BLE001
-        return None, ""
+        pass
+    return out
+
+
+def tally(d):
+    """{"a": 3, "b": 1} → "a ×3, b ×1" (most frequent first)."""
+    return ", ".join(f"{k} ×{v}" for k, v in sorted(d.items(), key=lambda x: -x[1]))[:120]
 
 
 def count_materials(paths):
@@ -143,17 +164,22 @@ def count_materials(paths):
         files += [f for f in glob.glob(os.path.join(p, "**", "*"), recursive=True)
                   if os.path.isfile(f)] if os.path.isdir(p) else [p]
     files = [f for f in files if os.path.isfile(f)]
-    size, mps, kameri, programi = 0, [], {}, {}
+    size, mps, kameri, programi, razmeri, profili, exif = 0, [], {}, {}, {}, {}, {}
     for f in files:
         size += os.path.getsize(f)
         ext = os.path.splitext(f)[1].lower()
         if ext in IMG:
             c["snimki"] += 1
-            mp, cam = image_info(f)
-            if mp:
-                mps.append(mp)
-            if cam:
-                kameri[cam] = kameri.get(cam, 0) + 1
+            i = image_info(f)
+            if i["mp"]:
+                mps.append(i["mp"])
+                razmeri[i["px"]] = razmeri.get(i["px"], 0) + 1
+            if i["profil"]:
+                profili[i["profil"]] = profili.get(i["profil"], 0) + 1
+            k = "да" if i["exif"] else "не"
+            exif[k] = exif.get(k, 0) + 1
+            if i["cam"]:
+                kameri[i["cam"]] = kameri.get(i["cam"], 0) + 1
         elif ext == ".pdf":
             n, skan, prod = pdf_info(f)
             c["pdf"] += 1
@@ -167,7 +193,10 @@ def count_materials(paths):
     extra = {
         "obem_mb": round(size / 1e6, 1) if files else "",
         "rezolyutsiya_mp": round(sum(mps) / len(mps), 1) if mps else "",
-        "kamera": ", ".join(f"{k} ×{v}" for k, v in sorted(kameri.items(), key=lambda x: -x[1]))[:120],
+        "razmer_px": tally(razmeri),
+        "tsveten_profil": tally(profili),
+        "exif": tally(exif),
+        "kamera": tally(kameri),
         "pdf_programa": ", ".join(f"{k} ×{v}" for k, v in sorted(programi.items(), key=lambda x: -x[1]))[:120],
         "minuti": round((time.time() - oldest) / 60) if oldest else "",
     }
@@ -200,7 +229,8 @@ def row(a):
         c, extra = count_materials(a.materiali)
     else:
         c = {"snimki": 0, "pdf": 0, "pdf_stranitsi": 0, "skanirani": 0, "drugi": 0}
-        extra = {"obem_mb": "", "rezolyutsiya_mp": "", "kamera": "", "pdf_programa": "", "minuti": ""}
+        extra = {"obem_mb": "", "rezolyutsiya_mp": "", "razmer_px": "", "tsveten_profil": "", "exif": "",
+                 "kamera": "", "pdf_programa": "", "minuti": ""}
     for k in c:  # numbers given by hand win over the counted ones
         v = getattr(a, k)
         if v is not None:
