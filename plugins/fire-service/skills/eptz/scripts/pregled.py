@@ -62,6 +62,11 @@ STANDARD = [("злонамерено внесен външен огнеизто�
 ORDINAL = ["първи", "втори", "трети", "четвърти", "пети", "шести", "седми", "осми", "девети", "десети",
            "единадесети", "дванадесети"]
 RESEARCH = r"(?:Изследване на|Отговор на) въпрос №\s*"
+# outdoor fires (waste, containers, dry grass, stubble, bushes, forests): the short-circuit version is not developed,
+# unless a question asks about an electrical installation or the expert chose to develop it
+OUTDOOR = re.compile(r"сух[аи]? трев|тревн[аи]? растителност|окосена трева|стърнищ|храст|горск|\bгора\b|\bгори\b(?= [а-я]*\s*(?:площ|масив))|"
+                     r"контейнер|отпадъ|сметищ|ниска растителност", re.I)
+ASKS_KS = re.compile(r"късо съединение|ел(?:\.|ектрическ[аи]) ?(?:инсталац|съоръжен|провод|мрежа)|електропровод|електрическ", re.I)
 SECTION_VI_MAX = 3800  # ≈ one page – the general conclusions are short answers, not the research again
 CAUSE_Q = r"причин|по какъв начин е възникнал|как е възникнал|как е предизвикан|начин(ът)? на възникване|от какво е възникнал"
 NO_TIMES = re.compile(r"час(ът|овете)[а-я ,]{0,40}(не са|не е|няма)[а-я ]{0,15}(отразен|посочен|данни)|няма (точни )?час", re.I)
@@ -152,6 +157,10 @@ def check(content, meta, vaprosi=None, materiali=""):
             found[m.group(1)] = m.group(2).strip().rstrip(".")
         titles = " | ".join(found.values()).lower()
         missing = [name for name, rx in STANDARD if not re.search(rx, titles)]
+        sec1 = section(text, r"^##\s*I\.", r"^##\s") or ""
+        if ("късо съединение" in missing and OUTDOOR.search(sec1 + " " + " ".join(listed))
+                and not any(ASKS_KS.search(q) for q in listed)):
+            missing.remove("късо съединение")
         # versions are needed only when a question asks about the cause (not e.g. „би ли се запалил …“)
         pita_prichina = not listed or any(re.search(CAUSE_Q, q, re.I) for q in listed)
         if missing and (found or pita_prichina):
