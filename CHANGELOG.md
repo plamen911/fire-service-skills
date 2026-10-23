@@ -7,7 +7,8 @@
   снимките, марката и модела на телефона от EXIF, програмата, създала PDF файла, минутите от качването до
   сметката и броя корекции на реда. Имена на файлове, GPS и дати от EXIF не се четат.
 - n8n: маршрутът `fire-dnevnik` и инструментът `dnevnik` в конектора са пуснати в „Fire Service API (skills)“.
-  Таблицата е `dnevnik_eptz.csv` в fire-service/_admin (чете се и с `tools/admin.py files get admin dnevnik_eptz.csv`).
+  Дневникът е таблица в Google Sheets „fire-service – дневник на ЕПТЗ“ в fire-service/_admin – n8n записва
+  ред по ред през Sheets API (замразен заглавен ред, филтър), повторният запис за същото дело обновява реда.
 
 ## 2.31.0 – 2026-10-23
 
