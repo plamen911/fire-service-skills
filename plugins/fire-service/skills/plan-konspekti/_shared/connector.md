@@ -34,7 +34,7 @@
 | `voda.py blizo` | `voda` с `action: "blizo"` и `lat`, `lon` (или `masto`) | `broi` до 25; разстоянието е по права линия |
 | `voda.py dobavi` / `potvardi` / `promeni` / `premahni` | `voda_save` с `action` и същите полета (`promeni` – `id` и `set`; `premahni` – `id` и `prichina`) | всеки може да записва; премахва администраторът или който е въвел точката; първо с `dry_run: true`; координатите са само от потребителя |
 | `obraztsi.py index` / `get` | `samples` с `kind: "spravka"` или `"eptz"` и `name` | започни с `name: "INDEX.md"`, после избрания файл |
-| `dnevnik.py eptz …` (дневник на ползването) | `dnevnik` със същите полета (`ekspert`, `zm`, `dp`, `obekt`, `prichina`, `stranitsi`, `suma_eur`, `snimki`, `pdf`, `pdf_stranitsi`, `skanirani`, `drugi`, `tekst_v_chata`) – броевете ги изчисли сам от качените файлове | всеки може да записва; без текста на заключението; при грешка – продължи |
+| `dnevnik.py eptz …` (дневник на ползването) | `dnevnik` със същите полета (`ekspert`, `zm`, `dp`, `obekt`, `prichina`, `stranitsi`, `suma_eur`, `snimki`, `pdf`, `pdf_stranitsi`, `skanirani`, `drugi`, `tekst_v_chata`, `model`, `ustroystvo`, `nahodki`) – броевете ги изчисли сам от качените файлове; часът и средата се записват в n8n | всеки може да записва; без текста на заключението; при грешка – продължи |
 | `regs.py index` | `regs_list` с `name: "_INDEX_"`, после `regs_read` | индексът е голям – чети го с `match`, не целия |
 | `regs.py katalog --q ТЕКСТ` | `regs_list` с `name: "index.json"`, после `regs_read` с `match: "ТЕКСТ"` | статусът на файла: `in_force`, `superseded_by`, `map` |
 | `regs.py get ФАЙЛ` | `regs_list` (за `id`) → `regs_read` с `heading: "Чл. 5"` или `match: "текст"` | цитирай дословно от върнатото |
