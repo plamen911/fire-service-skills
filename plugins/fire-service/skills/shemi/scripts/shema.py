@@ -496,6 +496,18 @@ def load(d):
                     break
     return out, warnings
 
+def building_outlines(data):
+    """Every building as an outline – a contour as it is, a rectangle by its corners."""
+    out = []
+    for b in data["sgradi"]:
+        if b.get("kontur"):
+            out.append(b["kontur"])
+        else:
+            x, y, w, h = b["x"], b["y"], b["w"], b["h"]
+            out.append([[x, y], [x + w, y], [x + w, y + h], [x, y + h]])
+    return out
+
+
 def centroid(pts):
     """The centroid of a polygon (its area's centre) – falls inside an ordinary building outline."""
     a = cx = cy = 0.0
@@ -637,7 +649,7 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
         ax.set_xlim(x0, x1)                            # imshow resets the limits – keep the drawing's
         ax.set_ylim(y0, y1)
     if data.get("imot"):                               # the parcel's boundary – from the library
-        draw_parcel(ax, data["imot"]["kontur"], data["imot"]["etiket"], s, fs)
+        draw_parcel(ax, data["imot"]["kontur"], data["imot"]["etiket"], s, fs, building_outlines(data))
     draw_streets(ax, data["ulitsi"], fs, pal)          # the situation first – under everything else
     for z in data["bez_parkirane"]:
         draw_no_parking(ax, z, pal)

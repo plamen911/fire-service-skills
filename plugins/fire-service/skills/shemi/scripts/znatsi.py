@@ -448,10 +448,65 @@ def draw_streets(ax, streets, fs, pal):
         ax.text((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, u["ime"], ha="center", va="center", fontsize=fs, color=INK,
                 rotation=readable(ang), rotation_mode="anchor", zorder=1.3)
 
-def draw_parcel(ax, kontur, label, s, fs):
-    """The boundary of the cadastral parcel – thin dash-dot black, its identifier at the top point."""
+def _inside(pt, poly):
+    x, y = pt
+    res = False
+    for (x1, y1), (x2, y2) in zip(poly, poly[1:] + poly[:1]):
+        if (y1 > y) != (y2 > y) and x < x1 + (y - y1) * (x2 - x1) / (y2 - y1):
+            res = not res
+    return res
+
+
+def parcel_label_pos(kontur, w, h, avoid=()):
+    """The centre of the parcel's identifier: inside the parcel, near its top, the whole label (w × h)
+    within the boundary and clear of the buildings (`avoid` – outlines); None when nothing fits."""
+    poly = [tuple(p) for p in kontur]
+    xs, ys = [p[0] for p in poly], [p[1] for p in poly]
+    mx, my = 0.3 * h, 0.3 * h                          # a margin from the boundary and the walls
+    bw, bh = w / 2 + mx, h / 2 + my
+    holes = [[tuple(p) for p in a] for a in avoid if a and len(a) >= 3]
+
+    def fits(cx, cy):
+        ring = [(cx + fx * bw, cy + fy * bh) for fx, fy in
+                ((-1, -1), (-0.5, -1), (0, -1), (0.5, -1), (1, -1), (1, 0), (1, 1), (0.5, 1), (0, 1),
+                 (-0.5, 1), (-1, 1), (-1, 0), (0, 0))]
+        if not all(_inside(q, poly) for q in ring):
+            return False
+        x0, x1, y0, y1 = cx - bw, cx + bw, cy - bh, cy + bh
+        if any(x0 < px < x1 and y0 < py < y1 for px, py in poly):
+            return False
+        for b in holes:
+            if any(_inside(q, b) for q in ring) or any(x0 < px < x1 and y0 < py < y1 for px, py in b):
+                return False
+        return True
+
+    step = max(h / 2, (max(ys) - min(ys)) / 80, (max(xs) - min(xs)) / 80)
+    mid = (min(xs) + max(xs)) / 2
+    best = None
+    y = max(ys) - bh
+    while y >= min(ys) + bh:
+        x = min(xs) + bw
+        while x <= max(xs) - bw:
+            if fits(x, y):
+                score = y - 0.25 * abs(x - mid)        # high in the parcel, not far from its middle
+                if best is None or score > best[0]:
+                    best = (score, x, y)
+            x += step
+        if best and best[2] - y > 4 * h:               # nothing higher will appear lower down
+            break
+        y -= step
+    return (best[1], best[2]) if best else None
+
+
+def draw_parcel(ax, kontur, label, s, fs, avoid=()):
+    """The boundary of the cadastral parcel – thin dash-dot black, its identifier inside it near the top,
+    clear of the buildings (above the top point only when it fits nowhere inside)."""
     ax.add_patch(Polygon(kontur, closed=True, fill=False, ec=INK, lw=0.7, ls=PARCEL_LS, zorder=1.35))
     if label:
+        pos = parcel_label_pos(kontur, 0.6 * s * len(label), 0.9 * s, avoid)
+        if pos:
+            ax.text(pos[0], pos[1], label, ha="center", va="center", fontsize=fs - 0.5, zorder=4)
+            return
         tx, ty = max(kontur, key=lambda p: (p[1], -p[0]))
         ax.text(tx, ty + 0.4 * s, label, ha="center", va="bottom", fontsize=fs - 0.5, zorder=4,
                 bbox=dict(fc="white", ec="none", pad=0.6, alpha=0.85))

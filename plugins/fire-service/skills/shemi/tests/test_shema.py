@@ -233,6 +233,20 @@ def test_kais_fields():
     check(r.returncode == 2 and "fon" in r.stderr, "a picture without its frame → BAD_INPUT")
 
 
+def test_parcel_label():
+    print("znatsi.py – the parcel's identifier inside the parcel, clear of the buildings")
+    import znatsi
+    kontur = [[0, 0], [100, 0], [100, 60], [40, 60], [40, 80], [0, 80]]
+    bld = [[10, 55], [35, 55], [35, 78], [10, 78]]
+    pos = znatsi.parcel_label_pos(kontur, 20, 3, [bld])
+    check(pos is not None and znatsi._inside(pos, kontur), f"inside the parcel: {pos}")
+    if pos:
+        x, y = pos
+        clear = not (x + 10 > 10 and x - 10 < 35 and y + 1.5 > 55 and y - 1.5 < 78)
+        check(clear and y > 40, f"near the top and clear of the building: {pos}")
+    check(znatsi.parcel_label_pos([[0, 0], [5, 0], [5, 5], [0, 5]], 20, 3) is None, "too small a parcel → None (above it)")
+
+
 def test_dxf():
     print("shema.py – the DXF for AutoCAD / CorelDRAW")
     import ezdxf
@@ -283,6 +297,7 @@ if __name__ == "__main__":
     test_floors_text()
     test_outline_building()
     test_kais_fields()
+    test_parcel_label()
     test_dxf()
     test_situacionna_sheet()
     test_situacionna_docx()
