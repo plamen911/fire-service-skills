@@ -46,7 +46,8 @@ try:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from matplotlib.patches import Circle, FancyArrowPatch, Polygon, Rectangle, Wedge
+    from matplotlib.patches import Circle, FancyArrowPatch, PathPatch, Polygon, Rectangle, Wedge
+    from matplotlib.path import Path as MPath
 except ImportError:  # pragma: no cover
     sys.stderr.write("NO_MATPLOTLIB: pip install matplotlib\n")
     sys.exit(3)
@@ -410,8 +411,11 @@ def draw_street(ax, pts, width, name, fs, pal):
                 rotation=readable(ang), rotation_mode="anchor", zorder=1.3)
 
 def draw_streets(ax, streets, fs, pal):
-    """All streets at once, so that the junctions merge: every street as a brown band with a white core of its
-    width (the edges are the two lines of the sign „Шосе“), the names last. streets – [{"tochki", "shirina", "ime"}]."""
+    """All streets at once, so that the junctions merge: a street along a line is a brown band with a white core
+    of its width (the edges are the two lines of the sign „Шосе“); a street as an area (its cadastral parcel,
+    "kontur") is its outline in brown – drawn twice, wide brown then white over it, so that where two street
+    parcels touch, the line between them disappears and only the outer edge stays. The names last.
+    streets – [{"tochki", "shirina", "ime"} | {"kontur", "otvori", "ime", "ime_pos", "ime_ugal"}]."""
     if not streets:
         return
     t = ax.transData
@@ -419,19 +423,34 @@ def draw_streets(ax, streets, fs, pal):
     edge = 0.9                                         # the line of the sign, pt
     for z, extra, colour in ((1.2, edge * 2, pal.road), (1.25, 0, "white")):
         for u in streets:
+            if "kontur" in u:
+                rings = [u["kontur"]] + list(u.get("otvori") or [])
+                if extra:
+                    for r in rings:
+                        ax.add_patch(Polygon(r, closed=True, fill=False, ec=colour, lw=extra, zorder=z, joinstyle="round"))
+                else:
+                    path = MPath.make_compound_path(*[MPath(list(r) + [r[0]], closed=True) for r in rings])
+                    ax.add_patch(PathPatch(path, fc="white", ec="none", lw=0, zorder=z))
+                continue
             xs, ys = zip(*u["tochki"])
             ax.plot(xs, ys, color=colour, lw=max(u["shirina"] * pt_per_m + extra, 0.5), zorder=z,
                     solid_capstyle="butt", solid_joinstyle="round")
     for u in streets:
-        if u["ime"]:
-            a, b = max(zip(u["tochki"], u["tochki"][1:]), key=lambda ab: math.dist(*ab))
-            ang = math.degrees(math.atan2(b[1] - a[1], b[0] - a[0]))
-            ax.text((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, u["ime"], ha="center", va="center", fontsize=fs, color=INK,
-                    rotation=readable(ang), rotation_mode="anchor", zorder=1.3)
+        if not u["ime"]:
+            continue
+        if "kontur" in u:
+            if u.get("ime_pos"):
+                ax.text(u["ime_pos"][0], u["ime_pos"][1], u["ime"], ha="center", va="center", fontsize=fs, color=INK,
+                        rotation=readable(u.get("ime_ugal") or 0), rotation_mode="anchor", zorder=1.3)
+            continue
+        a, b = max(zip(u["tochki"], u["tochki"][1:]), key=lambda ab: math.dist(*ab))
+        ang = math.degrees(math.atan2(b[1] - a[1], b[0] - a[0]))
+        ax.text((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, u["ime"], ha="center", va="center", fontsize=fs, color=INK,
+                rotation=readable(ang), rotation_mode="anchor", zorder=1.3)
 
 def draw_parcel(ax, kontur, label, s, fs):
     """The boundary of the cadastral parcel – thin dash-dot black, its identifier at the top point."""
-    ax.add_patch(Polygon(kontur, closed=True, fill=False, ec=INK, lw=0.7, ls=PARCEL_LS, zorder=1))
+    ax.add_patch(Polygon(kontur, closed=True, fill=False, ec=INK, lw=0.7, ls=PARCEL_LS, zorder=1.35))
     if label:
         tx, ty = max(kontur, key=lambda p: (p[1], -p[0]))
         ax.text(tx, ty + 0.4 * s, label, ha="center", va="bottom", fontsize=fs - 0.5, zorder=4,

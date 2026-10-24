@@ -26,6 +26,8 @@ obekt – имотът в точката (или по идентификатор
                       (от voda.py – трябва личен ключ);
   --radius N        – колко метра около имота да обхване теренът (30–300, по подразбиране 40);
   --bez-granitsa    – без границата на поземления имот;
+  --vodoprovod D    – с --voda: водопроводът по улицата на хидранта с диаметър D (по подразбиране 70/80 – когато
+                      няма данни от ВиК; „не“ – без него). Имената на ж.к. и кварталите наблизо – от OpenStreetMap;
   --fon             – и кадастралната карта около имота като блед фон (kais_fon.png до kais.json) – за
                       работа и сверка; не е по Приложение № 2а, затова не е по подразбиране.
 tarsi – какво намира търсачката на картата по идентификатор или адрес. В промишлените зони много имоти са
@@ -186,6 +188,32 @@ def clip_polyline(pts, x0, y0, x1, y1):
     return pieces
 
 
+def dist_seg(p, a, b):
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    if dx == dy == 0:
+        return math.dist(p, a)
+    t = max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy)))
+    return math.dist(p, (a[0] + t * dx, a[1] + t * dy))
+
+
+def densify(pts, step):
+    """The polyline with points at most step metres apart (the corners kept)."""
+    out = [tuple(pts[0])]
+    for a, b in zip(pts, pts[1:]):
+        n = max(1, int(math.ceil(math.dist(a, b) / step)))
+        out += [(a[0] + (b[0] - a[0]) * i / n, a[1] + (b[1] - a[1]) * i / n) for i in range(1, n + 1)]
+    return out
+
+
+def point_in(p, ring):
+    """Is the point inside the polygon (ray casting)?"""
+    c = False
+    for (xi, yi), (xj, yj) in zip(ring, ring[-1:] + ring[:-1]):
+        if (yi > p[1]) != (yj > p[1]) and p[0] < (xj - xi) * (p[1] - yi) / (yj - yi) + xi:
+            c = not c
+    return c
+
+
 def street_name(name):
     """„бул. Русе“ → „бул. „Русе““ – the plugin's typography for street names; other names stay as they are."""
     m = re.match(r"^(ул\.|бул\.|пл\.|ж\.к\.|кв\.)\s*(.+)$", name.strip())
@@ -314,7 +342,7 @@ def cmd_obekt(a):
                 continue
             b = {"kontur": local(s["kontur"], bx0, by0), "etiket": label(s), "kais_id": s["id"]}
             if (dims(s["kontur"])[1] or 0) < SMALL_M:      # an annex: no name and no dimension lines over its neighbour
-                b["etiket"], b["razmeri"] = "", False
+                b["etiket"], b["razmeri"], b["kratko"] = "", False, True
             if s.get("etazhi"):
                 b["etazhnost"] = f"{s['etazhi']} ет."
             sh["sgradi"].append(b)
@@ -322,28 +350,103 @@ def cmd_obekt(a):
             notes.append("Етажността е „брой етажи“ от КАИС (надземните); сутерен, тавански етаж, категорията и "
                          "огнеустойчивостта не са в кадастъра – провери ги на място или в документацията на обекта.")
 
-        # the streets (OpenStreetMap, from n8n): cut to the terrain, the name once per street – on its longest piece
-        streets = []
-        for u in res.get("ulitsi") or []:
+        # the streets: the street parcels of КАИС (exact outlines); their names – from OpenStreetMap, which also
+        # gives what КАИС lacks (a street that runs over no street parcel). The two are never drawn over each other.
+        roads = [r for r in res.get("ulitsi_kais") or [] if r.get("kontur")]
+        osm = res.get("ulitsi") or []
+        streets, names_used = [], set()
+
+        def named_piece(ways):
+            """(name, middle, angle) of the longest piece inside the terrain of the named ways given."""
+            best = None
+            for u in ways:
+                if not u.get("ime"):
+                    continue
+                for piece in clip_polyline(u.get("tochki") or [], bx0, by0, bx1, by1):
+                    for a_, b_ in zip(piece, piece[1:]):
+                        d = math.dist(a_, b_)
+                        if best is None or d > best[0]:
+                            best = (d, u["ime"], a_, b_)
+            if not best:
+                return None
+            _, name, a_, b_ = best
+            return (street_name(name), [round((a_[0] + b_[0]) / 2 - bx0, 1), round((a_[1] + b_[1]) / 2 - by0, 1)],
+                    round(math.degrees(math.atan2(b_[1] - a_[1], b_[0] - a_[0])), 1))
+
+        for r in roads:
+            st = {"kontur": local(r["kontur"], bx0, by0), "otvori": [local(h, bx0, by0) for h in (r.get("otvori") or [])],
+                  "ime": "", "kais_id": r["id"]}
+            tag = named_piece([u for u in osm if u.get("kais") == r["id"]])
+            if tag and tag[0] not in names_used:
+                st["ime"], st["ime_pos"], st["ime_ugal"] = tag
+                names_used.add(tag[0])
+            streets.append(st)
+        rings = [r["kontur"] for r in roads]
+        complement = []
+        for u in osm:
+            if u.get("kais"):
+                continue
             for piece in clip_polyline(u.get("tochki") or [], bx0, by0, bx1, by1):
-                if len(piece) > 1 and length(piece) > 3:
-                    streets.append({"tochki": [[round(x - bx0, 1), round(y - by0, 1)] for x, y in piece],
-                                    "shirina": u.get("shirina") or 6, "ime": street_name(u.get("ime") or ""), "_len": length(piece)})
-        for name in {st["ime"] for st in streets if st["ime"]}:
-            same = [st for st in streets if st["ime"] == name]
+                # only the parts of the line that lie outside every street parcel – what КАИС does not have
+                piece = densify(piece, 2.0)
+                part = []
+                for a_, b_ in zip(piece, piece[1:]):
+                    mid = ((a_[0] + b_[0]) / 2, (a_[1] + b_[1]) / 2)
+                    if any(point_in(mid, ring) for ring in rings):
+                        if len(part) > 1:
+                            complement.append((u, part))
+                        part = []
+                        continue
+                    part = part + [b_] if part else [a_, b_]
+                if len(part) > 1:
+                    complement.append((u, part))
+        for u, part in complement:
+            if length(part) > 3:
+                name = street_name(u.get("ime") or "")
+                streets.append({"tochki": [[round(x - bx0, 1), round(y - by0, 1)] for x, y in part],
+                                "shirina": u.get("shirina") or 6, "ime": "" if name in names_used else name, "_len": length(part)})
+        for name in {st["ime"] for st in streets if "tochki" in st and st["ime"]}:
+            same = [st for st in streets if "tochki" in st and st["ime"] == name]
             longest = max(same, key=lambda st: st["_len"])
             for st in same:
                 if st is not longest:
                     st["ime"] = ""
         for st in streets:
-            st.pop("_len")
+            st.pop("_len", None)
         if streets:
             sh["ulitsi"] = streets
-            summary["ulitsi"] = sorted({st["ime"] for st in streets if st["ime"]}) or ["(без имена)"]
-            notes.append("Улиците са от OpenStreetMap – осовите линии са приблизителни, ширината е по вида на пътя; "
-                         "провери имената и входовете на място.")
-        elif "ulitsi" in res:
-            notes.append("В OpenStreetMap няма улици около обекта – начертай ги на ръка.")
+            summary["ulitsi"] = {
+                "ot_kais": [{"id": st["kais_id"], "ime": st["ime"] or None} for st in streets if "kontur" in st],
+                "ot_osm": sorted({st["ime"] or "(без име)" for st in streets if "tochki" in st}),
+            }
+            if any("tochki" in st for st in streets):
+                notes.append("Улиците са по поземлените имоти от КАИС; там, където в кадастъра няма имот за улица, са "
+                             "допълнени от OpenStreetMap (осови линии, приблизителни). Имената са от OpenStreetMap.")
+            else:
+                notes.append("Улиците са по поземлените имоти от КАИС; имената им – от OpenStreetMap.")
+        elif "ulitsi" in res or "ulitsi_kais" in res:
+            notes.append("Около обекта няма улици нито в КАИС, нито в OpenStreetMap – начертай ги на ръка.")
+
+        # the named places nearby (ж.к. „…“, квартал) – from OpenStreetMap: inside the terrain at their point, a
+        # place outside it (up to 400 m) at the edge of the terrain on its side
+        cx, cy = (bx0 + bx1) / 2, (by0 + by1) / 2
+        texts = []
+        for m_ in sorted(res.get("mesta") or [], key=lambda m_: math.dist(m_["tochka"], (cx, cy))):
+            px, py = m_["tochka"]
+            dist_out = math.hypot(max(bx0 - px, 0, px - bx1), max(by0 - py, 0, py - by1))
+            if dist_out > 400 or len(texts) >= 2:
+                continue
+            m = 12.0
+            if dist_out > 0:                           # on the edge of the terrain, on the place's side
+                dx, dy = px - cx, py - cy
+                k = min((((bx1 - m) - cx) / dx if dx > 0 else ((bx0 + m) - cx) / dx) if dx else 1e9,
+                        (((by1 - m) - cy) / dy if dy > 0 else ((by0 + m) - cy) / dy) if dy else 1e9)
+                px, py = cx + dx * k, cy + dy * k
+            texts.append({"x": round(px - bx0, 1), "y": round(py - by0, 1), "tekst": street_name(m_["ime"]),
+                          "osm": True})
+        if texts:
+            sh["tekst"] = texts
+            summary["mesta"] = [t["tekst"] for t in texts]
 
         if hydrants:
             sh["vodoiztochnitsi"] = []
@@ -361,6 +464,38 @@ def cmd_obekt(a):
                 sh["razstoyaniya"] = [{"ot": [round(c[0], 1), round(c[1], 1)], "do": [hx, hy]}]
                 summary["do_vodoiztochnika_m"] = round(math.dist(c, (hx, hy)))
             summary["vodoiztochnitsi"] = len(hydrants)
+            # the water main: along the street of the nearest hydrant (its centre line from OpenStreetMap), with the
+            # diameter given – or 70/80 by default, the size of the city's hydrants, when nothing else is known
+            if a.vodoprovod and a.vodoprovod != "не":
+                hx, hy = hydrants[0][0], hydrants[0][1]
+                best = None
+                for u in osm:
+                    for piece in clip_polyline(u.get("tochki") or [], bx0, by0, bx1, by1):
+                        if len(piece) < 2:
+                            continue
+                        d = min(dist_seg((hx, hy), a_, b_) for a_, b_ in zip(piece, piece[1:]))
+                        if best is None or d < best[0]:
+                            best = (d, piece)
+                if best and best[0] < 30:
+                    line = best[1]
+                    if rings:                          # in the street parcels only – the OSM line is approximate
+                        pieces, cur = [], []
+                        for a_, b_ in zip(line, line[1:]):
+                            mid = ((a_[0] + b_[0]) / 2, (a_[1] + b_[1]) / 2)
+                            if any(point_in(mid, ring) for ring in rings):
+                                cur = cur + [b_] if cur else [a_, b_]
+                            elif cur:
+                                pieces.append(cur)
+                                cur = []
+                        if cur:
+                            pieces.append(cur)
+                        if pieces:
+                            line = min(pieces, key=lambda pc: min(dist_seg((hx, hy), p_, q_) for p_, q_ in zip(pc, pc[1:])))
+                    sh["vodoprovod"] = [{"tochki": [[round(x - bx0, 1), round(y - by0, 1)] for x, y in line],
+                                         "vid": "skluchena", "diametar": a.vodoprovod}]
+                    summary["vodoprovod"] = a.vodoprovod
+                    notes.append(f"Водопроводът е приет по улицата на хидранта, Ø {a.vodoprovod} (няма данни от ВиК) – "
+                                 "провери вида (сключена или тупикова), диаметъра и налягането.")
         with open(a.shema, "w", encoding="utf-8") as f:
             json.dump(sh, f, ensure_ascii=False, indent=1)
         summary["shema"] = os.path.abspath(a.shema)
@@ -389,6 +524,8 @@ def main():
     o.add_argument("--fon", action="store_true",
                    help="и картинката на кадастралната карта като блед фон (не по Приложение № 2а – за работа и сверка)")
     o.add_argument("--bez-granitsa", action="store_true", help="с --shema: без границата на поземления имот")
+    o.add_argument("--vodoprovod", default="70/80",
+                   help="с --voda: диаметърът на водопровода по улицата на хидранта (по подразбиране 70/80; „не“ – без него)")
     o.add_argument("-o", "--out", default="kais.json", help="изходен JSON (фонът – до него, *_fon.png)")
     o.add_argument("--shema", help="и начало на JSON за shema.py / situacionna.py")
     o.add_argument("--voda", action="store_true", help="с --shema: и точните водоизточници в рамката")

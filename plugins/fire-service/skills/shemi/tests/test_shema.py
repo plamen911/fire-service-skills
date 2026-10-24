@@ -227,6 +227,42 @@ def test_kais_fields():
     check(r.returncode == 2 and "fon" in r.stderr, "a picture without its frame → BAD_INPUT")
 
 
+def test_dxf():
+    print("shema.py – the DXF for AutoCAD / CorelDRAW")
+    import ezdxf
+    tmp = tempfile.mkdtemp()
+    data = {"teren": [120, 90], "kais": {"x0": 431100.0, "y0": 4808800.0},
+            "sgradi": [{"kontur": [[30, 30], [60, 30], [60, 45], [30, 45]], "etiket": "Склад", "etazhnost": "+1"}],
+            "imot": {"kontur": [[20, 20], [100, 20], [100, 70], [20, 70]], "etiket": "ПИ 99999.10.20"},
+            "ulitsi": [{"kontur": [[0, 75], [120, 75], [120, 88], [0, 88]], "ime": "бул. „Примерен“", "ime_pos": [60, 81]},
+                       {"kontur": [[50, 0], [58, 0], [58, 75], [50, 75]]},
+                       {"tochki": [[-10, 10], [130, 10]], "shirina": 6}],
+            "vodoiztochnitsi": [{"vid": "hidrant", "x": 10, "y": 80, "etiket": "ПХ 70/80"}],
+            "vodoprovod": [{"tochki": [[0, 80], [120, 80]], "diametar": "70/80"}]}
+    r, out = run(data)
+    dxf = os.path.splitext(out)[0] + ".dxf"
+    check(r.returncode == 0 and os.path.exists(dxf), "a DXF is written beside the picture by default")
+    doc = ezdxf.readfile(dxf)
+    layers = {lay.dxf.name for lay in doc.layers}
+    check({"SGRADI", "ULITSI", "VODA", "IMOT", "RAZMERI", "SEVER"} <= layers, "the layers by kind")
+    check(doc.header["$INSUNITS"] == 6, "in metres")
+    msp = doc.modelspace()
+    xs = [v[0] for e in msp.query("LWPOLYLINE[layer=='SGRADI']") for v in e.get_points("xy")]
+    check(xs and min(xs) == 431130.0, "with \"kais\" in КС2005 – the building lies where it is in the cadastre")
+    lines = [((e.dxf.start.x, e.dxf.start.y), (e.dxf.end.x, e.dxf.end.y)) for e in msp.query("LINE[layer=='ULITSI']")]
+    shared = [ln for ln in lines if abs(ln[0][1] - 4808875.0) < 1e-6 and abs(ln[1][1] - 4808875.0) < 1e-6
+              and min(ln[0][0], ln[1][0]) >= 431150.0 - 1e-6 and max(ln[0][0], ln[1][0]) <= 431158.0 + 1e-6]
+    check(not shared, "where two street parcels touch, there is no line between them")
+    check(all(431100.0 - 1e-6 <= x <= 431220.0 + 1e-6 for ln in lines for x in (ln[0][0], ln[1][0])),
+          "the streets are cut at the drawing's edge")
+    texts = [e.dxf.text for e in msp.query("TEXT")]
+    check("бул. „Примерен“" in texts and "ПХ 70/80" in texts and "С-70/80" in texts, "the names and labels as text")
+    dims = [[e.dxf.text for e in doc.blocks.get(d.dxf.geometry) if e.dxftype() in ("MTEXT", "TEXT")] for d in msp.query("DIMENSION")]
+    check(["30.00"] in dims or ["30"] in dims, f"dimensions in metres: {dims}")
+    r, out = run(data, "--bez-dxf")
+    check(not os.path.exists(os.path.splitext(out)[0] + ".dxf"), "--bez-dxf – none")
+
+
 if __name__ == "__main__":
     test_fixture()
     test_defaults()
@@ -237,6 +273,7 @@ if __name__ == "__main__":
     test_floors_text()
     test_outline_building()
     test_kais_fields()
+    test_dxf()
     test_situacionna_sheet()
     test_situacionna_docx()
     test_library()

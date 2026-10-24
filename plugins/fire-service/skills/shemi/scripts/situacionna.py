@@ -310,7 +310,8 @@ def build(d, out):
         lst["data"] = datetime.date.today().strftime("%d.%m.%Y")
     base = os.path.splitext(out)[0]
     png = base + "_grafichna.png"
-    _, _, warnings, extra = shema.render(d, png)
+    dxf = base + ".dxf"                                # the graphic part for AutoCAD / CorelDRAW
+    _, _, warnings, extra = shema.render(d, png, out_dxf=dxf)
 
     doc = Document()
     st = doc.styles["Normal"]
@@ -337,7 +338,7 @@ def build(d, out):
     typo_all(doc)
     doc.save(out)
     report(out, letterhead=False)
-    return {"output": out, "grafichna": png, "mashtab": extra.get("mashtab"), "redove": n,
+    return {"output": out, "grafichna": png, "dxf": extra.get("dxf"), "mashtab": extra.get("mashtab"), "redove": n,
             "izgotvil": lst.get("izgotvil") or None, "marshrut": marshrut,
             "preduprezhdeniya": warnings + gaps + table_gaps(tab)}
 
