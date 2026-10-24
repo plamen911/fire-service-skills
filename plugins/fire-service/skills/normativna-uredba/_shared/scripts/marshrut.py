@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 marshrut.py — маршрутът на пожарните автомобили от службата до обект в района на РДПБЗН – Плевен:
-разстоянието по пътищата и времето за движение (tдв. от Методиката към Указанията Iз-2749, Прил. № 5).
+разстоянието по пътищата, времето за движение (tдв. от Методиката към Указанията Iз-2749, Прил. № 5).
 
     python3 _shared/scripts/marshrut.py --do 43.4125702,24.6504731                 # службата – по заповедта
     python3 _shared/scripts/marshrut.py --link "https://www.google.com/maps/place/…/@43.41,24.65,17z"
@@ -20,11 +20,13 @@ marshrut.py — маршрутът на пожарните автомобили 
 Времето за движение е разстоянието, разделено на средната скорост на пожарните автомобили – 1 km/min,
 приета от администратора на 24.10.2026 г. (в Указанията Iз-2749 и в базата няма норматив; `--skorost`
 задава друга). Времето на OSRM е за лек автомобил в нормално движение – дава се само за сравнение.
-„Времето за реагиране“ по § 1, т. 4 от Указанията е от приемането на съобщението до пристигането –
-включва и обработката на сигнала и излизането; скриптът дава само движението.
+„Времето за реагиране“ по § 1, т. 4 от Указанията е от приемането на съобщението до пристигането:
+скриптът го смята като времето за излизане на дежурната смяна (1 min, дадено от администратора на
+24.10.2026 г.; `--izlizane` задава друго) плюс времето за движение.
 
 Отпечатва JSON: "ot" (службата, адрес, координати, как е избрана), "do", "razstoyanie_km" (по пътищата),
-"prava_km", "skorost_km_min", "vreme_dvizhenie_min" (с един знак), "vreme_min" (закръглено нагоре),
+"prava_km", "skorost_km_min", "vreme_dvizhenie_min" (с един знак), "izlizane_min", "vreme_reagirane_min"
+(излизане + движение), "vreme_min" (времето за реагиране, закръглено нагоре – за таблицата),
 "osrm_min", "prez" (улиците по маршрута), "belezhki".
 
 Грешки (на stderr, код ≠ 0): BAD_INPUT, NOT_FOUND, NO_NETWORK (адресът за WebFetch е в грешката).
@@ -46,6 +48,7 @@ SHARED = os.path.dirname(HERE)
 SLUZHBI = os.path.join(SHARED, "raioni", "sluzhbi_pleven.csv")
 MESTA = os.path.join(SHARED, "raioni", "koordinati_pleven.csv")
 SKOROST = 1.0          # km/min – приета от администратора (24.10.2026); в Iз-2749 норматив няма
+IZLIZANE = 1.0         # min – времето за излизане на дежурната смяна, дадено от администратора (24.10.2026)
 ROUTERS = ("https://routing.openstreetmap.de/routed-car/route/v1/driving/{a};{b}?overview=false&steps=true",
            "https://router.project-osrm.org/route/v1/driving/{a};{b}?overview=false&steps=true")
 
@@ -183,6 +186,7 @@ def main():
     ap.add_argument("--obshtina", help="общината, ако името на мястото се повтаря")
     ap.add_argument("--ot", help="службата, от която тръгват (напр. „Левски“, „УПБЗН – Сторгозия“)")
     ap.add_argument("--skorost", type=float, default=SKOROST, help=f"km/min (по подразбиране {SKOROST:g})")
+    ap.add_argument("--izlizane", type=float, default=IZLIZANE, help=f"min за излизане (по подразбиране {IZLIZANE:g})")
     ap.add_argument("--fail", help="отговорът на OSRM, свален с WebFetch (при NO_NETWORK)")
     ap.add_argument("--sluzhbi", action="store_true", help="адресите и координатите на службите")
     a = ap.parse_args()
@@ -201,6 +205,8 @@ def main():
         notes.append(f"точката е центърът на {pl['vid']} {pl['naseleno_masto']} – за обект дай --do или --link")
     else:
         bad("дай --do, --link или --masto")
+    if a.izlizane < 0:
+        bad("--izlizane не може да е отрицателно")
     if a.skorost <= 0:
         bad("--skorost трябва да е положителна")
 
@@ -235,7 +241,8 @@ def main():
         "ot": {"sluzhba": st["sluzhba"], "adres": st["adres"], "lat": start[0], "lon": start[1], "kak": how},
         "do": {"lat": dest[0], "lon": dest[1]},
         "razstoyanie_km": round(km, 2), "prava_km": round(dist_km(start, dest), 2),
-        "skorost_km_min": a.skorost, "vreme_dvizhenie_min": round(t, 1), "vreme_min": math.ceil(round(t, 2)),
+        "skorost_km_min": a.skorost, "vreme_dvizhenie_min": round(t, 1), "izlizane_min": a.izlizane,
+        "vreme_reagirane_min": round(t + a.izlizane, 1), "vreme_min": math.ceil(round(t + a.izlizane, 2)),
         "osrm_min": round(osrm_min, 1), "prez": prez, "belezhki": notes,
     }, ensure_ascii=False, indent=1))
 
