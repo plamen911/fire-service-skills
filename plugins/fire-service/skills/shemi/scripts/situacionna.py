@@ -20,9 +20,12 @@ situacionna.json е JSON-ът на схемата (входът – в нача�
   "list": {"nomer": "7", "obekt": "…", "sobstvenik": "…", "data": "24.10.2026", ...},
                                                // "izgotvil" по подразбиране – потребителят по личния ключ
                                                //   (с конектора – името от whoami); "data" – днешната дата
+  "obekt_gps": "43.4125702,24.6504731",       // точката на обекта или линк към нея – тогава разстоянието и
+                                               //   времето се смятат сами от службата по заповедта (marshrut.py:
+                                               //   по пътищата, 1 km/min); "sluzhba": "…" – от друга служба
   "tablitsa": {
-    "razstoyanie_km": 3.2,                     // от службата до обекта
-    "vreme_min": 7,                            // времето за реагиране
+    "razstoyanie_km": 3.2,                     // от службата до обекта (иначе – от "obekt_gps")
+    "vreme_min": 7,                            // времето за реагиране (иначе – движението от "obekt_gps")
     "redove": [{"natovarvane_vid": "мебели, текстил", "natovarvane_kg_m2": 25,
                 "pgi_vid": "", "pgi_kolichestvo": "",            // пожарогасителни инсталации: вид и к-во гас. в-во
                 "gasitelni_neobhodimi": "вода", "gasitelni_zabraneni": "",
@@ -263,6 +266,19 @@ def own_name():
         return None
 
 
+def route_to(target, ot=None):
+    """Distance and travel time from the responsible service (marshrut.py); None when it cannot be computed."""
+    script = os.path.join(os.path.dirname(HERE), "_shared", "scripts", "marshrut.py")
+    if not os.path.exists(script):
+        script = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(HERE))), "shared", "scripts", "marshrut.py")
+    cmd = [sys.executable, script, "--link" if "://" in target else "--do", target] + (["--ot", ot] if ot else [])
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        return json.loads(r.stdout) if r.returncode == 0 else None
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
+
+
 def build(d, out):
     if not isinstance(d, dict):
         bad("очаква се JSON обект")
@@ -279,6 +295,17 @@ def build(d, out):
             lst["izgotvil"] = name
         else:
             gaps.append("„Изготвил“ е празно – подай \"list.izgotvil\" (името от whoami на конектора)")
+    target = str(d.get("obekt_gps") or "").strip()
+    marshrut = None
+    if target and (tab.get("razstoyanie_km") in (None, "") or tab.get("vreme_min") in (None, "")):
+        marshrut = route_to(target, d.get("sluzhba"))     # the table's distance and time – from the service
+        if marshrut:
+            if tab.get("razstoyanie_km") in (None, ""):
+                tab["razstoyanie_km"] = round(marshrut["razstoyanie_km"], 1)
+            if tab.get("vreme_min") in (None, ""):
+                tab["vreme_min"] = marshrut["vreme_min"]
+        else:
+            gaps.append("разстоянието и времето не се изчислиха (marshrut.py) – пусни го отделно и ги подай в \"tablitsa\"")
     if not str(lst.get("data") or "").strip():
         lst["data"] = datetime.date.today().strftime("%d.%m.%Y")
     base = os.path.splitext(out)[0]
@@ -311,7 +338,7 @@ def build(d, out):
     doc.save(out)
     report(out, letterhead=False)
     return {"output": out, "grafichna": png, "mashtab": extra.get("mashtab"), "redove": n,
-            "izgotvil": lst.get("izgotvil") or None,
+            "izgotvil": lst.get("izgotvil") or None, "marshrut": marshrut,
             "preduprezhdeniya": warnings + gaps + table_gaps(tab)}
 
 

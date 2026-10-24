@@ -112,6 +112,25 @@ def main():
     u = {e["name"]: e for e in k["unit"]}
     ok(u["УПБЗН – Сторгозия"]["letterhead"] == "ПЛЕВЕН" and u["РСПБЗН – Червен бряг"]["key"] == "rspbzn_cherven_bryag", u)
     ok("Дъбов" not in json.dumps(k, ensure_ascii=False), "в каталога няма имена")
+
+    # маршрутът от службата до обекта (marshrut.py) – OSRM от файл, без мрежа
+    MR = os.path.join(SKILL, "_shared", "scripts", "marshrut.py")
+    route = os.path.join(ROOT, "tests", "fixtures", "osrm_route.json")
+    m = out(MR, "--masto", "Крушовене", "--fail", route)
+    ok(m["ot"]["sluzhba"] == "УПБЗН – Долна Митрополия" and "8121з-208" in m["ot"]["kak"], m["ot"])
+    ok(m["razstoyanie_km"] == 3.32 and m["skorost_km_min"] == 1.0 and m["vreme_dvizhenie_min"] == 3.3
+       and m["vreme_min"] == 4 and m["osrm_min"] == 5.3, m)
+    ok(m["prez"] == ["Св. св. Кирил и Методий", "Св. Климент Охридски", "бул. България"], m["prez"])
+    m = out(MR, "--link", "https://www.google.com/maps/place/X/@43.40,24.60,17z/data=!3d43.4125702!4d24.6504731",
+            "--ot", "Левски", "--skorost", "0.5", "--fail", route)
+    ok(m["do"] == {"lat": 43.4125702, "lon": 24.6504731} and m["ot"]["sluzhba"] == "РСПБЗН – Левски", m)
+    ok(m["vreme_dvizhenie_min"] == 6.6 and m["vreme_min"] == 7, m)
+    m = out(MR, "--do", "43.4125702,24.6504731", "--fail", route, env=NO_DATA)
+    ok(m["ot"]["sluzhba"] == "РСПБЗН – Плевен" and any("заповедта" in b for b in m["belezhki"]), m)
+    s = out(MR, "--sluzhbi")
+    ok(len(s) == 9 and all(r["lat"] and r["lon"] and r["adres"] for r in s), s)
+    r = run(MR, "--do", "43.41", "--fail", route)
+    ok(r.returncode == 2 and "BAD_INPUT" in r.stderr, r.stderr)
     print(f"OK – {checks} проверки")
 
 
