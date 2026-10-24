@@ -137,7 +137,7 @@ from matplotlib.patches import Polygon
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from znatsi import (FENCES, INK, LEGEND_ORDER, LINE_KINDS, NETWORKS, NOZZLES, PLACES, SPLITTERS, TRUCKS,  # noqa: E402,F401
                     LADDERS, WATER, Pal, chaikin, draw_building, draw_dimension, draw_fence, draw_fire, draw_hydrant,
-                    draw_gas_line, draw_gas_valve, offset_polyline, draw_main, draw_no_parking, draw_street, draw_streets, draw_tower, draw_valve_kran,
+                    draw_gas_line, draw_gas_valve, offset_polyline, draw_main, draw_no_parking, draw_parcel, draw_street, draw_streets, draw_tower, draw_valve_kran,
                     draw_kompas, draw_label_box, draw_ladder, draw_line, draw_nozzle, draw_reservoir, draw_ring,
                     draw_seat, draw_smoke, draw_splitter, draw_staff, draw_truck, draw_wind, big_arrow, is_el,
                     is_kpp, legend_text, length, obrazets, plt, point_at)
@@ -528,6 +528,8 @@ def legend_keys(data, hose_m):
         used.add("vyatar")
     used.update(t["vid"] for t in data["avtomobili"])
     used.update(v["vid"] for v in data["vodoprovod"])
+    if data.get("imot"):
+        used.add("imot")
     for key in ("ulitsi", "gazoprovod", "gaz_armatura", "bez_parkirane"):
         if data[key]:
             used.add({"ulitsi": "ulitsa"}.get(key, key))
@@ -590,13 +592,8 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
                   interpolation="bilinear")
         ax.set_xlim(x0, x1)                            # imshow resets the limits – keep the drawing's
         ax.set_ylim(y0, y1)
-    if data.get("imot"):                               # the parcel's boundary – thin dash-dot, its identifier at the top
-        k = data["imot"]["kontur"]
-        ax.add_patch(Polygon(k, closed=True, fill=False, ec=INK, lw=0.7, ls=(0, (6, 2, 1, 2)), zorder=1))
-        if data["imot"]["etiket"]:
-            tx, ty = max(k, key=lambda p: (p[1], -p[0]))
-            ax.text(tx, ty + 0.4 * s, data["imot"]["etiket"], ha="center", va="bottom", fontsize=fs - 0.5, zorder=4,
-                    bbox=dict(fc="white", ec="none", pad=0.6, alpha=0.85))
+    if data.get("imot"):                               # the parcel's boundary – from the library
+        draw_parcel(ax, data["imot"]["kontur"], data["imot"]["etiket"], s, fs)
     draw_streets(ax, data["ulitsi"], fs, pal)          # the situation first – under everything else
     for z in data["bez_parkirane"]:
         draw_no_parking(ax, z, pal)
