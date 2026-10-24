@@ -27,7 +27,8 @@ obekt – имотът в точката (или по идентификатор
   --radius N        – колко метра около имота да обхване теренът (30–300, по подразбиране 40);
   --bez-granitsa    – без границата на поземления имот;
   --vodoprovod D    – с --voda: водопроводът по улицата на хидранта с диаметър D (по подразбиране 70/80 – когато
-                      няма данни от ВиК; „не“ – без него). Имената на ж.к. и кварталите наблизо – от OpenStreetMap;
+                      няма данни от ВиК; „не“ – без него); --natisk – налягането, bar (по подразбиране 3–5).
+                      Имената на ж.к. и кварталите наблизо – от OpenStreetMap;
   --fon             – и кадастралната карта около имота като блед фон (kais_fon.png до kais.json) – за
                       работа и сверка; не е по Приложение № 2а, затова не е по подразбиране.
 tarsi – какво намира търсачката на картата по идентификатор или адрес. В промишлените зони много имоти са
@@ -492,10 +493,10 @@ def cmd_obekt(a):
                         if pieces:
                             line = min(pieces, key=lambda pc: min(dist_seg((hx, hy), p_, q_) for p_, q_ in zip(pc, pc[1:])))
                     sh["vodoprovod"] = [{"tochki": [[round(x - bx0, 1), round(y - by0, 1)] for x, y in line],
-                                         "vid": "skluchena", "diametar": a.vodoprovod}]
+                                         "vid": "skluchena", "diametar": a.vodoprovod, "natisk": a.natisk}]
                     summary["vodoprovod"] = a.vodoprovod
-                    notes.append(f"Водопроводът е приет по улицата на хидранта, Ø {a.vodoprovod} (няма данни от ВиК) – "
-                                 "провери вида (сключена или тупикова), диаметъра и налягането.")
+                    notes.append(f"Водопроводът е приет по улицата на хидранта, Ø {a.vodoprovod}, налягане {a.natisk} bar "
+                                 "(няма данни от ВиК) – провери вида (сключена или тупикова), диаметъра и налягането.")
         with open(a.shema, "w", encoding="utf-8") as f:
             json.dump(sh, f, ensure_ascii=False, indent=1)
         summary["shema"] = os.path.abspath(a.shema)
@@ -526,6 +527,8 @@ def main():
     o.add_argument("--bez-granitsa", action="store_true", help="с --shema: без границата на поземления имот")
     o.add_argument("--vodoprovod", default="70/80",
                    help="с --voda: диаметърът на водопровода по улицата на хидранта (по подразбиране 70/80; „не“ – без него)")
+    o.add_argument("--natisk", default="3–5",
+                   help="налягането във водопровода, bar (по подразбиране 3–5 – когато няма данни от ВиК)")
     o.add_argument("-o", "--out", default="kais.json", help="изходен JSON (фонът – до него, *_fon.png)")
     o.add_argument("--shema", help="и начало на JSON за shema.py / situacionna.py")
     o.add_argument("--voda", action="store_true", help="с --shema: и точните водоизточници в рамката")
