@@ -268,7 +268,8 @@ def test_kais(tmp, base):
     d = json.load(open(sh, encoding="utf-8"))
     check("fon" not in d and d["imot"]["etiket"] == "ПИ 99999.10.20", "by default: the parcel's boundary, no picture")
     u = d["ulitsi"]
-    check(len(u) == 2 and u[0]["tochki"] == [[0, 85], [60, 85], [120, 85]] and u[0]["shirina"] == 12,
+    check(len(u) == 2 and u[0]["tochki"][0] == [0, 85] and u[0]["tochki"][-1] == [120, 85]
+          and all(p[1] == 85 for p in u[0]["tochki"]) and u[0]["shirina"] == 12,
           "a street is cut to the terrain; one far away is left out")
     check(u[0]["ime"] == "бул. „Примерен“" and u[1]["ime"] == "", "the name once, on the longest piece, in „…“")
     Stub.plan = [(200, answer)]
@@ -294,7 +295,29 @@ def test_kais(tmp, base):
     b1, b2 = d["sgradi"]
     check(b1["etiket"] == "Промишлена сграда" and b1["etazhnost"] == "3 ет." and b1["kontur"][0] == [45, 45],
           "a building: its purpose with a capital letter, the floors, the outline")
-    check(b2["etiket"] == "" and b2["razmeri"] is False, "an annex narrower than 8 m – no name and no dimensions")
+    check(b2["etiket"] == "" and b2["razmeri"] is False and b2["kratko"] is True,
+          "an annex narrower than 8 m – no name, no dimensions, only its floors")
+    # streets from the cadastre (their parcels), the name from OpenStreetMap; OSM only where КАИС has nothing
+    road = [[x0 + 0, y0 + 90], [x0 + 140, y0 + 90], [x0 + 140, y0 + 100], [x0 + 0, y0 + 100]]
+    answer2 = dict(answer, ulitsi_kais=[{"id": "99999.10.30", "ntp": "За второстепенна улица", "kontur": road, "imena": []}],
+                   ulitsi=[{"ime": "бул. Примерен", "vid": "secondary", "shirina": 12, "kais": "99999.10.30",
+                            "tochki": [[x0 + 10, y0 + 95], [x0 + 130, y0 + 95]]},
+                           {"ime": "ул. Странична", "vid": "residential", "shirina": 7,     # half over the parcel
+                            "tochki": [[x0 + 120, y0 + 95], [x0 + 120, y0 + 60], [x0 + 120, y0 + 30]]}],
+                   mesta=[{"ime": "ж.к. Примерен", "vid": "neighbourhood", "tochka": [x0 + 70, y0 - 150]},
+                          {"ime": "Далечна зона", "vid": "industrial", "tochka": [x0 + 70, y0 - 2000]}])
+    Stub.plan = [(200, answer2)]
+    code, _, err = call(kais.main, ["obekt", "--id", "99999.10.20", "-o", out, "--shema", sh])
+    d = json.load(open(sh, encoding="utf-8"))
+    area = [u for u in d["ulitsi"] if "kontur" in u]
+    lines_ = [u for u in d["ulitsi"] if "tochki" in u]
+    check(code is None and len(area) == 1 and area[0]["ime"] == "бул. „Примерен“" and area[0]["ime_pos"][1] == 85,
+          "a street is its cadastral parcel, named from OpenStreetMap" + (": " + err if code else ""))
+    check(len(lines_) == 1 and all(p[1] <= 81 for p in lines_[0]["tochki"]),
+          "an OSM street only where it is outside every street parcel")
+    t = d.get("tekst") or []
+    check(len(t) == 1 and t[0]["tekst"] == "ж.к. „Примерен“" and t[0]["y"] == 12.0,
+          "a neighbourhood outside the terrain – at its edge on its side; a far one is left out")
     summary = json.loads(printed)
     check(summary["sgradi"][0]["razmeri_m"] == [30.0, 10.0] and any("сутерен" in z for z in summary["zabelezhki"]),
           "the walls' lengths and the reminder that КАИС has no basements or categories")

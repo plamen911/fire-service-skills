@@ -64,7 +64,9 @@ shema.py — чертае СХЕМА за разполагане на силит
   "vyatar": {"ugal": 200, "sila": "5 m/s"},                         // накъде духа и скоростта – в легендата
   "tekst": [{"x": 5, "y": 5, "tekst": "ул. „Христо Ботев“", "ugal": 0}],
   // --- елементите на ситуационната схема (чл. 7, ал. 3, т. 1 от Указанията) – по желание и в обикновената схема
-  "ulitsi": [{"tochki": [[0, -6], [120, -6]], "shirina": 8, "ime": "ул. „Примерна“"}],   // знакът „Шосе“, кафяв
+  "ulitsi": [{"tochki": [[0, -6], [120, -6]], "shirina": 8, "ime": "ул. „Примерна“"},   // знакът „Шосе“, кафяв;
+             {"kontur": [[x, y], …], "otvori": [], "ime": "бул. „Примерен“", "ime_pos": [60, 20], "ime_ugal": 0}],
+                                                //   или улица като площ – поземленият имот от КАИС (kais.py)
   "razstoyaniya": [{"ot": [46, 66], "do": [60, 66]}],          // разстояние между сгради – стойността се смята
   "vodoprovod": [{"tochki": [[0, -2], [120, -2]], "vid": "skluchena", "diametar": 150, "natisk": 0.5}],
                                                 // skluchena / tupikova; диаметър в mm, налягане в MPa →
@@ -84,8 +86,8 @@ shema.py — чертае СХЕМА за разполагане на силит
                                                 //   "ramka" – x0, y0, x1, y1 на картинката в метри
   "list": {...},                                // ЛИСТ НА СИТУАЦИОННА СХЕМА по Приложение № 2а – виж по-долу
   "shlang_m": 20,                               // дължина на един шланг – чертичка на всеки толкова метра
-  "cvetna": true, "sever": true, "ramka": false,  // "ramka": true – рамка около чертежа (в листа на ситуационна
-                                                //   схема – по подразбиране да; "ramka": false я маха)
+  "cvetna": true, "sever": true, "ramka": false,  // "ramka": true – рамка около чертежа (листът на ситуационната
+                                                //   схема има своя рамка по Приложение № 2а – там е излишна)
   "legenda": false,                             // true – легенда, мащаб ("mashtab") и вятър под чертежа
   "shirina_cm": 16.5, "visochina_cm": 17                           // или --shirina-cm / --visochina-cm
 }
@@ -326,6 +328,15 @@ def load(d):
         out["tekst"].append({"x": num(t.get("x"), f"tekst[{i}].x"), "y": num(t.get("y"), f"tekst[{i}].y"),
                              "tekst": str(t.get("tekst") or ""), "ugal": num(t.get("ugal", 0), f"tekst[{i}].ugal")})
     for i, u in enumerate(items(d, "ulitsi")):
+        if u.get("kontur"):                            # a street as an area – its parcel from the cadastre
+            k = [pt(p, f"ulitsi[{i}].kontur") for p in u["kontur"]]
+            if len(k) < 3:
+                bad(f"ulitsi[{i}].kontur: трябват поне три точки")
+            holes = [[pt(p, f"ulitsi[{i}].otvori") for p in h] for h in (u.get("otvori") or []) if len(h) >= 3]
+            out["ulitsi"].append({"kontur": k, "otvori": holes, "ime": str(u.get("ime") or ""),
+                                  "ime_pos": pt(u["ime_pos"], f"ulitsi[{i}].ime_pos") if u.get("ime_pos") else None,
+                                  "ime_ugal": num(u.get("ime_ugal", 0), f"ulitsi[{i}].ime_ugal")})
+            continue
         pts = [pt(p, f"ulitsi[{i}].tochki") for p in (u.get("tochki") or [])]
         if len(pts) < 2:
             bad(f"ulitsi[{i}].tochki: трябват поне две точки")
@@ -343,7 +354,10 @@ def load(d):
             bad(f"vodoprovod[{i}].tochki: трябват поне две точки")
         label = str(v.get("etiket") or "")
         if not label and v.get("diametar") is not None:
-            label = f"{NETWORKS[kind]}-{num(v['diametar'], f'vodoprovod[{i}].diametar'):g}"
+            dm = v["diametar"]                         # a number (mm), or a size as written, e.g. "70/80"
+            dm = f"{num(dm, f'vodoprovod[{i}].diametar'):g}" if not isinstance(dm, str) or dm.replace(".", "", 1).isdigit() \
+                else dm.strip()
+            label = f"{NETWORKS[kind]}-{dm}"
             if v.get("natisk") is not None:
                 label += f"/{num(v['natisk'], f'vodoprovod[{i}].natisk') * 10:g}"
         out["vodoprovod"].append({"tochki": pts, "vid": kind, "etiket": label})
@@ -406,7 +420,11 @@ def load(d):
         xs += [p[0] for p in ln["tochki"]]
         ys += [p[1] for p in ln["tochki"]]
     for u in out["ulitsi"] if not d.get("teren") else []:   # a street counts with its width – unless the terrain is
-        for k in (-1, 1):                                     #   given: then streets simply run off the drawing
+        if "kontur" in u:                                     #   given: then streets simply run off the drawing
+            xs += [p[0] for p in u["kontur"]]
+            ys += [p[1] for p in u["kontur"]]
+            continue
+        for k in (-1, 1):
             side = offset_polyline(u["tochki"], k * u["shirina"] / 2)
             xs += [p[0] for p in side]
             ys += [p[1] for p in side]
@@ -509,6 +527,8 @@ def building_label(b):
     """The building's name, and on the next line the floors, the fire-hazard category and the fire resistance
     (чл. 7, ал. 3, т. 1, б. „б“ от Указанията): „Склад\n1 подз. ет., 2 ет. · Ф5Б · II ст.“."""
     name = str(b.get("etiket") or "").replace("\\n", "\n")
+    if b.get("kratko"):                                # a small annex – only its floors fit into it
+        return "\n".join(p for p in (name, floors_text(b.get("etazhnost"))) if p)
     parts = [floors_text(b.get("etazhnost")), str(b.get("kategoriya") or "").strip()]
     ogn = str(b.get("ogneustoychivost") or "").strip()
     if ogn:
@@ -750,7 +770,7 @@ def render_legend(d, out_png, width_cm=WIDTH_CM, fs=7.0):
     return len(entries)
 
 
-def site_points(data):
+def site_points(data, streets=True):
     """The points of everything drawn on the site – to keep the sheet's fields clear of it."""
     pts = []
     for b in data["sgradi"]:
@@ -761,12 +781,16 @@ def site_points(data):
         pts += [(o["x"], o["y"]) for o in coll]
     for ln in data["linii"] + data["vodoprovod"] + data["gazoprovod"]:
         pts += densify(ln["tochki"])
-    for u in data["ulitsi"]:
+    for u in data["ulitsi"] if streets else []:       # the streets are background – the sheet's fields cover them
+        if "kontur" in u:
+            pts += densify(u["kontur"] + u["kontur"][:1])
+            continue
         for k in (-1, 1):
             pts += densify(offset_polyline(u["tochki"], k * u["shirina"] / 2))
     if data["ograda"]:
         pts += densify(data["ograda"] + data["ograda"][:1])
-    return pts
+    x0, y0, x1, y1 = data["box"]                       # what falls outside the drawing is cut off – it cannot touch
+    return [p for p in pts if x0 <= p[0] <= x1 and y0 <= p[1] <= y1]   # a field of the sheet
 
 def densify(pts, step=2.0):
     out = []
@@ -781,7 +805,7 @@ def sheet_scale(data, framed=False):
     the title block, otherwise above the title block or beside it."""
     x0, y0, x1, y1 = data["box"]
     wu, hu = x1 - x0, y1 - y0
-    pts = site_points(data)
+    pts = site_points(data, streets=False)
     top = SHEET_H - PAD
     keep_out = [(SHEET_W - TITLE_BOX[0] - 2, 0, SHEET_W, TITLE_BOX[1] + 2),              # the title block
                 (SHEET_W - NO_BOX[0] - 2, SHEET_H - NO_BOX[1] - 2, SHEET_W, SHEET_H),    # the number field
@@ -822,12 +846,12 @@ def draw_sheet(fig, lst, scale, fs):
     fax.set_xlim(0, SHEET_W)
     fax.set_ylim(0, SHEET_H)
     fax.axis("off")
-    fax.set_zorder(-1)
+    fax.set_zorder(5)                                  # over the drawing: a street running under a field ends at it
     from matplotlib.patches import Rectangle as R
     lw = 0.9
     fax.add_patch(R((0.3, 0.3), SHEET_W - 0.6, SHEET_H - 0.6, fill=False, ec=INK, lw=lw))
     nw, nh = NO_BOX
-    fax.add_patch(R((SHEET_W - nw - 0.3, SHEET_H - nh - 0.3), nw, nh, fill=False, ec=INK, lw=0.6))
+    fax.add_patch(R((SHEET_W - nw - 0.3, SHEET_H - nh - 0.3), nw, nh, fc="white", ec=INK, lw=0.6))
     fax.text(SHEET_W - nw / 2 - 0.3, SHEET_H - 3, "№ на плана", ha="center", va="center", fontsize=fs - 2.5)
     fax.text(SHEET_W - nw / 2 - 0.3, SHEET_H - nh / 2 - 2, str(lst.get("nomer") or ""), ha="center", va="center",
              fontsize=fs + 3)
@@ -869,7 +893,7 @@ def draw_sheet(fig, lst, scale, fs):
     fax.text(bx - 3, by + 2, f"М 1:{scale}", ha="right", va="bottom", fontsize=fs)
 
 
-def render(d, out_png, out_svg=None, width_cm=None, height_cm=None):
+def render(d, out_png, out_svg=None, width_cm=None, height_cm=None, out_dxf=None):
     data, warnings = load(d)
     pal = Pal(bool(d.get("cvetna", True)))
     x0, y0, x1, y1 = data["box"]
@@ -878,11 +902,12 @@ def render(d, out_png, out_svg=None, width_cm=None, height_cm=None):
     hose_m = num(d.get("shlang_m", 20) or 0, "shlang_m")
     lst = d.get("list")
     extra_out = {}
+    sheet = None
 
     if lst is not None:                                # the sheet of a situational scheme (Приложение № 2а)
         if not isinstance(lst, dict):
             bad("list: очаква се обект с полетата на антетката")
-        scale, (ax_mm, ay_mm, aw_mm, ah_mm) = sheet_scale(data, framed=bool(d.get("ramka", True)))
+        scale, (ax_mm, ay_mm, aw_mm, ah_mm) = sheet_scale(data, framed=bool(d.get("ramka", False)))
         fs = 7.0
         fig = plt.figure(figsize=(SHEET_W / 25.4, SHEET_H / 25.4), dpi=300)
         draw_sheet(fig, lst, scale, fs)
@@ -895,16 +920,19 @@ def render(d, out_png, out_svg=None, width_cm=None, height_cm=None):
         s = 4.5 * scale / 1000
         data["s"] = s
         hoses = draw_scene(ax, data, {**d, "sever": False}, pal, s, fs, hose_m)
-        if d.get("ramka", True):                       # the frame of the drawing on the sheet – the streets and the
-            ax.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0, fill=False, ec=INK, lw=0.8, zorder=8,   # rest end on it
+        if d.get("ramka", False):                      # a frame round the drawing on the sheet, only on request – the
+            ax.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0, fill=False, ec=INK, lw=0.8, zorder=8,   # sheet's frame
                                    clip_on=False))
         # the north arrow – in the upper left corner of the sheet (чл. 9, ал. 5)
         kax = fig.add_axes([0, 0, 1, 1])
         kax.set_xlim(0, SHEET_W)
         kax.set_ylim(0, SHEET_H)
         kax.axis("off")
+        kax.set_zorder(6)
+        kax.add_patch(Rectangle((1.2, SHEET_H - 23), 15.5, 21.8, fc="white", ec="none"))   # streets end under it
         draw_kompas(kax, 9, SHEET_H - 13, 6, fs)
         extra_out["mashtab"] = f"1:{scale}"
+        sheet = {"scale": scale, "x_mm": ax_mm, "y_mm": ay_mm, "list": lst}
         warnings += situation_gaps(data)
     else:
         width_cm = width_cm or num(d.get("shirina_cm", WIDTH_CM), "shirina_cm")
@@ -967,6 +995,13 @@ def render(d, out_png, out_svg=None, width_cm=None, height_cm=None):
             draw_legend_rows(lax, col_rows, row_lines, top - 0.22, width_in, pal, fs, line_in)
 
     fig.savefig(out_png, dpi=300, facecolor="white")
+    if out_dxf:                                        # the same scheme for AutoCAD / CorelDRAW
+        import dxf_export
+        if dxf_export.available():
+            dxf_export.write(data, d, out_dxf, data["s"], sheet=sheet if lst is not None else None)
+            extra_out["dxf"] = out_dxf
+        else:
+            warnings.append("DXF не е записан – няма ezdxf (pip install ezdxf)")
     if out_svg:
         fig.savefig(out_svg, facecolor="white")
     plt.close(fig)
@@ -1005,6 +1040,8 @@ def main():
     ap.add_argument("shema", help="JSON файл със схемата")
     ap.add_argument("-o", "--out", required=True, help="изходен .png")
     ap.add_argument("--svg", help="и .svg")
+    ap.add_argument("--dxf", help="DXF за AutoCAD/CorelDRAW (по подразбиране – до .png, със същото име)")
+    ap.add_argument("--bez-dxf", action="store_true", help="без DXF")
     ap.add_argument("--shirina-cm", type=float, help="ширината на картинката, cm (16.5 – A4 изправена, 25.2 – легнала)")
     ap.add_argument("--visochina-cm", type=float, help="най-голямата височина на чертежа, cm")
     a = ap.parse_args()
@@ -1014,7 +1051,8 @@ def main():
     except (OSError, json.JSONDecodeError) as e:
         bad(f"не мога да прочета {a.shema}: {e}")
     os.makedirs(os.path.dirname(os.path.abspath(a.out)) or ".", exist_ok=True)
-    counts, hoses, warnings, extra = render(d, a.out, a.svg, a.shirina_cm, a.visochina_cm)
+    dxf = None if a.bez_dxf else (a.dxf or os.path.splitext(a.out)[0] + ".dxf")
+    counts, hoses, warnings, extra = render(d, a.out, a.svg, a.shirina_cm, a.visochina_cm, out_dxf=dxf)
     print(json.dumps({"output": a.out, "svg": a.svg, "elementi": counts, "shlangove": hoses, **extra,
                       "preduprezhdeniya": warnings}, ensure_ascii=False, indent=1))
 
