@@ -292,7 +292,7 @@ def test_kais(tmp, base):
           "Северна промишлена зона", "street names get „…“, other names stay")
     check(d["fon"]["ramka"] == [-10, -10, 130, 120], "the picture is placed by its own frame")
     b1, b2 = d["sgradi"]
-    check(b1["etiket"] == "Промишлена сграда" and b1["etazhnost"] == "+3" and b1["kontur"][0] == [45, 45],
+    check(b1["etiket"] == "Промишлена сграда" and b1["etazhnost"] == "3 ет." and b1["kontur"][0] == [45, 45],
           "a building: its purpose with a capital letter, the floors, the outline")
     check(b2["etiket"] == "" and b2["razmeri"] is False, "an annex narrower than 8 m – no name and no dimensions")
     summary = json.loads(printed)

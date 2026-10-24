@@ -179,7 +179,7 @@ JSON-а за `shema.py` и `situacionna.py`, само в знаците и цв�
 | Чл. 7, ал. 3 | Поле |
 |---|---|
 | т. 1 а) обекти с размери и разстояния, входове, улици | `sgradi` (или `kontur`), `razstoyaniya`, `vhodove`, `ulitsi` |
-| т. 1 б) наименование, етажност, категория, огнеустойчивост | `sgradi[].etiket`, `etazhnost` („-1 +2 +Т“ – чл. 8), `kategoriya`, `ogneustoychivost` |
+| т. 1 б) наименование, етажност, категория, огнеустойчивост | `sgradi[].etiket`, `etazhnost` („-1 +2 +Т“ – чл. 8; на схемата се пише „1 подз. ет., 2 ет., тав. ет.“), `kategoriya`, `ogneustoychivost` |
 | т. 1 в) водоеми, вместимост, места за водовземане | `vodoiztochnitsi` (`vodoem` с обема, `kula`) |
 | т. 1 г) водопроводна мрежа – вид, диаметър, налягане; кранове и хидранти | `vodoprovod` (`skluchena`/`tupikova`, `diametar` mm, `natisk` MPa), `vodoiztochnitsi` (`hidrant`, `nadzemen_hidrant`, `kran`) |
 | т. 1 д) газоразпределителна мрежа и спирателна арматура | `gazoprovod`, `gaz_armatura` |

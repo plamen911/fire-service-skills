@@ -316,7 +316,7 @@ def cmd_obekt(a):
             if (dims(s["kontur"])[1] or 0) < SMALL_M:      # an annex: no name and no dimension lines over its neighbour
                 b["etiket"], b["razmeri"] = "", False
             if s.get("etazhi"):
-                b["etazhnost"] = f"+{s['etazhi']}"
+                b["etazhnost"] = f"{s['etazhi']} ет."
             sh["sgradi"].append(b)
         if any(s.get("etazhi") for s in sgradi):
             notes.append("Етажността е „брой етажи“ от КАИС (надземните); сутерен, тавански етаж, категорията и "
