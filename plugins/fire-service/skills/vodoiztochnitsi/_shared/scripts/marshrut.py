@@ -21,8 +21,9 @@ marshrut.py — маршрутът на пожарните автомобили 
 приета от администратора на 24.10.2026 г. (в Указанията Iз-2749 и в базата няма норматив; `--skorost`
 задава друга). Времето на OSRM е за лек автомобил в нормално движение – дава се само за сравнение.
 „Времето за реагиране“ по § 1, т. 4 от Указанията е от приемането на съобщението до пристигането:
-скриптът го смята като времето за излизане на дежурната смяна (1 min, дадено от администратора на
-24.10.2026 г.; `--izlizane` задава друго) плюс времето за движение.
+скриптът го смята като 1 min от приемането на сигнала до излизането на автомобилите (сигнал в 10:00 –
+излизане в 10:01; дадено от администратора на 24.10.2026 г.; `--izlizane` задава друго) плюс времето
+за движение.
 
 Отпечатва JSON: "ot" (службата, адрес, координати, как е избрана), "do", "razstoyanie_km" (по пътищата),
 "prava_km", "skorost_km_min", "vreme_dvizhenie_min" (с един знак), "izlizane_min", "vreme_reagirane_min"
@@ -48,7 +49,7 @@ SHARED = os.path.dirname(HERE)
 SLUZHBI = os.path.join(SHARED, "raioni", "sluzhbi_pleven.csv")
 MESTA = os.path.join(SHARED, "raioni", "koordinati_pleven.csv")
 SKOROST = 1.0          # km/min – приета от администратора (24.10.2026); в Iз-2749 норматив няма
-IZLIZANE = 1.0         # min – времето за излизане на дежурната смяна, дадено от администратора (24.10.2026)
+IZLIZANE = 1.0         # min – от приемането на сигнала до излизането на автомобилите (администраторът, 24.10.2026)
 ROUTERS = ("https://routing.openstreetmap.de/routed-car/route/v1/driving/{a};{b}?overview=false&steps=true",
            "https://router.project-osrm.org/route/v1/driving/{a};{b}?overview=false&steps=true")
 
@@ -186,7 +187,7 @@ def main():
     ap.add_argument("--obshtina", help="общината, ако името на мястото се повтаря")
     ap.add_argument("--ot", help="службата, от която тръгват (напр. „Левски“, „УПБЗН – Сторгозия“)")
     ap.add_argument("--skorost", type=float, default=SKOROST, help=f"km/min (по подразбиране {SKOROST:g})")
-    ap.add_argument("--izlizane", type=float, default=IZLIZANE, help=f"min за излизане (по подразбиране {IZLIZANE:g})")
+    ap.add_argument("--izlizane", type=float, default=IZLIZANE, help=f"min от сигнала до излизането (по подразбиране {IZLIZANE:g})")
     ap.add_argument("--fail", help="отговорът на OSRM, свален с WebFetch (при NO_NETWORK)")
     ap.add_argument("--sluzhbi", action="store_true", help="адресите и координатите на службите")
     a = ap.parse_args()
