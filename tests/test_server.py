@@ -266,13 +266,13 @@ def test_kais(tmp, base):
                                                                                 "lat": 43.41, "lon": 24.65},
           "a „ширина,дължина“ point goes to the КАИС address with the key and the radius – no picture by default")
     d = json.load(open(sh, encoding="utf-8"))
-    check("fon" not in d and "imot" not in d, "by default the scheme is in the signs of Приложение № 6 only – no picture, no parcel line")
+    check("fon" not in d and d["imot"]["etiket"] == "ПИ 99999.10.20", "by default: the parcel's boundary, no picture")
     u = d["ulitsi"]
     check(len(u) == 2 and u[0]["tochki"] == [[0, 85], [60, 85], [120, 85]] and u[0]["shirina"] == 12,
           "a street is cut to the terrain; one far away is left out")
     check(u[0]["ime"] == "бул. „Примерен“" and u[1]["ime"] == "", "the name once, on the longest piece, in „…“")
     Stub.plan = [(200, answer)]
-    code, printed, err = call(kais.main, ["obekt", "--link", "43.41,24.65", "-o", out, "--shema", sh, "--fon", "--granitsa"])
+    code, printed, err = call(kais.main, ["obekt", "--link", "43.41,24.65", "-o", out, "--shema", sh, "--fon"])
     check(code is None and Stub.seen[-1]["body"]["fon"] is True, "--fon asks for the picture")
     fon = os.path.join(tmp, "k", "kais_fon.png")
     saved = json.load(open(out, encoding="utf-8"))
@@ -282,7 +282,10 @@ def test_kais(tmp, base):
     check(d["teren"] == [120, 110] and d["kais"]["x0"] == x0 + 10 and d["kais"]["y0"] == y0 + 10,
           "the terrain is the parcel plus the radius, its origin kept in КС2005")
     check(d["imot"]["kontur"][0] == [40, 40] and len(d["imot"]["kontur"]) == 4 and d["imot"]["etiket"] == "ПИ 99999.10.20",
-          "--granitsa: the parcel's outline in local metres, without the closing point")
+          "the parcel's outline in local metres, without the closing point")
+    Stub.plan = [(200, answer)]
+    call(kais.main, ["obekt", "--id", "99999.10.20", "-o", out, "--shema", sh, "--bez-granitsa"])
+    check("imot" not in json.load(open(sh, encoding="utf-8")), "--bez-granitsa leaves the boundary out")
     check(kais.clip_polyline([[-5, 5], [5, 5], [5, 15], [15, 15]], 0, 0, 10, 10) == [[(0.0, 5.0), (5.0, 5.0), (5.0, 10.0)]],
           "clipping keeps the inside part of a bent line")
     check(kais.street_name("ул. Васил Левски") == "ул. „Васил Левски“" and kais.street_name("Северна промишлена зона") ==

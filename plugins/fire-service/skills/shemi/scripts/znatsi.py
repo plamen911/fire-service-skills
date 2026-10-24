@@ -69,7 +69,9 @@ WATER = ("vodoem", "hidrant", "nadzemen_hidrant", "kran", "kula")
 
 NETWORKS = {"skluchena": "С", "tupikova": "Т"}     # the letter of the water main's label „С-150/5“
 
-SITUATION = ("ulitsa", "bez_parkirane", *NETWORKS, "gazoprovod", "gaz_armatura")
+SITUATION = ("imot", "ulitsa", "bez_parkirane", *NETWORKS, "gazoprovod", "gaz_armatura")
+PARCEL_LS = (0, (6, 2, 1, 2))                       # the parcel's boundary: dash-dot (not a sign of Приложение № 6 –
+                                                    #   drawn per чл. 9, ал. 9–10 and named in the legend)
 
 TRUCKS = {"pa": ("", False, True), "pa_lafeten": ("", True, True), "pas": ("ПАС", False, False),
           "shlangov": ("Ш", False, False), "aerodrumen": ("А", True, False), "pena_prah": ("ПП", True, False),
@@ -116,6 +118,7 @@ LEGEND_TEXT = {
     "nadzemen_hidrant": "Надземен хидрант",
     "kran": "Пожарен кран (№)",
     "kula": "Водонапорна кула",
+    "imot": "Граница на поземлен имот (кадастрална карта)",
     "ulitsa": "Улица, път",
     "bez_parkirane": "Площ, неразрешена за паркиране на автомобили",
     "skluchena": "Сключена водопроводна мрежа (С – диаметър, mm / налягане, bar)",
@@ -426,6 +429,14 @@ def draw_streets(ax, streets, fs, pal):
             ax.text((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, u["ime"], ha="center", va="center", fontsize=fs, color=INK,
                     rotation=readable(ang), rotation_mode="anchor", zorder=1.3)
 
+def draw_parcel(ax, kontur, label, s, fs):
+    """The boundary of the cadastral parcel – thin dash-dot black, its identifier at the top point."""
+    ax.add_patch(Polygon(kontur, closed=True, fill=False, ec=INK, lw=0.7, ls=PARCEL_LS, zorder=1))
+    if label:
+        tx, ty = max(kontur, key=lambda p: (p[1], -p[0]))
+        ax.text(tx, ty + 0.4 * s, label, ha="center", va="bottom", fontsize=fs - 0.5, zorder=4,
+                bbox=dict(fc="white", ec="none", pad=0.6, alpha=0.85))
+
 def draw_no_parking(ax, r, pal):
     """An area where parking is not allowed – orange frame and hatching (чл. 9, ал. 9, т. 7)."""
     ax.add_patch(Rectangle((r["x"], r["y"]), r["w"], r["h"], fill=False, hatch="////", ec=pal.parking, lw=0.8,
@@ -707,6 +718,8 @@ def obrazets(ax, entry, x, y, pal, fs):
         draw_valve_kran(ax, x, y - 0.06, 0.11, "", fs, pal)
     elif key == "kula":
         draw_tower(ax, x, y, 0.14, "", fs, pal)
+    elif key == "imot":
+        ax.plot([x - w, x + w], [y, y], color=INK, lw=0.7, ls=PARCEL_LS)
     elif key == "ulitsa":
         draw_street(ax, [(x - w, y), (x + w, y)], 0.1, "", fs, pal)
     elif key == "bez_parkirane":
