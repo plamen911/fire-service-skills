@@ -33,7 +33,8 @@ data.json (задължителни: "zveno", "obekt", "hod"; останалот
   "approver": {"lines": ["НАЧАЛНИК НА", "РСПБЗН – ЛЕВСКИ:", "ГЛАВЕН ИНСПЕКТОР"], "name": "Име Фамилия"},
                                                // по подразбиране – началникът на звеното от списъка на служителите
   "razrabotil": {"date": "20.10.2026 г.", "lines": ["ИНСПЕКТОР"], "name": "Име Фамилия"},
-  "shema": "shema.json",                       // JSON за скилът shemi (чертае се тук) или готов .png;
+  "shema": "shema.json",                       // JSON за скила shemi (чертае се тук; началото му – от
+                                               //   _shared/scripts/kais.py obekt --shema) или готов .png;
                                                //   пътят е спрямо папката на data.json; без него – без схема
   "shema_zaglavie": "…",                       // по подразбиране – „за разполагане на силите и средствата
                                                //   при провеждане на ПТЗ в {obekt}“
@@ -44,7 +45,9 @@ data.json (задължителни: "zveno", "obekt", "hod"; останалот
 РСПБЗН“). За общото време се събират всички стойности с ′ (минути) и ″ (секунди).
 
 Типографията следва _shared/conventions.md: „№ 4“, тире „–“ и НИКАКЪВ получер шрифт. Скриптът
-отпечатва JSON {"output", "redove", "obshto_minuti", "shema", "preduprezhdeniya"}. Предупрежденията
+отпечатва JSON {"output", "redove", "obshto_minuti", "shema", "dxf", "preduprezhdeniya"}. Когато
+схемата е JSON, до .docx се записват `…_shema.png` и същата схема като `…_shema.dxf` (AutoCAD/CorelDRAW;
+при сгради от КАИС – в координати КС2005). Предупрежденията
 казват за липсващи данни, за разминаване между общото време и часовете в „Време“, за стари термини
 (РСПАБ, РОД, диспечер, бойна готовност, ДБС, отделение, боец, п.п. автомобил) и за предупрежденията
 на схемата.
@@ -198,7 +201,7 @@ def run_shema(src, png, page, title=""):
 
 
 def draw_scheme(path, base, out, warnings, forced=None, title=""):
-    """(the picture, the page orientation): a .png as it is, or a .json drawn by the skill shemi next to the
+    """(the picture, the page orientation, the .dxf or None): a .png as it is, or a .json drawn by the skill shemi next to the
     output – first for a landscape page; when the site fits a portrait page better, again for it."""
     src = path if os.path.isabs(path) else os.path.join(base, path)
     if not os.path.exists(src):
@@ -210,7 +213,7 @@ def draw_scheme(path, base, out, warnings, forced=None, title=""):
                 w, h = im.size
         except Exception:  # noqa: BLE001
             w, h = 3, 2
-        return src, orientation(w, h, forced, title)
+        return src, orientation(w, h, forced, title), None
     png = os.path.splitext(out)[0] + "_shema.png"
     res = run_shema(src, png, "landscape", title)
     wu, hu = (res.get("elementi") or {}).get("razmer_m") or [3, 2]
@@ -218,7 +221,11 @@ def draw_scheme(path, base, out, warnings, forced=None, title=""):
     if page != "landscape":
         res = run_shema(src, png, page, title)
     warnings += ["схема: " + w for w in res.get("preduprezhdeniya") or []]
-    return png, page
+    dxf = res.get("dxf")                               # the same scheme for AutoCAD / CorelDRAW, beside the .png
+    if not dxf or not os.path.exists(dxf):
+        warnings.append("схема: DXF не се записа – вижте скила shemi (ezdxf)")
+        dxf = None
+    return png, page, dxf
 
 
 def old_terms(texts, warnings):
@@ -310,11 +317,11 @@ def build(d, out, base):
     B.signature(doc, sign.get("date") or "", sign.get("lines") or [], sign.get("name") or B.PLACEHOLDER_NAME,
                 label="РАЗРАБОТИЛ:")
 
-    shema, page = None, None
+    shema, page, dxf = None, None, None
     if d.get("shema"):
         title2 = B.typo(str(d.get("shema_zaglavie") or
                             f"за разполагане на силите и средствата при провеждане на ПТЗ в {obekt or tema}"))
-        shema, page = draw_scheme(str(d["shema"]), base, out, warnings, d.get("orientatsiya"), title2)
+        shema, page, dxf = draw_scheme(str(d["shema"]), base, out, warnings, d.get("orientatsiya"), title2)
         pw, ph_ = PAGES[page][:2]
         text_w, pic_h = room(page, title2)
         sec = doc.add_section(WD_SECTION.NEW_PAGE)    # the scheme – on its own A4 page, turned to fit it
@@ -343,7 +350,7 @@ def build(d, out, base):
     os.makedirs(os.path.dirname(os.path.abspath(out)) or ".", exist_ok=True)
     doc.save(out)
     B.report(out)
-    return {"output": out, "redove": len(rows), "obshto_minuti": total_min, "shema": shema,
+    return {"output": out, "redove": len(rows), "obshto_minuti": total_min, "shema": shema, "dxf": dxf,
             "stranitsa_shema": page if shema else None, "preduprezhdeniya": warnings}
 
 

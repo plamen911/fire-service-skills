@@ -74,6 +74,8 @@ def test_full():
                  "за разполагане на силите и средствата при провеждане на ПТЗ в склад"):
         check(want in text, f"has „{want}“")
     check(len(doc.inline_shapes) == 1, "the scheme is in the document")
+    check(res.get("dxf") == os.path.splitext(out)[0] + "_shema.dxf" and os.path.exists(res["dxf"]),
+          "the scheme is also written as a DXF for AutoCAD / CorelDRAW beside the .docx")
     from docx.enum.section import WD_ORIENT
     check(len(doc.sections) == 2 and doc.sections[-1].orientation == WD_ORIENT.LANDSCAPE
           and doc.sections[-1].page_width > doc.sections[-1].page_height, "the scheme is on a landscape page")
@@ -118,6 +120,33 @@ def test_upbzn():
         check("УПБЗН – СТОРГОЗИЯ:" in text and "при УПБЗН – Сторгозия" in text, "the УПБЗН is in the approval and the title")
 
 
+def test_kais_scheme():
+    print("build_ptz.py – a scheme started from the cadastre (КАИС): contours, the parcel, street parcels")
+    import ezdxf
+    d = fixture()
+    tmp = tempfile.mkdtemp()
+    sh = {"teren": [120, 90], "kais": {"x0": 431100.0, "y0": 4808800.0, "imot": "99999.10.20", "data": "25.10.2026"},
+          "imot": {"kontur": [[20, 20], [100, 20], [100, 70], [20, 70]], "etiket": "ПИ 99999.10.20"},
+          "sgradi": [{"kontur": [[30, 30], [70, 30], [70, 50], [30, 50]], "etiket": "Склад", "etazhnost": "1 ет."}],
+          "ulitsi": [{"kontur": [[0, 75], [120, 75], [120, 88], [0, 88]], "ime": "ул. „Примерна“", "ime_pos": [60, 81]}],
+          "vodoiztochnitsi": [{"vid": "hidrant", "x": 10, "y": 80, "etiket": "ПХ 70/80"}],
+          "pozhar": [{"x": 45, "y": 35, "w": 15, "h": 10}]}
+    path = os.path.join(tmp, "kais_shema.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(sh, f, ensure_ascii=False)
+    d["shema"] = path
+    r, out = run(d)
+    check(r.returncode == 0, "builds with a КАИС scheme" + (": " + r.stderr[:300] if r.returncode else ""))
+    if r.returncode:
+        return
+    res = json.loads(r.stdout)
+    check(res.get("dxf") and os.path.exists(res["dxf"]), "the DXF is written")
+    if res.get("dxf"):
+        doc = ezdxf.readfile(res["dxf"])
+        xs = [p[0] for e in doc.modelspace().query("LWPOLYLINE") for p in e.get_points("xy")]
+        check(xs and min(xs) > 431000, "the DXF is in КС2005 (the origin from \"kais\" is added back)")
+
+
 def test_bad_input():
     print("build_ptz.py – bad input")
     for change, what in (({"zveno": ""}, "no unit"), ({"zveno": "РСПАБ – Левски"}, "an old unit name"),
@@ -133,6 +162,7 @@ if __name__ == "__main__":
     test_full()
     test_old_terms_and_missing()
     test_upbzn()
+    test_kais_scheme()
     test_bad_input()
     print("FAILURES: " + "; ".join(failures) if failures else "ALL OK")
     sys.exit(1 if failures else 0)
