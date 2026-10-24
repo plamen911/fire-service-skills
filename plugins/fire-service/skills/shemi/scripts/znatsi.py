@@ -406,6 +406,26 @@ def draw_street(ax, pts, width, name, fs, pal):
         ax.text((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, name, ha="center", va="center", fontsize=fs, color=INK,
                 rotation=readable(ang), rotation_mode="anchor", zorder=1.3)
 
+def draw_streets(ax, streets, fs, pal):
+    """All streets at once, so that the junctions merge: every street as a brown band with a white core of its
+    width (the edges are the two lines of the sign „Шосе“), the names last. streets – [{"tochki", "shirina", "ime"}]."""
+    if not streets:
+        return
+    t = ax.transData
+    pt_per_m = (t.transform((1, 0))[0] - t.transform((0, 0))[0]) * 72 / ax.figure.dpi
+    edge = 0.9                                         # the line of the sign, pt
+    for z, extra, colour in ((1.2, edge * 2, pal.road), (1.25, 0, "white")):
+        for u in streets:
+            xs, ys = zip(*u["tochki"])
+            ax.plot(xs, ys, color=colour, lw=max(u["shirina"] * pt_per_m + extra, 0.5), zorder=z,
+                    solid_capstyle="butt", solid_joinstyle="round")
+    for u in streets:
+        if u["ime"]:
+            a, b = max(zip(u["tochki"], u["tochki"][1:]), key=lambda ab: math.dist(*ab))
+            ang = math.degrees(math.atan2(b[1] - a[1], b[0] - a[0]))
+            ax.text((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, u["ime"], ha="center", va="center", fontsize=fs, color=INK,
+                    rotation=readable(ang), rotation_mode="anchor", zorder=1.3)
+
 def draw_no_parking(ax, r, pal):
     """An area where parking is not allowed – orange frame and hatching (чл. 9, ал. 9, т. 7)."""
     ax.add_patch(Rectangle((r["x"], r["y"]), r["w"], r["h"], fill=False, hatch="////", ec=pal.parking, lw=0.8,

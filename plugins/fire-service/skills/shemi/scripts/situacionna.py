@@ -88,7 +88,7 @@ COLUMNS = [
     ("gazove_kolichestvo", "ГОРИМИ ГАЗОВЕ", "количество"),
     ("zashtita", "Вид защита на служителите", ""),
 ]
-WIDTHS_CM = [1.8, 1.9, 2.3, 1.7, 2.0, 1.8, 2.1, 2.2, 2.2, 1.9, 2.1, 1.9, 2.8]   # 26.7 cm – the frame's width
+WIDTHS_CM = [2.1, 1.9, 2.3, 1.7, 2.0, 1.8, 2.1, 2.1, 2.1, 1.9, 2.1, 1.9, 2.7]   # 26.7 cm – the frame's width
 # the page: A4 landscape; the margins are where the frame of Приложение № 2а is (left 2 cm for binding)
 MARGINS = dict(left=2.0, right=1.0, top=1.0, bottom=1.0)
 
