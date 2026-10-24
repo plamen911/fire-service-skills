@@ -1,0 +1,235 @@
+{
+ "_belezhka": "Измислен обект за тестовете – не е истински адрес.",
+ "teren": [
+  90,
+  62
+ ],
+ "ograda": [
+  [
+   12,
+   12
+  ],
+  [
+   86,
+   12
+  ],
+  [
+   86,
+   58
+  ],
+  [
+   12,
+   58
+  ]
+ ],
+ "ograda_vid": "metalna",
+ "vhodove": [
+  {
+   "x": 44,
+   "y": 12,
+   "shirina": 6,
+   "etiket": "Вход"
+  },
+  {
+   "x": 80,
+   "y": 12,
+   "shirina": 5
+  }
+ ],
+ "sgradi": [
+  {
+   "x": 20,
+   "y": 34,
+   "w": 40,
+   "h": 14,
+   "etiket": "Детска градина",
+   "etazhnost": "-1 +2",
+   "kategoriya": "Ф1.1",
+   "ogneustoychivost": "II",
+   "pokriv": "dvuskaten"
+  },
+  {
+   "x": 68,
+   "y": 36,
+   "w": 14,
+   "h": 10,
+   "etiket": "Кухненски блок",
+   "etazhnost": "+1",
+   "kategoriya": "Ф1.1",
+   "ogneustoychivost": "III"
+  },
+  {
+   "x": 24,
+   "y": 50,
+   "w": 16,
+   "h": 6,
+   "etiket": "Съседна жилищна сграда",
+   "sasedna": true
+  }
+ ],
+ "razstoyaniya": [
+  {
+   "ot": [
+    60,
+    41
+   ],
+   "do": [
+    68,
+    41
+   ]
+  }
+ ],
+ "obekti": [
+  {
+   "x": 14,
+   "y": 40,
+   "w": 4,
+   "h": 3,
+   "etiket": "Ел."
+  }
+ ],
+ "ulitsi": [
+  {
+   "tochki": [
+    [
+     0,
+     5
+    ],
+    [
+     90,
+     5
+    ]
+   ],
+   "shirina": 8,
+   "ime": "ул. „Примерна“"
+  },
+  {
+   "tochki": [
+    [
+     5,
+     0
+    ],
+    [
+     5,
+     62
+    ]
+   ],
+   "shirina": 7,
+   "ime": "ул. „Тестова“"
+  }
+ ],
+ "vodoprovod": [
+  {
+   "tochki": [
+    [
+     0,
+     2.5
+    ],
+    [
+     90,
+     2.5
+    ]
+   ],
+   "vid": "skluchena",
+   "diametar": 150,
+   "natisk": 0.5
+  },
+  {
+   "tochki": [
+    [
+     7.5,
+     2.5
+    ],
+    [
+     7.5,
+     56
+    ]
+   ],
+   "vid": "tupikova",
+   "diametar": 100,
+   "natisk": 0.4
+  }
+ ],
+ "vodoiztochnitsi": [
+  {
+   "vid": "nadzemen_hidrant",
+   "x": 60,
+   "y": 2.5,
+   "etiket": "ПХ"
+  },
+  {
+   "vid": "hidrant",
+   "x": 7.5,
+   "y": 42,
+   "etiket": "ПХ"
+  },
+  {
+   "vid": "kran",
+   "x": 50,
+   "y": 50.5,
+   "etiket": "ПК-1"
+  }
+ ],
+ "gazoprovod": [
+  {
+   "tochki": [
+    [
+     86,
+     26
+    ],
+    [
+     75,
+     26
+    ],
+    [
+     75,
+     36
+    ]
+   ]
+  }
+ ],
+ "gaz_armatura": [
+  {
+   "x": 82,
+   "y": 26,
+   "etiket": "СК"
+  }
+ ],
+ "bez_parkirane": [
+  {
+   "x": 38,
+   "y": 14,
+   "w": 12,
+   "h": 7
+  }
+ ],
+ "list": {
+  "nomer": "7",
+  "obekt": "Детска градина „Примерна“, гр. Примерно, ул. „Примерна“ № 1, тел. 000 000 000",
+  "sobstvenik": "Община Примерно",
+  "izgotvil": "Име Фамилия",
+  "data": "24.10.2026"
+ },
+ "tablitsa": {
+  "razstoyanie_km": 3.2,
+  "vreme_min": 7,
+  "redove": [
+   {
+    "natovarvane_vid": "мебели, текстил, хартия",
+    "natovarvane_kg_m2": 25,
+    "pgi_vid": "няма",
+    "gasitelni_neobhodimi": "вода",
+    "gasitelni_zabraneni": "–",
+    "gazove_vid": "природен газ (кухня)",
+    "gazove_kolichestvo": "газопровод",
+    "zashtita": "ДА, защитно облекло"
+   },
+   {
+    "natovarvane_vid": "хранителни продукти, мазнини",
+    "natovarvane_kg_m2": 15,
+    "gasitelni_neobhodimi": "вода, пяна",
+    "gasitelni_zabraneni": "вода – при горящи мазнини"
+   }
+  ]
+ }
+}

@@ -121,6 +121,55 @@ def test_bad_input():
         check(r.returncode == 2 and "BAD_INPUT" in r.stderr, f"{what} → BAD_INPUT")
 
 
+def test_situacionna_sheet():
+    print("shema.py – the sheet of a situational scheme (Приложение № 2а)")
+    data = json.load(open(os.path.join(HERE, "fixtures", "situacionna.json"), encoding="utf-8"))
+    svg = os.path.join(tempfile.mkdtemp(), "s.svg")
+    r, out = run(data, "--svg", svg)
+    check(r.returncode == 0, "renders the sheet" + (": " + r.stderr[:200] if r.returncode else ""))
+    if r.returncode:
+        return
+    res = json.loads(r.stdout)
+    check(res["mashtab"] == "1:500", f"a standard scale that fits ({res['mashtab']})")
+    check(res["preduprezhdeniya"] == [], f"a complete situation gives no warnings: {res['preduprezhdeniya']}")
+    text = open(svg, encoding="utf-8").read()
+    for name in ("Ситуационна схема", "№ на плана", "Собственик:", "Утвърдил / дата:", "М 1:500",
+                 "С-150/5", "Т-100/4", "ПК-1", "-1 +2 · Ф1.1 · II ст."):
+        check(name in text, f"the sheet shows „{name}“")
+    for colour in ("#8b5a2b", "#d9a400", "#f28c00"):
+        check(colour in text.lower(), f"the colour {colour} of чл. 9, ал. 9")
+    bare = {"sgradi": [{"x": 0, "y": 0, "w": 20, "h": 10, "etiket": "Склад"}], "list": {}}
+    r, _ = run(bare)
+    w = json.loads(r.stdout)["preduprezhdeniya"] if r.returncode == 0 else []
+    for what in ("етажност", "водопроводна мрежа", "улици", "електрическо табло", "водоизточници"):
+        check(any(what in x for x in w), f"a bare sheet reports the missing „{what}“")
+    r, _ = run({"sgradi": [{"x": 0, "y": 0, "w": 20, "h": 10}]})
+    check(r.returncode == 0 and "етажност" not in r.stdout, "an ordinary scheme does not ask for the situation")
+
+
+def test_situacionna_docx():
+    print("situacionna.py – the .docx (Приложения № 2а и № 2б)")
+    out = os.path.join(tempfile.mkdtemp(), "s.docx")
+    r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "situacionna.py"),
+                        os.path.join(HERE, "fixtures", "situacionna.json"), "-o", out], capture_output=True, text=True)
+    check(r.returncode == 0, "builds the document" + (": " + r.stderr[:300] if r.returncode else ""))
+    if r.returncode:
+        return
+    check("DOC_CHECK" not in r.stderr, f"passes the common check (no bold, „–“, „№ 4“): {r.stderr[:200]}")
+    from docx import Document
+    doc = Document(out)
+    check(len(doc.sections) == 2 and all(s.page_width > s.page_height for s in doc.sections),
+          "two landscape pages – the graphic and the table part")
+    t = doc.tables[-1]
+    head = " ".join(c.text for c in t.rows[0].cells)
+    for name in ("Разстояние до обекта", "ГОРИМО НАТОВАРВАНЕ", "РИСКОВИ ВЕЩЕСТВА И МАТЕРИАЛИ", "Вид защита на служителите"):
+        check(name in head, f"the table has „{name}“ (Приложение № 2б)")
+    check(len(t.columns) == 13 and len(t.rows) >= 8, f"13 columns and room to write by hand ({len(t.rows)} rows)")
+    check(t.rows[2].cells[0].text == "3,2" and t.rows[2].cells[1].text == "7", "the distance and the time on the first row")
+    res = json.loads(r.stdout)
+    check(res["preduprezhdeniya"] == [], f"no gaps for the complete example: {res['preduprezhdeniya']}")
+
+
 def test_label_avoids_fire():
     print("shema.py – the building's name is not under the fire")
     b = {"x": 0, "y": 0, "w": 40, "h": 10}
@@ -136,6 +185,8 @@ if __name__ == "__main__":
     test_warnings()
     test_bad_input()
     test_label_avoids_fire()
+    test_situacionna_sheet()
+    test_situacionna_docx()
     test_library()
     print("FAILURES: " + "; ".join(failures) if failures else "ALL OK")
     sys.exit(1 if failures else 0)

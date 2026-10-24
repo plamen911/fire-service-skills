@@ -10,9 +10,16 @@ znatsi.py — БИБЛИОТЕКАТА С УСЛОВНИТЕ ЗНАЦИ на с�
 МВР). Свои знаци на библиотеката (няма ги в приложението): сграда с размери, смукателна линия,
 чертичката за шланг по линията и знакът за посоките – север и юг (draw_kompas).
 
-Цветове (Pal): по подразбиране черно-бяло за печат; с цвят – както в приложението: автомобилите,
-пожарът, огнището и направленията в червено; линиите, струйниците, разклонителите, водоизточниците
-и задимяването в синьо.
+Цветове (Pal): по подразбиране черно-бяло за печат; с цвят – както в приложението и по чл. 9, ал. 9 от
+Указанията: автомобилите, пожарът, огнището, направленията и ел. таблата в червено; линиите,
+струйниците, разклонителите, водоизточниците, водопроводната мрежа и крановете в синьо; улиците и
+пътищата в кафяво; газопроводите и спирателната им арматура в жълто; площите, неразрешени за
+паркиране – в оранжево.
+
+Знаците на ситуационната схема (чл. 7, ал. 3 от Указанията): сключена и тупикова водопроводна мрежа,
+пожарен кран, водонапорна кула, газопровод, улица (знакът „Шосе“) – по Приложение № 6; спирателната
+арматура на газопровода и площта, неразрешена за паркиране, нямат знак в приложението – начертани
+са по чл. 9, ал. 9 – 10 (цвят и легенда).
 
 Всеки знак е функция draw_…(ax, …, s, …, pal), където s е размерът на знака в единиците на чертежа
 (пожарният автомобил е около 1,7 s дълъг). obrazets(ax, (ключ, …), x, y, pal, fs) чертае малкото копие
@@ -39,7 +46,7 @@ try:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from matplotlib.patches import Circle, FancyArrowPatch, Polygon, Rectangle
+    from matplotlib.patches import Circle, FancyArrowPatch, Polygon, Rectangle, Wedge
 except ImportError:  # pragma: no cover
     sys.stderr.write("NO_MATPLOTLIB: pip install matplotlib\n")
     sys.exit(3)
@@ -58,7 +65,11 @@ NOZZLES = ("malak", "glaven", "lafeten", "penostruinik", "prahov")
 
 PLACES = {"pokriv": "п", "etazh": "е", "maze": "м"}
 
-WATER = ("vodoem", "hidrant", "nadzemen_hidrant")
+WATER = ("vodoem", "hidrant", "nadzemen_hidrant", "kran", "kula")
+
+NETWORKS = {"skluchena": "С", "tupikova": "Т"}     # the letter of the water main's label „С-150/5“
+
+SITUATION = ("ulitsa", "bez_parkirane", *NETWORKS, "gazoprovod", "gaz_armatura")
 
 TRUCKS = {"pa": ("", False, True), "pa_lafeten": ("", True, True), "pas": ("ПАС", False, False),
           "shlangov": ("Ш", False, False), "aerodrumen": ("А", True, False), "pena_prah": ("ПП", True, False),
@@ -103,6 +114,14 @@ LEGEND_TEXT = {
     "vodoem": "Пожарен водоем (обемът – в m³)",
     "hidrant": "Подземен хидрант",
     "nadzemen_hidrant": "Надземен хидрант",
+    "kran": "Пожарен кран (№)",
+    "kula": "Водонапорна кула",
+    "ulitsa": "Улица, път",
+    "bez_parkirane": "Площ, неразрешена за паркиране на автомобили",
+    "skluchena": "Сключена водопроводна мрежа (С – диаметър, mm / налягане, bar)",
+    "tupikova": "Тупикова водопроводна мрежа (Т – диаметър, mm / налягане, bar)",
+    "gazoprovod": "Газопровод",
+    "gaz_armatura": "Спирателна арматура на газопровода",
     "glavna": "Главна шлангова линия (Ø 75 mm)",
     "malka": "Работна шлангова линия (Ø 52 mm)",
     "smukatelna": "Смукателна линия",
@@ -128,7 +147,7 @@ LEGEND_TEXT = {
     "el": "Електрическо табло",
 }
 
-LEGEND_ORDER = ["sgrada", "ograda", *FENCES, "pozhar", "pozhar_otkrito", "zadimyavane", "ognishte", "posoka",
+LEGEND_ORDER = ["sgrada", "ograda", *FENCES, *SITUATION, "pozhar", "pozhar_otkrito", "zadimyavane", "ognishte", "posoka",
                 "napravlenie", "vyatar", *TRUCKS, *WATER, "glavna", "malka", "smukatelna", "shlang", "dvupaten",
                 "tripaten", "chetiripaten", *NOZZLES, *PLACES, *LADDERS, "shtab", "pbt", "kpp", "el"]
 
@@ -143,6 +162,9 @@ class Pal:
         self.hose = blue if colour else INK
         self.water = blue if colour else INK
         self.smoke = blue if colour else "#555555"
+        self.road = "#8b5a2b" if colour else INK        # чл. 9, ал. 9: кафяв – улици и пътища
+        self.gas = "#d9a400" if colour else INK         # жълт – инсталации и арматура за горими газове
+        self.parking = "#f28c00" if colour else "#555555"   # оранжев – площи, неразрешени за паркиране
 
 def chaikin(points, rounds=3):
     """Smooths a polyline (keeps the end points) – the hose lines are drawn as soft curves."""
@@ -343,9 +365,107 @@ def draw_hydrant(ax, x, y, s, label, fs, pal, above=False):
     else:
         ax.plot([x, x], [y - 1.0 * s, y - 0.15 * s], color=c, lw=0.9, zorder=9)
         solid_head(ax, (x, y), (0, 1), 0.16 * s, c, 9)
-    if label:
-        ax.text(x + 1.0 * s, y + 0.25 * s, label, ha="left", va="center", fontsize=fs, zorder=9,
+    if label:                                          # текстът към хидрантите – син (чл. 9, ал. 9, т. 2)
+        ax.text(x + 1.0 * s, y + 0.25 * s, label, ha="left", va="center", fontsize=fs, color=c, zorder=9,
                 bbox=dict(fc="white", ec="none", pad=0.4))
+
+def offset_polyline(pts, d):
+    """The polyline moved sideways by d (to the left of its direction), with mitred corners."""
+    out = []
+    n = len(pts)
+    for i in range(n):
+        dirs = []
+        for a, b in ((pts[i - 1], pts[i]) if i > 0 else (None, None), (pts[i], pts[i + 1]) if i < n - 1 else (None, None)):
+            if a is None:
+                continue
+            L = math.dist(a, b) or 1.0
+            dirs.append(((b[0] - a[0]) / L, (b[1] - a[1]) / L))
+        nx = sum(-dy for _, dy in dirs)
+        ny = sum(dx for dx, _ in dirs)
+        L = math.hypot(nx, ny) or 1.0
+        nx, ny = nx / L, ny / L
+        cos = max(0.3, nx * -dirs[0][1] + ny * dirs[0][0])    # the mitre grows at a sharp corner
+        out.append((pts[i][0] + nx * d / cos, pts[i][1] + ny * d / cos))
+    return out
+
+def label_on_line(ax, pts, text, fs, color, z=7):
+    """A label in the middle of the longest straight part of a polyline, along it, never upside down."""
+    a, b = max(zip(pts, pts[1:]), key=lambda ab: math.dist(*ab))
+    ang = math.degrees(math.atan2(b[1] - a[1], b[0] - a[0]))
+    ax.text((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, text, ha="center", va="center", fontsize=fs, color=color,
+            rotation=readable(ang), rotation_mode="anchor", zorder=z, bbox=dict(fc="white", ec="none", pad=0.4))
+
+def draw_street(ax, pts, width, name, fs, pal):
+    """A street or road – the sign „Шосе“: two parallel lines (brown), the name between them."""
+    for sgn in (-1, 1):
+        xs, ys = zip(*offset_polyline(pts, sgn * width / 2))
+        ax.plot(xs, ys, color=pal.road, lw=0.9, zorder=1.2, solid_joinstyle="miter")
+    if name:
+        a, b = max(zip(pts, pts[1:]), key=lambda ab: math.dist(*ab))
+        ang = math.degrees(math.atan2(b[1] - a[1], b[0] - a[0]))
+        ax.text((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, name, ha="center", va="center", fontsize=fs, color=INK,
+                rotation=readable(ang), rotation_mode="anchor", zorder=1.3)
+
+def draw_no_parking(ax, r, pal):
+    """An area where parking is not allowed – orange frame and hatching (чл. 9, ал. 9, т. 7)."""
+    ax.add_patch(Rectangle((r["x"], r["y"]), r["w"], r["h"], fill=False, hatch="////", ec=pal.parking, lw=0.8,
+                           zorder=1.5))
+
+def draw_main(ax, pts, kind, label, s, fs, pal):
+    """A water main as in Приложение № 6: a blue dash-dot line, the label „С-150/5“ (сключена) or
+    „Т-100/4“ (тупикова) – the letter, the diameter in mm and the pressure in bar – along it."""
+    xs, ys = zip(*pts)
+    ax.plot(xs, ys, color=pal.water, lw=1.1, ls=(0, (8, 2, 1, 2)), zorder=4.5)
+    if label:
+        label_on_line(ax, pts, label, fs - 0.5, pal.water, 4.6)
+
+def draw_valve_kran(ax, x, y, s, label, fs, pal):
+    """A fire cock (пожарен кран) as in Приложение № 6: a stem with a short bar on top and a circle,
+    its lower half filled; the number beside it („ПК-4“)."""
+    c, r = pal.water, 0.32 * s
+    ax.plot([x, x], [y + r, y + 1.1 * s], color=c, lw=0.9, zorder=9)
+    ax.plot([x - 0.3 * s, x + 0.3 * s], [y + 1.1 * s, y + 1.1 * s], color=c, lw=0.9, zorder=9)
+    ax.add_patch(Circle((x, y), r, fc="white", ec=c, lw=0.9, zorder=9))
+    ax.add_patch(Wedge((x, y), r, 180, 360, fc=c, ec=c, lw=0.9, zorder=9.1))
+    if label:
+        ax.text(x + 0.55 * s, y + 0.5 * s, label, ha="left", va="center", fontsize=fs, color=c, zorder=9,
+                bbox=dict(fc="white", ec="none", pad=0.4))
+
+def draw_tower(ax, x, y, s, label, fs, pal):
+    """A water tower (водонапорна кула): two circles, blue."""
+    c = pal.water
+    ax.add_patch(Circle((x, y), 0.55 * s, fc="white", ec=c, lw=0.9, zorder=8))
+    ax.add_patch(Circle((x, y), 0.38 * s, fill=False, ec=c, lw=0.9, zorder=8))
+    if label:
+        ax.text(x + 0.75 * s, y, label, ha="left", va="center", fontsize=fs, color=c, zorder=9,
+                bbox=dict(fc="white", ec="none", pad=0.4))
+
+def draw_gas_line(ax, pts, s, fs, pal):
+    """A gas pipeline as in Приложение № 6: a line broken by the letter „Г“ (yellow, чл. 9, ал. 9, т. 6) –
+    one upright „Г“ in the middle of every straight part long enough for it, never on a corner."""
+    xs, ys = zip(*pts)
+    ax.plot(xs, ys, color=pal.gas, lw=1.2, zorder=4.4)
+    for a, b in zip(pts, pts[1:]):
+        L = math.dist(a, b)
+        if L < 2.5 * s:
+            continue
+        n = max(1, int(L // (8 * s)))
+        for i in range(n):
+            t = (i + 0.5) / n
+            ax.text(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, "Г", ha="center", va="center",
+                    fontsize=fs, color=pal.gas, zorder=4.6, bbox=dict(fc="white", ec="none", pad=0.3))
+
+def draw_gas_valve(ax, x, y, s, label, fs, pal, angle=0):
+    """A shut-off valve of the gas network: two triangles tip to tip (the usual valve sign – чл. 9, ал. 10),
+    yellow; the label beside it."""
+    a, h = 0.45 * s, 0.28 * s
+    for sgn in (-1, 1):
+        ax.add_patch(Polygon(rotate(x, y, angle, [(0, 0), (sgn * a, h), (sgn * a, -h)]), closed=True,
+                             fc=pal.gas, ec=INK if pal.gas == INK else pal.gas, lw=0.7, zorder=9))
+    if label:
+        ax.text(x + 0.65 * s, y + 0.35 * s, label, ha="left", va="center", fontsize=fs, zorder=9,
+                bbox=dict(fc="white", ec="none", pad=0.4))
+
 
 def draw_line(ax, pts, kind, s, hose_m, pal):
     """A hose line with a short cross tick at every hose length; returns the number of hoses."""
@@ -563,6 +683,23 @@ def obrazets(ax, entry, x, y, pal, fs):
         draw_truck(ax, {"x": x - 0.03, "y": y, "ugal": 0, "vid": key}, s, fs, pal)
     elif key == "vodoem":
         draw_reservoir(ax, x, y, 0.15, "", fs, pal)
+    elif key == "kran":
+        draw_valve_kran(ax, x, y - 0.06, 0.11, "", fs, pal)
+    elif key == "kula":
+        draw_tower(ax, x, y, 0.14, "", fs, pal)
+    elif key == "ulitsa":
+        draw_street(ax, [(x - w, y), (x + w, y)], 0.1, "", fs, pal)
+    elif key == "bez_parkirane":
+        draw_no_parking(ax, {"x": x - w, "y": y - k, "w": 2 * w, "h": 2 * k}, pal)
+    elif key in NETWORKS:
+        draw_main(ax, [(x - w, y), (x + w, y)], key, "", 0.2, fs, pal)
+        ax.text(x, y + 0.06, NETWORKS[key] + "-150/5" if key == "skluchena" else NETWORKS[key] + "-100/4",
+                ha="center", va="bottom", fontsize=fs - 2, color=pal.water)
+    elif key == "gazoprovod":
+        ax.plot([x - w, x + w], [y, y], color=pal.gas, lw=1.2)
+        ax.text(x, y, "Г", ha="center", va="center", fontsize=fs - 1, color=pal.gas, bbox=dict(fc="white", ec="none", pad=0.1))
+    elif key == "gaz_armatura":
+        draw_gas_valve(ax, x, y, 0.14, "", fs, pal)
     elif key in ("hidrant", "nadzemen_hidrant"):
         draw_hydrant(ax, x, y - (0.03 if key == "nadzemen_hidrant" else -0.05), 0.12, "", fs, pal,
                      above=key == "nadzemen_hidrant")
