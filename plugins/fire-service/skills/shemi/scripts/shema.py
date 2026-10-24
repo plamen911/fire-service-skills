@@ -402,8 +402,8 @@ def load(d):
     for ln in out["linii"] + out["vodoprovod"] + out["gazoprovod"]:
         xs += [p[0] for p in ln["tochki"]]
         ys += [p[1] for p in ln["tochki"]]
-    for u in out["ulitsi"]:                        # a street counts with its width
-        for k in (-1, 1):
+    for u in out["ulitsi"] if not d.get("teren") else []:   # a street counts with its width – unless the terrain is
+        for k in (-1, 1):                                     #   given: then streets simply run off the drawing
             side = offset_polyline(u["tochki"], k * u["shirina"] / 2)
             xs += [p[0] for p in side]
             ys += [p[1] for p in side]
