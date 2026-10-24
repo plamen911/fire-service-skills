@@ -168,6 +168,12 @@ def test_situacionna_docx():
     check(t.rows[2].cells[0].text == "3,2" and t.rows[2].cells[1].text == "7", "the distance and the time on the first row")
     res = json.loads(r.stdout)
     check(res["preduprezhdeniya"] == [], f"no gaps for the complete example: {res['preduprezhdeniya']}")
+    check(res["dxf"] and res["dxf"].endswith("s.dxf") and os.path.exists(res["dxf"]), "the graphic part also as .dxf beside it")
+    fx = json.load(open(os.path.join(HERE, "fixtures", "situacionna.json"), encoding="utf-8"))
+    if not fx["list"].get("fail"):
+        import ezdxf
+        texts = [e.dxf.text for e in ezdxf.readfile(res["dxf"]).modelspace().query("TEXT")]
+        check("s.dxf" in texts, "„Име на файла“ in the title block is the .dxf's name")
 
 
 def test_outline_building():
@@ -257,6 +263,10 @@ def test_dxf():
           "the streets are cut at the drawing's edge")
     texts = [e.dxf.text for e in msp.query("TEXT")]
     check("бул. „Примерен“" in texts and "ПХ 70/80" in texts and "С-70/80" in texts, "the names and labels as text")
+    loaded, _ = shema.load({**data, "vodoprovod": [{"tochki": [[0, 80], [120, 80]], "diametar": "70/80", "natisk": "3–5"}]})
+    check(loaded["vodoprovod"][0]["etiket"] == "С-70/80/3–5", "a size and a pressure range as written: С-70/80/3–5")
+    loaded, _ = shema.load({**data, "vodoprovod": [{"tochki": [[0, 80], [120, 80]], "diametar": 150, "natisk": 0.5}]})
+    check(loaded["vodoprovod"][0]["etiket"] == "С-150/5", "numbers: mm and MPa → bar")
     dims = [[e.dxf.text for e in doc.blocks.get(d.dxf.geometry) if e.dxftype() in ("MTEXT", "TEXT")] for d in msp.query("DIMENSION")]
     check(["30.00"] in dims or ["30"] in dims, f"dimensions in metres: {dims}")
     r, out = run(data, "--bez-dxf")

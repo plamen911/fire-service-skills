@@ -69,6 +69,7 @@ shema.py — чертае СХЕМА за разполагане на силит
                                                 //   или улица като площ – поземленият имот от КАИС (kais.py)
   "razstoyaniya": [{"ot": [46, 66], "do": [60, 66]}],          // разстояние между сгради – стойността се смята
   "vodoprovod": [{"tochki": [[0, -2], [120, -2]], "vid": "skluchena", "diametar": 150, "natisk": 0.5}],
+                                                // или като текст: "diametar": "70/80", "natisk": "3–5" (bar)
                                                 // skluchena / tupikova; диаметър в mm, налягане в MPa →
                                                 //   надпис „С-150/5“ (налягането в bar), както в Приложение № 6
   "gazoprovod": [{"tochki": [[118, 10], [100, 10], [100, 40]]}],
@@ -358,8 +359,10 @@ def load(d):
             dm = f"{num(dm, f'vodoprovod[{i}].diametar'):g}" if not isinstance(dm, str) or dm.replace(".", "", 1).isdigit() \
                 else dm.strip()
             label = f"{NETWORKS[kind]}-{dm}"
-            if v.get("natisk") is not None:
-                label += f"/{num(v['natisk'], f'vodoprovod[{i}].natisk') * 10:g}"
+            if v.get("natisk") is not None:            # MPa → bar, or as written (a range in bar, e.g. "3–5")
+                nt = v["natisk"]
+                label += "/" + (nt.strip() if isinstance(nt, str) and not nt.replace(".", "", 1).isdigit()
+                                else f"{num(nt, f'vodoprovod[{i}].natisk') * 10:g}")
         out["vodoprovod"].append({"tochki": pts, "vid": kind, "etiket": label})
     for i, g in enumerate(items(d, "gazoprovod")):
         pts = [pt(p, f"gazoprovod[{i}].tochki") for p in (g.get("tochki") or [])]

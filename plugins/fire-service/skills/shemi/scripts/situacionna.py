@@ -18,7 +18,8 @@ situacionna.json е JSON-ът на схемата (входът – в нача�
   ...полетата на схемата: "sgradi" (с "etazhnost", "kategoriya", "ogneustoychivost"), "ulitsi", "vodoprovod",
      "vodoiztochnitsi", "gazoprovod", "gaz_armatura", "bez_parkirane", "razstoyaniya", "obekti" („Ел.“) ...,
   "list": {"nomer": "7", "obekt": "…", "sobstvenik": "…", "data": "24.10.2026", ...},
-                                               // "izgotvil" по подразбиране – потребителят по личния ключ
+                                               // "izgotvil" по подразбиране – потребителят по личния ключ;
+                                               // "fail" – името на .dxf файла на графичната част
                                                //   (с конектора – името от whoami); "data" – днешната дата
   "obekt_gps": "43.4125702,24.6504731",       // точката на обекта или линк към нея – тогава разстоянието и
                                                //   времето се смятат сами от службата по заповедта (marshrut.py:
@@ -311,6 +312,8 @@ def build(d, out):
     base = os.path.splitext(out)[0]
     png = base + "_grafichna.png"
     dxf = base + ".dxf"                                # the graphic part for AutoCAD / CorelDRAW
+    if not str(lst.get("fail") or "").strip():         # „Име на файла“ – the drawing's own file
+        lst["fail"] = os.path.basename(dxf)
     _, _, warnings, extra = shema.render(d, png, out_dxf=dxf)
 
     doc = Document()
