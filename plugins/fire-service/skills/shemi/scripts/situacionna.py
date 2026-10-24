@@ -17,7 +17,9 @@ situacionna.json е JSON-ът на схемата (входът – в нача�
 {
   ...полетата на схемата: "sgradi" (с "etazhnost", "kategoriya", "ogneustoychivost"), "ulitsi", "vodoprovod",
      "vodoiztochnitsi", "gazoprovod", "gaz_armatura", "bez_parkirane", "razstoyaniya", "obekti" („Ел.“) ...,
-  "list": {"nomer": "7", "obekt": "…", "sobstvenik": "…", "izgotvil": "…", "data": "24.10.2026", ...},
+  "list": {"nomer": "7", "obekt": "…", "sobstvenik": "…", "data": "24.10.2026", ...},
+                                               // "izgotvil" по подразбиране – потребителят по личния ключ
+                                               //   (с конектора – името от whoami); "data" – днешната дата
   "tablitsa": {
     "razstoyanie_km": 3.2,                     // от службата до обекта
     "vreme_min": 7,                            // времето за реагиране
@@ -43,8 +45,10 @@ situacionna.json е JSON-ът на схемата (входът – в нача�
     BAD_INPUT: ...   — неверен JSON, липсва "sgradi" или "list"
 """
 import argparse
+import datetime
 import json
 import os
+import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -246,6 +250,19 @@ def table_gaps(tab):
     return gaps
 
 
+def own_name():
+    """Име и фамилия на потребителя по личния му ключ (списъкът на служителите – _shared/profile.md);
+    None, когато ключ няма (тогава "izgotvil" се подава от whoami на конектора)."""
+    script = os.path.join(os.path.dirname(HERE), "_shared", "scripts", "sluzhiteli.py")
+    if not os.path.exists(script):
+        script = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(HERE))), "shared", "scripts", "sluzhiteli.py")
+    try:
+        r = subprocess.run([sys.executable, script, "--profil"], capture_output=True, text=True, timeout=90)
+        return (json.loads(r.stdout).get("profil") or {}).get("ime") if r.returncode == 0 else None
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
+
+
 def build(d, out):
     if not isinstance(d, dict):
         bad("очаква се JSON обект")
@@ -254,6 +271,16 @@ def build(d, out):
     tab = d.get("tablitsa") or {}
     if not isinstance(tab, dict):
         bad("tablitsa: очаква се обект")
+    lst = d["list"]
+    gaps = []
+    if not str(lst.get("izgotvil") or "").strip():         # „Изготвил“ – потребителят по ключа
+        name = own_name()
+        if name:
+            lst["izgotvil"] = name
+        else:
+            gaps.append("„Изготвил“ е празно – подай \"list.izgotvil\" (името от whoami на конектора)")
+    if not str(lst.get("data") or "").strip():
+        lst["data"] = datetime.date.today().strftime("%d.%m.%Y")
     base = os.path.splitext(out)[0]
     png = base + "_grafichna.png"
     _, _, warnings, extra = shema.render(d, png)
@@ -269,7 +296,6 @@ def build(d, out):
     # 2. the table part – on a new landscape page (the back of the sheet)
     sec = doc.add_section(WD_SECTION.NEW_PAGE)
     page(sec)
-    lst = d["list"]
     number_box(doc, lst.get("nomer"))
     para(doc, "Ситуационна схема – таблична част", 12, WD_ALIGN_PARAGRAPH.CENTER)
     if lst.get("obekt"):
@@ -285,7 +311,8 @@ def build(d, out):
     doc.save(out)
     report(out, letterhead=False)
     return {"output": out, "grafichna": png, "mashtab": extra.get("mashtab"), "redove": n,
-            "preduprezhdeniya": warnings + table_gaps(tab)}
+            "izgotvil": lst.get("izgotvil") or None,
+            "preduprezhdeniya": warnings + gaps + table_gaps(tab)}
 
 
 def main():
