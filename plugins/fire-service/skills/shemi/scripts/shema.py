@@ -73,6 +73,14 @@ shema.py — чертае СХЕМА за разполагане на силит
   "bez_parkirane": [{"x": 50, "y": 4, "w": 20, "h": 6}],       // площ, неразрешена за паркиране, оранжева
   "geo": {"lat": 43.4100, "lon": 24.6100},      // долният ляв ъгъл на терена; тогава водоизточник може да е
                                                 //   с "lat"/"lon" вместо "x"/"y" (напр. от voda.py на vodoiztochnitsi)
+  // --- от кадастралната карта (КАИС) – началото на JSON-а го пише _shared/scripts/kais.py obekt --shema
+  "kais": {"x0": 430981, "y0": 4808710},       // долният ляв ъгъл на терена в КС2005 – тогава "lat"/"lon" на
+                                                //   водоизточник се смятат точно като контурите от КАИС (вместо "geo")
+  "imot": {"kontur": [[x, y], …], "etiket": "ПИ 56722.27.446"},   // границата на поземления имот – тънка щрих-
+                                                //   пунктирна линия с идентификатора
+  "fon": {"png": "kais_fon.png", "ramka": [0, 0, 226, 226], "prozrachnost": 0.35},   // картинка под чертежа:
+                                                //   кадастралната карта около обекта (съседните сгради и имоти);
+                                                //   "ramka" – x0, y0, x1, y1 на картинката в метри
   "list": {...},                                // ЛИСТ НА СИТУАЦИОННА СХЕМА по Приложение № 2а – виж по-долу
   "shlang_m": 20,                               // дължина на един шланг – чертичка на всеки толкова метра
   "cvetna": true, "sever": true, "ramka": false,  // "ramka": true – рамка около чертежа
@@ -262,11 +270,17 @@ def load(d):
     geo = d.get("geo")
     if geo is not None and not isinstance(geo, dict):
         bad("geo: очаква се обект {\"lat\", \"lon\"}")
+    kais = d.get("kais")
+    if kais is not None and not isinstance(kais, dict):
+        bad("kais: очаква се обект {\"x0\", \"y0\"} – началото на терена в КС2005")
     for i, w in enumerate(items(d, "vodoiztochnitsi")):
         kind = w.get("vid") or "hidrant"
         if kind not in WATER:
             bad(f"vodoiztochnitsi[{i}].vid: {', '.join(WATER)}")
-        if w.get("x") is None and w.get("lat") is not None:
+        if w.get("x") is None and w.get("lat") is not None and kais:
+            x, y = from_kais(num(w.get("lat"), f"vodoiztochnitsi[{i}].lat"), num(w.get("lon"), f"vodoiztochnitsi[{i}].lon"),
+                             num(kais.get("x0"), "kais.x0"), num(kais.get("y0"), "kais.y0"))
+        elif w.get("x") is None and w.get("lat") is not None:
             if not geo:
                 bad(f"vodoiztochnitsi[{i}]: дадени са \"lat\"/\"lon\" – трябва и \"geo\" (долният ляв ъгъл на терена)")
             x, y = from_geo(num(w.get("lat"), f"vodoiztochnitsi[{i}].lat"), num(w.get("lon"), f"vodoiztochnitsi[{i}].lon"),
@@ -353,6 +367,24 @@ def load(d):
         if not isinstance(v, dict):
             bad("vyatar: очаква се обект {\"ugal\", \"sila\"}")
         out["vyatar"] = {"ugal": num(v.get("ugal"), "vyatar.ugal"), "sila": str(v.get("sila") or "")}
+    out["imot"] = None
+    if d.get("imot"):
+        im = d["imot"]
+        if not isinstance(im, dict) or not isinstance(im.get("kontur"), list):
+            bad("imot: очаква се {\"kontur\": [[x, y], …], \"etiket\": \"ПИ …\"}")
+        k = [pt(p, "imot.kontur") for p in im["kontur"]]
+        if len(k) >= 3:
+            out["imot"] = {"kontur": k, "etiket": str(im.get("etiket") or "")}
+    out["fon"] = None
+    if d.get("fon"):
+        f = d["fon"]
+        if not isinstance(f, dict) or not f.get("png") or not isinstance(f.get("ramka"), list) or len(f["ramka"]) != 4:
+            bad("fon: очаква се {\"png\": \"файл\", \"ramka\": [x0, y0, x1, y1]}")
+        if os.path.exists(str(f["png"])):
+            out["fon"] = {"png": str(f["png"]), "ramka": [num(v, "fon.ramka") for v in f["ramka"]],
+                          "alpha": min(1.0, max(0.05, num(f.get("prozrachnost", 0.35), "fon.prozrachnost")))}
+        else:
+            warnings.append(f"фонът {f['png']} го няма – чертая без него")
     if not out["sgradi"]:
         bad("няма нито една сграда в \"sgradi\"")
 
@@ -381,6 +413,9 @@ def load(d):
     if out["ograda"]:
         xs += [p[0] for p in out["ograda"]]
         ys += [p[1] for p in out["ograda"]]
+    if out["imot"]:
+        xs += [p[0] for p in out["imot"]["kontur"]]
+        ys += [p[1] for p in out["imot"]["kontur"]]
     if d.get("teren"):
         tw, th = pt(d["teren"], "teren")
         if tw <= 0 or th <= 0:
@@ -460,6 +495,19 @@ def building_label(b):
     extra = " · ".join(p for p in parts if p)
     return "\n".join(p for p in (name, extra) if p)
 
+def from_kais(lat, lon, x0, y0):
+    """Metres east and north of the terrain's origin (x0, y0 in КС2005) – the same projection as the contours from
+    КАИС, so a hydrant lands exactly where it is against the buildings."""
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "_shared", "scripts"))
+    try:
+        from kais import wgs_to_kc
+    except ImportError:  # pragma: no cover – the development tree
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))), "shared", "scripts"))
+        from kais import wgs_to_kc
+    x, y = wgs_to_kc(lat, lon)
+    return x - x0, y - y0
+
 def from_geo(lat, lon, lat0, lon0):
     """Metres east and north of (lat0, lon0) – plenty accurate over a site of a few hundred metres."""
     return ((lon - lon0) * 111_320 * math.cos(math.radians(lat0)), (lat - lat0) * 110_574)
@@ -534,6 +582,21 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
             gx = g["x"] + 0.6 * s if g["x"] < (x0 + x1) / 2 else g["x"] - 0.6 * s - bw
             gy = g["y"] - bh / 2
         draw_label_box(ax, gx, gy, bw, bh, g["etiket"], fs)
+    if data.get("fon"):                                # the cadastral map (КАИС) – faint, under everything
+        f = data["fon"]
+        img = plt.imread(f["png"])
+        fx0, fy0, fx1, fy1 = f["ramka"]
+        ax.imshow(img, extent=(fx0, fx1, fy0, fy1), origin="upper", alpha=f["alpha"], zorder=0,
+                  interpolation="bilinear")
+        ax.set_xlim(x0, x1)                            # imshow resets the limits – keep the drawing's
+        ax.set_ylim(y0, y1)
+    if data.get("imot"):                               # the parcel's boundary – thin dash-dot, its identifier at the top
+        k = data["imot"]["kontur"]
+        ax.add_patch(Polygon(k, closed=True, fill=False, ec=INK, lw=0.7, ls=(0, (6, 2, 1, 2)), zorder=1))
+        if data["imot"]["etiket"]:
+            tx, ty = max(k, key=lambda p: (p[1], -p[0]))
+            ax.text(tx, ty + 0.4 * s, data["imot"]["etiket"], ha="center", va="bottom", fontsize=fs - 0.5, zorder=4,
+                    bbox=dict(fc="white", ec="none", pad=0.6, alpha=0.85))
     draw_streets(ax, data["ulitsi"], fs, pal)          # the situation first – under everything else
     for z in data["bez_parkirane"]:
         draw_no_parking(ax, z, pal)

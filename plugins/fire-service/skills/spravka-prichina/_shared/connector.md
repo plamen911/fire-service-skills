@@ -6,7 +6,7 @@
 скрипт. Скриптовете, които питат n8n, без ключ спират с `NO_KEY`.
 
 **Как познаваш режима.** Ако в разговора има инструментите `incidents`, `staff`, `whoami`,
-`regs_list`, `regs_read`, `duty`, `duty_save`, `samples`, `raioni`, `voda`, `voda_save` и `dnevnik` (конектор Fire Service),
+`regs_list`, `regs_read`, `duty`, `duty_save`, `samples`, `raioni`, `voda`, `voda_save`, `kais` и `dnevnik` (конектор Fire Service),
 ползвай **тях** за всичко, което иначе скриптовете взимат от n8n. Ако ги няма, работи със
 скриптовете, както е описано в скила (те намират ключа сами – `_shared/scripts/api_config.py`).
 Ако няма нито инструменти, нито ключ (`NO_KEY`) – кажи, че данните не са достъпни, защото
@@ -32,6 +32,7 @@
 | `koya_sluzhba.py --tekst` (текстът на заповедта) | `raioni` с `tekst` | обекти, км на АМ, включвания и изключвания |
 | `voda.py masto` / `sluzhba` / `statistika` | `voda` с `action` и `name` (и `obshtina`) | отговорът е като на скрипта с `--json`; за място на хидрант се дават само точните (`tochni_koordinati: true`) |
 | `voda.py blizo` | `voda` с `action: "blizo"` и `lat`, `lon` (или `masto`) | `broi` до 25; разстоянието е по права линия |
+| `kais.py obekt` / `tarsi` (сградите от кадастъра за схемите) | `kais` с `action: "obekt"` и `id` или `lat`, `lon`; `tarsi` с `tekst` | контурите са в КС2005 (метри) – извади началото на `ramka.bbox`; фонът (картинката) не идва през конектора |
 | `voda.py dobavi` / `potvardi` / `promeni` / `premahni` | `voda_save` с `action` и същите полета (`promeni` – `id` и `set`; `premahni` – `id` и `prichina`) | всеки може да записва; премахва администраторът или който е въвел точката; първо с `dry_run: true`; координатите са само от потребителя |
 | `obraztsi.py index` / `get` | `samples` с `kind: "spravka"` или `"eptz"` и `name` | започни с `name: "INDEX.md"`, после избрания файл |
 | `dnevnik.py eptz …` (дневник на ползването) | `dnevnik` със същите полета (`ekspert`, `zm`, `dp`, `obekt`, `prichina`, `stranitsi`, `suma_eur`, `snimki`, `pdf`, `pdf_stranitsi`, `skanirani`, `drugi`, `tekst_v_chata`, `model`, `ustroystvo`, `nahodki`) – броевете ги изчисли сам от качените файлове; часът и средата се записват в n8n | всеки може да записва; без текста на заключението; при грешка – продължи |

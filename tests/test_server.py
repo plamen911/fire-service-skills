@@ -22,6 +22,7 @@ os.environ.pop("FIRE_SERVICE_KEY", None)
 sys.path.insert(0, SHARED)
 import api_config  # noqa: E402
 import fetch_incidents  # noqa: E402
+import kais  # noqa: E402
 import poshta  # noqa: E402
 
 failures = []
@@ -234,6 +235,62 @@ def test_search(tmp):
     check(str(code).startswith("BAD_REQUEST") and len(Stub.seen) == before, "a malformed filter never reaches the server")
 
 
+# a 1×1 PNG – the stand-in for the cadastral picture
+PNG1 = ("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=")
+
+
+def test_kais(tmp, base):
+    """kais.py: the request, the picture beside the JSON and the beginning of a scheme in local metres."""
+    api_config._cache["cfg"] = dict(api_config._cache["cfg"], kais_url=base + "kais")
+    x0, y0 = 400000.0, 4800000.0        # an invented parcel and buildings – not a real place
+    imot = {"id": "99999.10.20", "vid": "ПИ", "adres": "м. „Примерна“", "plosht_m2": 1200,
+            "kontur": [[x0 + 50, y0 + 50], [x0 + 90, y0 + 50], [x0 + 90, y0 + 80], [x0 + 50, y0 + 80], [x0 + 50, y0 + 50]]}
+    big = {"id": "99999.10.20.1", "vid": "сграда", "predn": "промишлена сграда", "etazhi": 3, "zastroena_m2": 300,
+           "kontur": [[x0 + 55, y0 + 55], [x0 + 85, y0 + 55], [x0 + 85, y0 + 65], [x0 + 55, y0 + 65], [x0 + 55, y0 + 55]]}
+    small = {"id": "99999.10.20.2", "vid": "сграда", "predn": "Промишлена сграда", "etazhi": 1, "zastroena_m2": 12,
+             "kontur": [[x0 + 60, y0 + 70], [x0 + 64, y0 + 70], [x0 + 64, y0 + 73], [x0 + 60, y0 + 73], [x0 + 60, y0 + 70]]}
+    answer = {"ok": True, "action": "obekt", "imot": imot, "sgradi": [big, small],
+              "ramka": {"bbox": [x0, y0, x0 + 140, y0 + 130], "radius_m": 40},
+              "fon": {"bbox": [x0, y0, x0 + 140, y0 + 130], "px": [1, 1], "png_base64": PNG1},
+              "istochnik": "КАИС", "zaiavki_kais": 9}
+    Stub.plan, Stub.seen = [(200, answer)], []
+    out, sh = os.path.join(tmp, "k", "kais.json"), os.path.join(tmp, "k", "shema.json")
+    code, printed, err = call(kais.main, ["obekt", "--link", "43.41,24.65", "-o", out, "--shema", sh])
+    sent = Stub.seen[-1]
+    check(code is None, "obekt answers" + (": " + err if code else ""))
+    check(sent["path"] == "/kais" and sent["key"] == FAKE and sent["body"] == {"action": "obekt", "fon": True, "radius_m": 40,
+                                                                                "lat": 43.41, "lon": 24.65},
+          "a „ширина,дължина“ point goes to the КАИС address with the key, the picture and the radius")
+    fon = os.path.join(tmp, "k", "kais_fon.png")
+    saved = json.load(open(out, encoding="utf-8"))
+    check(os.path.exists(fon) and open(fon, "rb").read()[1:4] == b"PNG" and "png_base64" not in json.dumps(saved),
+          "the picture is saved beside the JSON, not inside it")
+    d = json.load(open(sh, encoding="utf-8"))
+    check(d["teren"] == [120, 110] and d["kais"]["x0"] == x0 + 10 and d["kais"]["y0"] == y0 + 10,
+          "the terrain is the parcel plus the radius, its origin kept in КС2005")
+    check(d["imot"]["kontur"][0] == [40, 40] and len(d["imot"]["kontur"]) == 4 and d["imot"]["etiket"] == "ПИ 99999.10.20",
+          "the parcel's outline in local metres, without the closing point")
+    check(d["fon"]["ramka"] == [-10, -10, 130, 120], "the picture is placed by its own frame")
+    b1, b2 = d["sgradi"]
+    check(b1["etiket"] == "Промишлена сграда" and b1["etazhnost"] == "+3" and b1["kontur"][0] == [45, 45],
+          "a building: its purpose with a capital letter, the floors, the outline")
+    check(b2["etiket"] == "" and b2["razmeri"] is False, "an annex narrower than 8 m – no name and no dimensions")
+    summary = json.loads(printed)
+    check(summary["sgradi"][0]["razmeri_m"] == [30.0, 10.0] and any("сутерен" in z for z in summary["zabelezhki"]),
+          "the walls' lengths and the reminder that КАИС has no basements or categories")
+    Stub.plan = [(400, {"error": "BAD_REQUEST: lat/lon извън България [line 185]"})]
+    code, _, err = call(kais.main, ["obekt", "--lat", "40", "--lon", "24"])
+    check(code == 2 and err.startswith("BAD_INPUT: lat/lon извън България") and "[line" not in err,
+          "a refused point is BAD_INPUT, without the node's line number")
+    Stub.plan = [(404, {"error": "NOT_FOUND: 99999.10.21 не е намерен в КАИС"})]
+    code, _, err = call(kais.main, ["obekt", "--id", "99999.10.21", "-o", out])
+    check(code == 2 and err.startswith("NOT_FOUND"), "an unknown identifier is NOT_FOUND")
+    x, y = kais.wgs_to_kc(43.4125702, 24.6504731)
+    check(abs(x - 431194.0109) < 0.01 and abs(y - 4808897.5614) < 0.01, "КС2005 as EPSG:7801 (checked against PROJ)")
+    la, lo = kais.kc_to_wgs(x, y)
+    check(abs(la - 43.4125702) < 1e-8 and abs(lo - 24.6504731) < 1e-8, "… and back")
+
+
 def main():
     with tempfile.TemporaryDirectory() as tmp:
         test_key(tmp)
@@ -245,6 +302,7 @@ def main():
         api_config.RETRY_PAUSE = 0
         test_mail(tmp, base)
         test_search(tmp)
+        test_kais(tmp, base)
         srv.shutdown()
     print("\nALL PASS" if not failures else f"\n{len(failures)} FAILED")
     sys.exit(1 if failures else 0)
