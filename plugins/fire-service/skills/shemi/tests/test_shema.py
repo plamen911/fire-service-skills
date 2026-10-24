@@ -196,6 +196,30 @@ def test_label_avoids_fire():
     check(shema.label_point(b, []) == (20, 5), "without a fire – in the middle")
 
 
+def test_kais_fields():
+    print("shema.py – the cadastral background, the parcel and a hydrant by КС2005")
+    import matplotlib.pyplot as mplt
+    tmp = tempfile.mkdtemp()
+    fon = os.path.join(tmp, "fon.png")
+    mplt.imsave(fon, [[[0.9, 0.8, 0.6, 1.0]] * 4] * 4)
+    x0, y0 = 431100.0, 4808800.0           # an origin in КС2005 – the hydrant's point is computed from it
+    data = {"teren": [120, 90], "kais": {"x0": x0, "y0": y0},
+            "imot": {"kontur": [[20, 20], [100, 20], [100, 70], [20, 70]], "etiket": "ПИ 99999.10.20"},
+            "fon": {"png": fon, "ramka": [-20, -20, 140, 110]},
+            "sgradi": [{"kontur": [[30, 30], [60, 30], [60, 45], [30, 45]], "etiket": "Склад", "etazhnost": "+1"}],
+            "vodoiztochnitsi": [{"vid": "hidrant", "lat": 43.4125702, "lon": 24.6504731, "etiket": "ПХ"}]}
+    r, out = run(data)
+    check(r.returncode == 0 and os.path.exists(out), "draws with the background and the parcel" + (": " + r.stderr[:200] if r.returncode else ""))
+    loaded, _ = shema.load(data)
+    h = loaded["vodoiztochnitsi"][0]
+    check(abs(h["x"] - 94.011) < 0.01 and abs(h["y"] - 97.561) < 0.01, "lat/lon with \"kais\" → metres in КС2005 from the origin")
+    check(loaded["imot"]["etiket"] == "ПИ 99999.10.20" and loaded["fon"]["alpha"] == 0.35, "the parcel and the picture are kept")
+    r, _ = run({**data, "fon": {"png": os.path.join(tmp, "missing.png"), "ramka": [0, 0, 1, 1]}})
+    check(r.returncode == 0 and "фонът" in r.stdout, "a missing picture is a warning, not an error")
+    r, _ = run({**data, "fon": {"png": fon}})
+    check(r.returncode == 2 and "fon" in r.stderr, "a picture without its frame → BAD_INPUT")
+
+
 if __name__ == "__main__":
     test_fixture()
     test_defaults()
@@ -204,6 +228,7 @@ if __name__ == "__main__":
     test_bad_input()
     test_label_avoids_fire()
     test_outline_building()
+    test_kais_fields()
     test_situacionna_sheet()
     test_situacionna_docx()
     test_library()
