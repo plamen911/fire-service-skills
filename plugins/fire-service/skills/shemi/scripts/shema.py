@@ -83,7 +83,8 @@ shema.py — чертае СХЕМА за разполагане на силит
                                                 //   "ramka" – x0, y0, x1, y1 на картинката в метри
   "list": {...},                                // ЛИСТ НА СИТУАЦИОННА СХЕМА по Приложение № 2а – виж по-долу
   "shlang_m": 20,                               // дължина на един шланг – чертичка на всеки толкова метра
-  "cvetna": true, "sever": true, "ramka": false,  // "ramka": true – рамка около чертежа
+  "cvetna": true, "sever": true, "ramka": false,  // "ramka": true – рамка около чертежа (в листа на ситуационна
+                                                //   схема – по подразбиране да; "ramka": false я маха)
   "legenda": false,                             // true – легенда, мащаб ("mashtab") и вятър под чертежа
   "shirina_cm": 16.5, "visochina_cm": 17                           // или --shirina-cm / --visochina-cm
 }
@@ -132,7 +133,7 @@ import os
 import sys
 import textwrap
 
-from matplotlib.patches import Polygon
+from matplotlib.patches import Polygon, Rectangle
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from znatsi import (FENCES, INK, LEGEND_ORDER, LINE_KINDS, NETWORKS, NOZZLES, PLACES, SPLITTERS, TRUCKS,  # noqa: E402,F401
@@ -754,7 +755,7 @@ def densify(pts, step=2.0):
         out += [(a[0] + (b[0] - a[0]) * i / n, a[1] + (b[1] - a[1]) * i / n) for i in range(n)]
     return out + list(pts[-1:])
 
-def sheet_scale(data):
+def sheet_scale(data, framed=False):
     """The standard scale (1:N) and the drawing area (x, y, w, h in mm on the sheet): the largest scale at which
     the site fits on the sheet – over the whole frame when nothing falls on the number field, the compass or
     the title block, otherwise above the title block or beside it."""
@@ -776,8 +777,13 @@ def sheet_scale(data):
             spots = [(ax_ + (aw - w) / 2, ay + (ah - h) / 2)]          # centred first, then towards the corners
             if check:
                 spots += [(px, py) for py in (ay + ah - h, ay + (ah - h) / 2, ay) for px in (ax_, ax_ + (aw - w) / 2, ax_ + aw - w)]
+                if framed:                             # a framed drawing: any place, in steps of 2 mm
+                    spots += [(ax_ + i * 2.0, ay + j * 2.0) for j in range(int((ah - h) / 2) + 1)
+                              for i in range(int((aw - w) / 2) + 1)]
             for px, py in spots:
                 if check:
+                    if framed and any(px < c and a < px + w and py < d and b < py + h for a, b, c, d in keep_out):
+                        continue                       # the frame of the drawing must not cut a field or the compass
                     mm = [(px + (x - x0) * 1000 / n, py + (y - y0) * 1000 / n) for x, y in pts]
                     if any(a <= mx <= c and b <= my <= d for mx, my in mm for a, b, c, d in keep_out):
                         continue
@@ -856,7 +862,7 @@ def render(d, out_png, out_svg=None, width_cm=None, height_cm=None):
     if lst is not None:                                # the sheet of a situational scheme (Приложение № 2а)
         if not isinstance(lst, dict):
             bad("list: очаква се обект с полетата на антетката")
-        scale, (ax_mm, ay_mm, aw_mm, ah_mm) = sheet_scale(data)
+        scale, (ax_mm, ay_mm, aw_mm, ah_mm) = sheet_scale(data, framed=bool(d.get("ramka", True)))
         fs = 7.0
         fig = plt.figure(figsize=(SHEET_W / 25.4, SHEET_H / 25.4), dpi=300)
         draw_sheet(fig, lst, scale, fs)
@@ -869,6 +875,9 @@ def render(d, out_png, out_svg=None, width_cm=None, height_cm=None):
         s = 4.5 * scale / 1000
         data["s"] = s
         hoses = draw_scene(ax, data, {**d, "sever": False}, pal, s, fs, hose_m)
+        if d.get("ramka", True):                       # the frame of the drawing on the sheet – the streets and the
+            ax.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0, fill=False, ec=INK, lw=0.8, zorder=8,   # rest end on it
+                                   clip_on=False))
         # the north arrow – in the upper left corner of the sheet (чл. 9, ал. 5)
         kax = fig.add_axes([0, 0, 1, 1])
         kax.set_xlim(0, SHEET_W)
