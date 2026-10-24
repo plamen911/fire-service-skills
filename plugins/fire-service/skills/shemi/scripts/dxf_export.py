@@ -188,8 +188,14 @@ def write(data, d, out, s, sheet=None):
                  rot=readable(math.degrees(math.atan2(b[1] - a[1], b[0] - a[0]))))
     if data.get("imot"):
         poly(data["imot"]["kontur"], "IMOT", closed=True)
-        tx, ty = max(data["imot"]["kontur"], key=lambda p: (p[1], -p[0]))
-        text(tx, ty + 0.8 * th, data["imot"]["etiket"], layer="IMOT", h=th * 0.9)
+        from shema import building_outlines
+        from znatsi import parcel_label_pos
+        lab = data["imot"]["etiket"]
+        pos = parcel_label_pos(data["imot"]["kontur"], 0.65 * th * len(lab), 1.1 * th, building_outlines(data))
+        if pos is None:                                # nowhere inside – above the top point, as before
+            tx, ty = max(data["imot"]["kontur"], key=lambda p: (p[1], -p[0]))
+            pos = (tx, ty + 0.8 * th)
+        text(pos[0], pos[1], lab, layer="IMOT", h=th * 0.9)
     if data["ograda"]:
         poly(data["ograda"], "OGRADA", closed=True)
     for z in data["bez_parkirane"]:
