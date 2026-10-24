@@ -170,6 +170,24 @@ def test_situacionna_docx():
     check(res["preduprezhdeniya"] == [], f"no gaps for the complete example: {res['preduprezhdeniya']}")
 
 
+def test_outline_building():
+    print("shema.py – a building of any shape (kontur) and merged streets")
+    data = {"sgradi": [{"kontur": [[0, 15], [41, 14], [53, 3], [43, -7], [34, 0], [1, 0]], "etiket": "Цех"}],
+            "ulitsi": [{"tochki": [[-10, 25], [60, 25]], "shirina": 8, "ime": "бул. „Примерен“"},
+                       {"tochki": [[30, 25], [30, 16]], "shirina": 5}]}
+    svg = os.path.join(tempfile.mkdtemp(), "k.svg")
+    r, _ = run(data, "--svg", svg)
+    check(r.returncode == 0, "draws an outline" + (": " + r.stderr[:200] if r.returncode else ""))
+    if r.returncode:
+        return
+    text = open(svg, encoding="utf-8").read()
+    check(">53<" in text.replace(" ", "") or "53</text>" in text, "the overall length of the outline is dimensioned")
+    x, y = shema.centroid([[0, 0], [10, 0], [10, 10], [0, 10]])
+    check(abs(x - 5) < 1e-9 and abs(y - 5) < 1e-9, "the label goes to the centroid")
+    r, _ = run({"sgradi": [{"kontur": [[0, 0], [1, 1]]}]})
+    check(r.returncode == 2 and "kontur" in r.stderr, "an outline of two points → BAD_INPUT")
+
+
 def test_label_avoids_fire():
     print("shema.py – the building's name is not under the fire")
     b = {"x": 0, "y": 0, "w": 40, "h": 10}
@@ -185,6 +203,7 @@ if __name__ == "__main__":
     test_warnings()
     test_bad_input()
     test_label_avoids_fire()
+    test_outline_building()
     test_situacionna_sheet()
     test_situacionna_docx()
     test_library()

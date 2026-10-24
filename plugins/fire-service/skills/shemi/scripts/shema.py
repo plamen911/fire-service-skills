@@ -36,7 +36,8 @@ shema.py — чертае СХЕМА за разполагане на силит
   "ograda_vid": "metalna",                      // zhelezobetonna, kamenna, metalna, darvena, bodliva;
                                                 //   без вид – пунктир „Ограда“
   "vhodove": [{"x": 60, "y": 2, "shirina": 8, "etiket": "КПП"}],    // отвор в оградата; „КПП“ – в кръг
-  "sgradi": [{"x": 10, "y": 55, "w": 36, "h": 22, "etiket": "Склад\\nет. 1",
+  "sgradi": [{"x": 10, "y": 55, "w": 36, "h": 22, "etiket": "Склад\\nет. 1",   // или "kontur": [[x, y], …] –
+                                                //   сграда с друга форма (размерите – общата дължина и ширина)
               "razmeri": true, "pokriv": "dvuskaten",   // "dvuskaten" чертае билото; "plosak" – нищо
               "etazhnost": "-1 +2", "kategoriya": "Ф5Б", "ogneustoychivost": "II",   // ситуационна схема:
                                                 //   добавят се под името – „-1 +2 · Ф5Б · II ст.“ (чл. 8, ал. 1)
@@ -123,10 +124,12 @@ import os
 import sys
 import textwrap
 
+from matplotlib.patches import Polygon
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from znatsi import (FENCES, INK, LEGEND_ORDER, LINE_KINDS, NETWORKS, NOZZLES, PLACES, SPLITTERS, TRUCKS,  # noqa: E402,F401
                     LADDERS, WATER, Pal, chaikin, draw_building, draw_dimension, draw_fence, draw_fire, draw_hydrant,
-                    draw_gas_line, draw_gas_valve, offset_polyline, draw_main, draw_no_parking, draw_street, draw_tower, draw_valve_kran,
+                    draw_gas_line, draw_gas_valve, offset_polyline, draw_main, draw_no_parking, draw_street, draw_streets, draw_tower, draw_valve_kran,
                     draw_kompas, draw_label_box, draw_ladder, draw_line, draw_nozzle, draw_reservoir, draw_ring,
                     draw_seat, draw_smoke, draw_splitter, draw_staff, draw_truck, draw_wind, big_arrow, is_el,
                     is_kpp, legend_text, length, obrazets, plt, point_at)
@@ -221,12 +224,20 @@ def load(d):
     if out["ograda_vid"] not in (None, *FENCES):
         bad(f"ograda_vid: {', '.join(FENCES)}")
     for i, b in enumerate(items(d, "sgradi")):
-        r = rect(b, f"sgradi[{i}]")
+        kontur = None
+        if b.get("kontur"):                            # an outline of any shape – the points in order
+            kontur = [pt(p, f"sgradi[{i}].kontur") for p in b["kontur"]]
+            if len(kontur) < 3:
+                bad(f"sgradi[{i}].kontur: трябват поне три точки")
+            kx, ky = [p[0] for p in kontur], [p[1] for p in kontur]
+            r = {"x": min(kx), "y": min(ky), "w": max(kx) - min(kx), "h": max(ky) - min(ky)}
+        else:
+            r = rect(b, f"sgradi[{i}]")
         if b.get("pokriv") not in (None, "", "plosak", "dvuskaten"):
             bad(f"sgradi[{i}].pokriv: „dvuskaten“ или „plosak“")
         sasedna = bool(b.get("sasedna", False))
         out["sgradi"].append({**r, "etiket": building_label(b), "razmeri": b.get("razmeri", not sasedna),
-                              "pokriv": b.get("pokriv"), "sasedna": sasedna,
+                              "pokriv": b.get("pokriv"), "sasedna": sasedna, "kontur": kontur,
                               "danni": {k: str(b.get(k) or "").strip() for k in ("etazhnost", "kategoriya", "ogneustoychivost")}})
     for i, b in enumerate(items(d, "obekti")):
         out["obekti"].append({**rect(b, f"obekti[{i}]", 5, 3), "etiket": str(b.get("etiket") or ""),
@@ -426,6 +437,18 @@ def load(d):
                     break
     return out, warnings
 
+def centroid(pts):
+    """The centroid of a polygon (its area's centre) – falls inside an ordinary building outline."""
+    a = cx = cy = 0.0
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:] + pts[:1]):
+        c = x0 * y1 - x1 * y0
+        a += c
+        cx += (x0 + x1) * c
+        cy += (y0 + y1) * c
+    if abs(a) < 1e-9:
+        return sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)
+    return cx / (3 * a), cy / (3 * a)
+
 def building_label(b):
     """The building's name, and on the next line the floors, the fire-hazard category and the fire resistance
     (чл. 7, ал. 3, т. 1, б. „б“ от Указанията): „Склад\n-1 +2 · Ф5Б · II ст.“."""
@@ -511,8 +534,7 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
             gx = g["x"] + 0.6 * s if g["x"] < (x0 + x1) / 2 else g["x"] - 0.6 * s - bw
             gy = g["y"] - bh / 2
         draw_label_box(ax, gx, gy, bw, bh, g["etiket"], fs)
-    for u in data["ulitsi"]:                           # the situation first – under everything else
-        draw_street(ax, u["tochki"], u["shirina"], u["ime"], fs, pal)
+    draw_streets(ax, data["ulitsi"], fs, pal)          # the situation first – under everything else
     for z in data["bez_parkirane"]:
         draw_no_parking(ax, z, pal)
     for v in data["vodoprovod"]:
@@ -522,8 +544,16 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
     for z in data["zadimyavane"]:
         draw_smoke(ax, z, s, pal)
     for b in data["sgradi"]:
-        draw_building(ax, b["x"], b["y"], b["w"], b["h"], b["pokriv"], lw=0.9 if b["sasedna"] else 1.8)
-        if b["etiket"]:
+        if b["kontur"]:
+            ax.add_patch(Polygon(b["kontur"], closed=True, fill=False, ec=INK, lw=0.9 if b["sasedna"] else 1.8,
+                                 joinstyle="miter", zorder=3))
+        else:
+            draw_building(ax, b["x"], b["y"], b["w"], b["h"], b["pokriv"], lw=0.9 if b["sasedna"] else 1.8)
+        if b["etiket"] and b["kontur"]:                # an outline: the label at its centroid, no white box over the walls
+            lx, ly = centroid(b["kontur"])
+            ax.text(lx, ly, b["etiket"].replace("\\n", "\n"), ha="center", va="center", fontsize=fs + 0.5, zorder=4,
+                    linespacing=1.2)
+        elif b["etiket"]:
             lx, ly = label_point(b, data["pozhar"] + data["zadimyavane"])
             ax.text(lx, ly, b["etiket"].replace("\\n", "\n"), ha="center", va="center", fontsize=fs + 0.5, zorder=4,
                     linespacing=1.2, bbox=dict(fc="white", ec="none", pad=1.0, alpha=0.9))
@@ -642,6 +672,8 @@ def render_legend(d, out_png, width_cm=WIDTH_CM, fs=7.0):
 def site_points(data):
     """The points of everything drawn on the site – to keep the sheet's fields clear of it."""
     pts = []
+    for b in data["sgradi"]:
+        pts += densify(b["kontur"] + b["kontur"][:1]) if b["kontur"] else []
     for b in data["sgradi"] + data["obekti"] + data["pozhar"] + data["zadimyavane"] + data["bez_parkirane"]:
         pts += [(b["x"], b["y"]), (b["x"] + b["w"], b["y"]), (b["x"], b["y"] + b["h"]), (b["x"] + b["w"], b["y"] + b["h"])]
     for coll in (data["avtomobili"], data["vodoiztochnitsi"], data["vhodove"], data["razklonitel"], data["gaz_armatura"]):
