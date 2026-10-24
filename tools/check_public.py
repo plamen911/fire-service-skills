@@ -60,7 +60,12 @@ ALLOWED = {
     # 1983р-15019 is the number of a circular letter of ГДПБЗН that the regulations skill names as missing
     "registration number": {"1234р-56789", "000р-0000", "947р-0000", "1983р-15019"},
     # the example streets, and the address of the directorate itself (printed in the footers of its letterhead)
-    "street address": {"ул.„КлиментОхридски“№4", "ул.„Примерна“№1", "ул.„Св.Св.КирилиМетодий”№31"},
+    "street address": {"ул.„КлиментОхридски“№4", "ул.„Примерна“№1", "ул.„Св.Св.КирилиМетодий”№31",
+                       # the official addresses of the РСПБЗН and УПБЗН of РДПБЗН – Плевен (mvr.bg), where the
+                       # fire engines leave from – shared/raioni/sluzhbi_pleven.csv, for the route to an object
+                       "ул.„Св.Св.КирилиМетодий“№31", "ул.„ПатриархЕвтимий“№43", "ул.„България“№50",
+                       "ул.„Индустриална“№10", "ул.„МаринБоев“№1", "ул.„Европа“№3", "ул.„ГеоргиС.Раковски“№8",
+                       "ул.„ЦоньоМатев“№5"},
 }
 IBAN = re.compile(r"\bBG\d{2}[A-Z]{4}[0-9A-Z]{14}\b")
 # three capitalised Cyrillic words whose last two look like a patronymic and a surname; or name + surname
