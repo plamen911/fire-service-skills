@@ -134,7 +134,7 @@ def test_situacionna_sheet():
     check(res["preduprezhdeniya"] == [], f"a complete situation gives no warnings: {res['preduprezhdeniya']}")
     text = open(svg, encoding="utf-8").read()
     for name in ("Ситуационна схема", "№ на плана", "Собственик:", "Утвърдил / дата:", "М 1:500",
-                 "С-150/5", "Т-100/4", "ПК-1", "-1 +2 · Ф1.1 · II ст."):
+                 "С-150/5", "Т-100/4", "ПК-1", "1 подз. ет., 2 ет. · Ф1.1 · II ст."):
         check(name in text, f"the sheet shows „{name}“")
     for colour in ("#8b5a2b", "#d9a400", "#f28c00"):
         check(colour in text.lower(), f"the colour {colour} of чл. 9, ал. 9")
@@ -188,6 +188,13 @@ def test_outline_building():
     check(r.returncode == 2 and "kontur" in r.stderr, "an outline of two points → BAD_INPUT")
 
 
+def test_floors_text():
+    print("shema.py – the floors as „N ет.“")
+    check(shema.floors_text("+3") == "3 ет.", "„+3“ → „3 ет.“")
+    check(shema.floors_text("-1 +2 +Т") == "1 подз. ет., 2 ет., тав. ет.", "basement, floors and attic")
+    check(shema.floors_text("3 ет.") == "3 ет." and shema.floors_text("") == "", "other text stays as it is")
+
+
 def test_label_avoids_fire():
     print("shema.py – the building's name is not under the fire")
     b = {"x": 0, "y": 0, "w": 40, "h": 10}
@@ -227,6 +234,7 @@ if __name__ == "__main__":
     test_warnings()
     test_bad_input()
     test_label_avoids_fire()
+    test_floors_text()
     test_outline_building()
     test_kais_fields()
     test_situacionna_sheet()

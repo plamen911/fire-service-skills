@@ -40,7 +40,8 @@ shema.py — чертае СХЕМА за разполагане на силит
                                                 //   сграда с друга форма (размерите – общата дължина и ширина)
               "razmeri": true, "pokriv": "dvuskaten",   // "dvuskaten" чертае билото; "plosak" – нищо
               "etazhnost": "-1 +2", "kategoriya": "Ф5Б", "ogneustoychivost": "II",   // ситуационна схема:
-                                                //   добавят се под името – „-1 +2 · Ф5Б · II ст.“ (чл. 8, ал. 1)
+                                                //   добавят се под името – „1 подз. ет., 2 ет. · Ф5Б · II ст.“
+                                                //   ("+3" се пише „3 ет.“; друг текст – както е даден)
               "sasedna": false}],               // true – съседна сграда: по-тънък контур, без размери
   "obekti": [{"x": 3, "y": 58, "w": 4, "h": 3, "etiket": "Ел."}],   // малки обекти в рамка; „Ел.“ влиза в
                                                 //   легендата като „Електрическо табло“; "legenda": "…" – друг текст
@@ -130,6 +131,7 @@ import argparse
 import json
 import math
 import os
+import re
 import sys
 import textwrap
 
@@ -485,11 +487,29 @@ def centroid(pts):
         return sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)
     return cx / (3 * a), cy / (3 * a)
 
+def floors_text(e):
+    """The floors as they are written on the schemes: „+2“ → „2 ет.“, „-1 +2 +Т“ → „1 подз. ет., 2 ет., тав. ет.“;
+    any other text stays as it is."""
+    e = str(e or "").strip()
+    toks = e.split()
+    if not toks or not all(re.fullmatch(r"[+-]?(\d+|[ТтT])", t) for t in toks):
+        return e
+    out = []
+    for t in toks:
+        v = t.lstrip("+-")
+        if v in ("Т", "т", "T"):
+            out.append("тав. ет.")
+        elif t.startswith("-"):
+            out.append(f"{v} подз. ет.")
+        else:
+            out.append(f"{v} ет.")
+    return ", ".join(out)
+
 def building_label(b):
     """The building's name, and on the next line the floors, the fire-hazard category and the fire resistance
-    (чл. 7, ал. 3, т. 1, б. „б“ от Указанията): „Склад\n-1 +2 · Ф5Б · II ст.“."""
+    (чл. 7, ал. 3, т. 1, б. „б“ от Указанията): „Склад\n1 подз. ет., 2 ет. · Ф5Б · II ст.“."""
     name = str(b.get("etiket") or "").replace("\\n", "\n")
-    parts = [str(b.get("etazhnost") or "").strip(), str(b.get("kategoriya") or "").strip()]
+    parts = [floors_text(b.get("etazhnost")), str(b.get("kategoriya") or "").strip()]
     ogn = str(b.get("ogneustoychivost") or "").strip()
     if ogn:
         parts.append(ogn if "ст" in ogn else f"{ogn} ст.")
