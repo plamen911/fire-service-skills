@@ -252,15 +252,28 @@ def test_kais(tmp, base):
     answer = {"ok": True, "action": "obekt", "imot": imot, "sgradi": [big, small],
               "ramka": {"bbox": [x0, y0, x0 + 140, y0 + 130], "radius_m": 40},
               "fon": {"bbox": [x0, y0, x0 + 140, y0 + 130], "px": [1, 1], "png_base64": PNG1},
+              "ulitsi": [{"ime": "бул. Примерен", "vid": "secondary", "shirina": 12,     # runs off the terrain on both ends
+                          "tochki": [[x0 - 50, y0 + 95], [x0 + 70, y0 + 95], [x0 + 200, y0 + 95]]},
+                         {"ime": "бул. Примерен", "vid": "secondary", "shirina": 12, "tochki": [[x0 + 100, y0 + 95], [x0 + 105, y0 + 95]]},
+                         {"ime": "", "vid": "service", "shirina": 5, "tochki": [[x0 + 300, y0 + 300], [x0 + 310, y0 + 310]]}],
               "istochnik": "КАИС", "zaiavki_kais": 9}
     Stub.plan, Stub.seen = [(200, answer)], []
     out, sh = os.path.join(tmp, "k", "kais.json"), os.path.join(tmp, "k", "shema.json")
     code, printed, err = call(kais.main, ["obekt", "--link", "43.41,24.65", "-o", out, "--shema", sh])
     sent = Stub.seen[-1]
     check(code is None, "obekt answers" + (": " + err if code else ""))
-    check(sent["path"] == "/kais" and sent["key"] == FAKE and sent["body"] == {"action": "obekt", "fon": True, "radius_m": 40,
+    check(sent["path"] == "/kais" and sent["key"] == FAKE and sent["body"] == {"action": "obekt", "fon": False, "radius_m": 40,
                                                                                 "lat": 43.41, "lon": 24.65},
-          "a „ширина,дължина“ point goes to the КАИС address with the key, the picture and the radius")
+          "a „ширина,дължина“ point goes to the КАИС address with the key and the radius – no picture by default")
+    d = json.load(open(sh, encoding="utf-8"))
+    check("fon" not in d and "imot" not in d, "by default the scheme is in the signs of Приложение № 6 only – no picture, no parcel line")
+    u = d["ulitsi"]
+    check(len(u) == 2 and u[0]["tochki"] == [[0, 85], [60, 85], [120, 85]] and u[0]["shirina"] == 12,
+          "a street is cut to the terrain; one far away is left out")
+    check(u[0]["ime"] == "бул. „Примерен“" and u[1]["ime"] == "", "the name once, on the longest piece, in „…“")
+    Stub.plan = [(200, answer)]
+    code, printed, err = call(kais.main, ["obekt", "--link", "43.41,24.65", "-o", out, "--shema", sh, "--fon", "--granitsa"])
+    check(code is None and Stub.seen[-1]["body"]["fon"] is True, "--fon asks for the picture")
     fon = os.path.join(tmp, "k", "kais_fon.png")
     saved = json.load(open(out, encoding="utf-8"))
     check(os.path.exists(fon) and open(fon, "rb").read()[1:4] == b"PNG" and "png_base64" not in json.dumps(saved),
@@ -269,7 +282,11 @@ def test_kais(tmp, base):
     check(d["teren"] == [120, 110] and d["kais"]["x0"] == x0 + 10 and d["kais"]["y0"] == y0 + 10,
           "the terrain is the parcel plus the radius, its origin kept in КС2005")
     check(d["imot"]["kontur"][0] == [40, 40] and len(d["imot"]["kontur"]) == 4 and d["imot"]["etiket"] == "ПИ 99999.10.20",
-          "the parcel's outline in local metres, without the closing point")
+          "--granitsa: the parcel's outline in local metres, without the closing point")
+    check(kais.clip_polyline([[-5, 5], [5, 5], [5, 15], [15, 15]], 0, 0, 10, 10) == [[(0.0, 5.0), (5.0, 5.0), (5.0, 10.0)]],
+          "clipping keeps the inside part of a bent line")
+    check(kais.street_name("ул. Васил Левски") == "ул. „Васил Левски“" and kais.street_name("Северна промишлена зона") ==
+          "Северна промишлена зона", "street names get „…“, other names stay")
     check(d["fon"]["ramka"] == [-10, -10, 130, 120], "the picture is placed by its own frame")
     b1, b2 = d["sgradi"]
     check(b1["etiket"] == "Промишлена сграда" and b1["etazhnost"] == "+3" and b1["kontur"][0] == [45, 45],
