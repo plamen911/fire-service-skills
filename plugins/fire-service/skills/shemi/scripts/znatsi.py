@@ -264,7 +264,13 @@ def draw_dimension(ax, a, b, text, off, fs):
     ax.annotate("", (x0 + ox, y0 + oy), (x1 + ox, y1 + oy),
                 arrowprops=dict(arrowstyle="<->", lw=0.5, color=INK, shrinkA=0, shrinkB=0), zorder=2)
     mx, my = (x0 + x1) / 2 + ox, (y0 + y1) / 2 + oy
-    rot = 90 if abs(x1 - x0) < abs(y1 - y0) else 0
+    rot = math.degrees(math.atan2(y1 - y0, x1 - x0))  # along the line, read from below or from the right
+    while rot <= -90:
+        rot += 180
+    while rot > 90:
+        rot -= 180
+    if abs(rot + 90) < 1e-6:
+        rot = 90
     ax.text(mx, my, text, ha="center", va="center", fontsize=fs, rotation=rot, zorder=4,
             bbox=dict(fc="white", ec="none", pad=0.6))
 
