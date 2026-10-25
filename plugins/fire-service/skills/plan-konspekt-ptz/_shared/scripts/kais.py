@@ -61,6 +61,7 @@ import api_config  # noqa: E402
 CONFIG_FIELD = "kais_url"
 EXACT = ("проверена", "вик")       # the water sources whose coordinates are exact (voda.py)
 SMALL_M = 8.0                     # a building narrower than this is drawn without a name and dimensions
+MAX_SASEDI = 12                   # the bordering parcels read for their buildings (one КАИС call each)
 
 
 # ── КС2005 (EPSG:7801) ⇄ WGS84 – Lambert conformal conic, 2SP, GRS80 (the same as the n8n node) ────────────────
@@ -347,6 +348,37 @@ def cmd_obekt(a):
             if s.get("etazhi"):
                 b["etazhnost"] = f"{s['etazhi']} ет."
             sh["sgradi"].append(b)
+        # the neighbouring buildings (чл. 7, ал. 3, т. 1, б. „е“): the buildings of the parcels that border the
+        # object, from КАИС as well – thin outlines with their floors; those wholly outside the terrain stay out
+        if not a.bez_sasedni:
+            street_ids = {r.get("id") for r in res.get("ulitsi_kais") or []}
+            seen, near, failed = {s["id"] for s in sgradi}, [], 0
+            for pid in [i for i in imot.get("sasedi") or [] if i not in street_ids][:MAX_SASEDI]:
+                try:
+                    nb = call({"action": "obekt", "id": pid, "fon": False, "radius_m": 30})
+                except SystemExit:
+                    failed += 1
+                    continue
+                for s in nb.get("sgradi") or []:
+                    k = s.get("kontur") or []
+                    if s.get("id") in seen or not k or (dims(k)[1] or 0) < SMALL_M:
+                        continue
+                    if not any(bx0 <= x <= bx1 and by0 <= y <= by1 for x, y in densify(k + k[:1], 2.0)):
+                        continue
+                    seen.add(s["id"])
+                    b = {"kontur": local(k, bx0, by0), "etiket": label(s), "kais_id": s["id"], "sasedna": True}
+                    if s.get("etazhi"):
+                        b["etazhnost"] = f"{s['etazhi']} ет."
+                    sh["sgradi"].append(b)
+                    near.append({"id": s["id"], "predn": s.get("predn"), "etazhi": s.get("etazhi"),
+                                 "zastroena_m2": s.get("zastroena_m2")})
+            summary["sasedni"] = near
+            if near:
+                notes.append("Съседните сгради са от граничещите имоти в КАИС с предназначението им; името на обекта в тях "
+                             "(магазин, фирма) кадастърът няма – допиши го в етикета, ако се знае.")
+            if failed:
+                notes.append(f"{failed} от граничещите имоти не се прочетоха от КАИС – сградите им липсват.")
+
         if any(s.get("etazhi") for s in sgradi):
             notes.append("Етажността е „брой етажи“ от КАИС (надземните); сутерен, тавански етаж, категорията и "
                          "огнеустойчивостта не са в кадастъра – провери ги на място или в документацията на обекта.")
@@ -532,6 +564,8 @@ def main():
     o.add_argument("-o", "--out", default="kais.json", help="изходен JSON (фонът – до него, *_fon.png)")
     o.add_argument("--shema", help="и начало на JSON за shema.py / situacionna.py")
     o.add_argument("--voda", action="store_true", help="с --shema: и точните водоизточници в рамката")
+    o.add_argument("--bez-sasedni", action="store_true",
+                   help="с --shema: без сградите в граничещите имоти (по подразбиране са в схемата – б. „е“)")
     t = sub.add_parser("tarsi", help="търсачката на картата")
     t.add_argument("tekst")
     a = ap.parse_args()
