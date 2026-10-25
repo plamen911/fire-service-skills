@@ -93,6 +93,8 @@ shema.py — чертае СХЕМА за разполагане на силит
                                                 //   да е горе вляво). Теренът се изрязва около обекта – улиците
                                                 //   излизат от чертежа. Полезно при сграда под ъгъл: събира се в
                                                 //   по-едър мащаб. Без поле или 0 – северът е нагоре
+  "teren_tochki": [[x, y], …],                  // при "zavartane": точки, които изрязаният терен да обхване, без
+                                                //   да се чертаят (напр. контурът на имота, когато границата не се иска)
   "cvetna": true, "sever": true, "ramka": false,  // "ramka": true – рамка около чертежа (листът на ситуационната
                                                 //   схема има своя рамка по Приложение № 2а – там е излишна)
   "legenda": false,                             // true – легенда, мащаб ("mashtab") и вятър под чертежа
@@ -347,6 +349,7 @@ def zavarti(d):
         core += ln["tochki"]
     if d.get("ograda"):
         core += d["ograda"]
+    core += RL(d.pop("teren_tochki", None) or [])     # points the cut terrain must also take in (not drawn)
     xs, ys = [p[0] for p in core], [p[1] for p in core]
     pad = max(12.0, 0.12 * max(max(xs) - min(xs), max(ys) - min(ys)))
     ox, oy = min(xs) - pad, min(ys) - pad
