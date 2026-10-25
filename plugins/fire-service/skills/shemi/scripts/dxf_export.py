@@ -10,7 +10,7 @@ dxf_export.py — схемата като DXF (AutoCAD 2010, R2018 съвмес�
 
 Слоеве (цветовете – по чл. 9, ал. 9 от Указанията Iз-2749):
   SGRADI (черно) · RAZMERI · IMOT (щрих-пунктир) · ULITSI (кафяво) · VODA (синьо: водоизточници, водопровод,
-  шлангови линии) · GAZ (жълто) · BEZ_PARKIRANE (оранжево) · OGRADA · POZHAR (червено: пожар, огнище, автомобили,
+  шлангови линии) · GAZ (жълто) · BEZ_PARKIRANE (оранжево) · TREVNI (зелено) · OGRADA · POZHAR (червено: пожар, огнище, автомобили,
   направления) · TEKST · LIST (рамката и антетката) · SEVER (посоките)
 Знаците са опростени (кръг с кръст за хидрант, правоъгълник за автомобил …) – точните им рисунки са в .png;
 в DXF-а са на правилното място и с надписа си, за да се редактират.
@@ -27,7 +27,7 @@ BROWN = (139, 90, 43)
 LAYERS = {  # name: (ACI colour, true colour or None, linetype)
     "SGRADI": (7, None, "CONTINUOUS"), "RAZMERI": (7, None, "CONTINUOUS"), "IMOT": (7, None, "DASHDOT"),
     "ULITSI": (30, BROWN, "CONTINUOUS"), "VODA": (5, None, "CONTINUOUS"), "GAZ": (2, None, "CONTINUOUS"),
-    "BEZ_PARKIRANE": (30, (255, 140, 0), "CONTINUOUS"), "OGRADA": (7, None, "DASHED"), "POZHAR": (1, None, "CONTINUOUS"),
+    "BEZ_PARKIRANE": (30, (255, 140, 0), "CONTINUOUS"), "TREVNI": (3, (46, 139, 58), "CONTINUOUS"), "OGRADA": (7, None, "DASHED"), "POZHAR": (1, None, "CONTINUOUS"),
     "TEKST": (7, None, "CONTINUOUS"), "LIST": (7, None, "CONTINUOUS"), "SEVER": (7, None, "CONTINUOUS"),
 }
 FONT = "arial.ttf"            # a TrueType font with Cyrillic – AutoCAD and CorelDRAW both have it
@@ -238,6 +238,11 @@ def write(data, d, out, s, sheet=None):
         text(pos[0], pos[1], lab, layer="IMOT", h=th * 0.9)
     if data["ograda"]:
         poly(data["ograda"], "OGRADA", closed=True)
+    for k in data.get("trevni") or []:                # grass areas – green outlines, cut at the drawing's edge
+        for a_, b_ in zip(k, k[1:] + k[:1]):
+            c_ = _clip(a_, b_, data["box"])
+            if c_:
+                msp.add_line(P(c_[0]), P(c_[1]), dxfattribs={"layer": "TREVNI"})
     for z in data["bez_parkirane"]:
         poly([(z["x"], z["y"]), (z["x"] + z["w"], z["y"]), (z["x"] + z["w"], z["y"] + z["h"]), (z["x"], z["y"] + z["h"])],
              "BEZ_PARKIRANE", closed=True)

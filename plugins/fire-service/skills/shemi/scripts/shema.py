@@ -68,6 +68,7 @@ shema.py — чертае СХЕМА за разполагане на силит
              {"kontur": [[x, y], …], "otvori": [], "ime": "бул. „Примерен“", "ime_pos": [60, 20], "ime_ugal": 0}],
                                                 //   или улица като площ – поземленият имот от КАИС (kais.py)
   // в "ulitsi" улица като ивица може да е без единия си ръб: "bez_ruba": "lyav" или "desen" (по посоката на точките)
+  "trevni": [{"kontur": [[x, y], …]}],          // тревни площи – зелени (чл. 9, ал. 9, т. 5)
   "ulitsi_skrij": [[[x, y], [x, y]]],          // парче от ръба на улица, което не се чертае (напр. краят на
                                                 //   кадастрален имот, начертан напреки на пътя)
   "ulitsi_rab": [[[x, y], [x, y], [x, y]]],     // ръб на улица, начертан на ръка – кафява линия, заоблена
@@ -157,7 +158,7 @@ from matplotlib.patches import Circle, Polygon, Rectangle
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from znatsi import (FENCES, INK, LEGEND_ORDER, LINE_KINDS, NETWORKS, NOZZLES, PLACES, SPLITTERS, TRUCKS,  # noqa: E402,F401
                     LADDERS, WATER, Pal, chaikin, draw_building, draw_dimension, draw_fence, draw_fire, draw_hydrant,
-                    draw_gas_line, draw_gas_valve, offset_polyline, draw_main, draw_no_parking, draw_parcel, draw_street, draw_streets, draw_tower, draw_valve_kran,
+                    draw_gas_line, draw_gas_valve, offset_polyline, draw_main, draw_no_parking, draw_parcel, draw_street, draw_streets, draw_grass, draw_tower, draw_valve_kran,
                     draw_kompas, draw_label_box, draw_ladder, draw_line, draw_nozzle, draw_reservoir, draw_ring,
                     draw_seat, draw_smoke, draw_splitter, draw_staff, draw_truck, draw_wind, big_arrow, is_el,
                     is_kpp, legend_text, length, obrazets, plt, point_at)
@@ -323,6 +324,8 @@ def zavarti(d):
             ln["tochki"] = RL(ln.get("tochki") or [])
     for key in ("ulitsi_skrij", "ulitsi_rab"):
         d[key] = [RL(ln) for ln in (d.get(key) or [])]
+    for t in items(d, "trevni"):
+        t["kontur"] = RL(t.get("kontur") or [])
     for key in ("posoka", "napravlenie", "stalbi", "razstoyaniya"):
         for o in items(d, key):
             o["ot"], o["do"] = R(o["ot"]), R(o["do"])
@@ -379,6 +382,8 @@ def zavarti(d):
                 ln["tochki"] = [S(p) for p in ln["tochki"]]
         for key in ("ulitsi_skrij", "ulitsi_rab"):
             d[key] = [[S(p) for p in ln] for ln in (d.get(key) or [])]
+        for t in items(d, "trevni"):
+            t["kontur"] = [S(p) for p in t["kontur"]]
         for key in ("posoka", "napravlenie", "stalbi", "razstoyaniya"):
             for o in items(d, key):
                 o["ot"], o["do"] = S(o["ot"]), S(o["do"])
@@ -487,7 +492,7 @@ def load(d):
     out = {k: [] for k in ("sgradi", "obekti", "pozhar", "zadimyavane", "ognishte", "posoka", "napravlenie",
                            "avtomobili", "vodoiztochnitsi", "linii", "razklonitel", "stalbi", "shtab", "pbt",
                            "tekst", "vhodove", "ulitsi", "razstoyaniya", "vodoprovod", "gazoprovod",
-                           "gaz_armatura", "bez_parkirane", "prohodi", "ulitsi_skrij", "ulitsi_rab")}
+                           "gaz_armatura", "bez_parkirane", "prohodi", "ulitsi_skrij", "ulitsi_rab", "trevni")}
     out["ograda"] = None
     out["vyatar"] = None
     out["ograda_vid"] = d.get("ograda_vid") or None
@@ -633,6 +638,11 @@ def load(d):
                                     "etiket": str(g.get("etiket") or ""), "ugal": num(g.get("ugal", 0), f"gaz_armatura[{i}].ugal")})
     for i, z in enumerate(items(d, "bez_parkirane")):
         out["bez_parkirane"].append(rect(z, f"bez_parkirane[{i}]"))
+    for i, t in enumerate(items(d, "trevni")):           # grass areas (green) – e.g. from OpenStreetMap
+        k = [pt(p, f"trevni[{i}].kontur") for p in (t.get("kontur") or [])]
+        if len(k) < 3:
+            bad(f"trevni[{i}].kontur: трябват поне три точки")
+        out["trevni"].append(k)
     for key in ("ulitsi_skrij", "ulitsi_rab"):           # corrections of the street edges, by hand
         for i, ln in enumerate(d.get(key) or []):
             pts = [pt(p, f"{key}[{i}]") for p in ln]
@@ -789,26 +799,36 @@ def centroid(pts):
     return cx / (3 * a), cy / (3 * a)
 
 def floors_text(e):
-    """The floors as they are written on the schemes: „+2“ → „2 ет.“, „-1 +2 +Т“ → „1 подз. ет., 2 ет., тав. ет.“;
-    any other text stays as it is."""
+    """The floors as чл. 8 от Указанията Iз-2749 writes them – underground, above-ground and attic floors:
+    „-1 +2 +Т“; „2 ет.“ (and „2“) → „+2“, „1 подз. ет., 2 ет., тав. ет.“ → „-1 +2 +Т“; any other text stays."""
     e = str(e or "").strip()
+    if not e:
+        return ""
     toks = e.split()
-    if not toks or not all(re.fullmatch(r"[+-]?(\d+|[ТтT])", t) for t in toks):
-        return e
-    out = []
-    for t in toks:
-        v = t.lstrip("+-")
-        if v in ("Т", "т", "T"):
-            out.append("тав. ет.")
-        elif t.startswith("-"):
-            out.append(f"{v} подз. ет.")
+    if all(re.fullmatch(r"[+-]?(\d+|[ТтT])", t) for t in toks):
+        out = []
+        for t in toks:
+            v = t.lstrip("+-")
+            out.append("+Т" if v in ("Т", "т", "T") else ("-" if t.startswith("-") else "+") + v)
+        return " ".join(out)
+    parts, ok = [], True
+    for piece in [x.strip() for x in e.split(",")]:
+        m = re.fullmatch(r"(\d+)\s*подз\.?\s*ет\.?", piece)
+        n = re.fullmatch(r"(\d+)\s*ет\.?", piece)
+        if m:
+            parts.append("-" + m.group(1))
+        elif n:
+            parts.append("+" + n.group(1))
+        elif re.fullmatch(r"тав\.?\s*ет\.?", piece):
+            parts.append("+Т")
         else:
-            out.append(f"{v} ет.")
-    return ", ".join(out)
+            ok = False
+            break
+    return " ".join(parts) if ok and parts else e
 
 def building_label(b):
     """The building's name, and on the next line the floors, the fire-hazard category and the fire resistance
-    (чл. 7, ал. 3, т. 1, б. „б“ от Указанията): „Склад\n1 подз. ет., 2 ет. · Ф5Б · II ст.“."""
+    (чл. 7, ал. 3, т. 1, б. „б“ и чл. 8 от Указанията): „Склад\n-1 +2 · Ф5Б · II ст.“."""
     name = str(b.get("etiket") or "").replace("\\n", "\n")
     if b.get("kratko"):                                # a small annex – only its floors fit into it
         return "\n".join(p for p in (name, floors_text(b.get("etazhnost"))) if p)
@@ -854,9 +874,9 @@ def legend_keys(data, hose_m):
     used.update(v["vid"] for v in data["vodoprovod"])
     if data.get("imot"):
         used.add("imot")
-    for key in ("ulitsi", "gazoprovod", "gaz_armatura", "bez_parkirane"):
+    for key in ("ulitsi", "gazoprovod", "gaz_armatura", "bez_parkirane", "trevni"):
         if data[key]:
-            used.add({"ulitsi": "ulitsa"}.get(key, key))
+            used.add({"ulitsi": "ulitsa", "trevni": "trevna"}.get(key, key))
     used.update(w["vid"] for w in data["vodoiztochnitsi"])
     used.update(ln["vid"] for ln in data["linii"])
     if hose_m and any(ln["vid"] != "smukatelna" for ln in data["linii"]):
@@ -918,6 +938,8 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
         ax.set_ylim(y0, y1)
     if data.get("imot"):                               # the parcel's boundary – from the library
         draw_parcel(ax, data["imot"]["kontur"], data["imot"]["etiket"], s, fs, building_outlines(data))
+    for k in data["trevni"]:                           # the grass areas – under the streets
+        draw_grass(ax, k, pal)
     draw_streets(ax, data["ulitsi"], fs, pal,          # the situation first – under everything else
                  hidden=[seg for ln in data["ulitsi_skrij"] for seg in zip(ln, ln[1:])])
     for g in data["prohodi"]:                          # the entrances from the street: the edge line is cut there
