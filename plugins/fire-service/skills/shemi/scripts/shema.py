@@ -87,6 +87,12 @@ shema.py — чертае СХЕМА за разполагане на силит
                                                 //   "ramka" – x0, y0, x1, y1 на картинката в метри
   "list": {...},                                // ЛИСТ НА СИТУАЦИОННА СХЕМА по Приложение № 2а – виж по-долу
   "shlang_m": 20,                               // дължина на един шланг – чертичка на всеки толкова метра
+  "zavartane": "avto",                          // завъртане на целия чертеж, в градуси обратно на часовниковата стрелка;
+                                                //   "avto" – най-дългата стена на главната сграда става хоризонтална.
+                                                //   Знакът за посоките се завърта с чертежа (чл. 9, ал. 5 иска само
+                                                //   да е горе вляво). Теренът се изрязва около обекта – улиците
+                                                //   излизат от чертежа. Полезно при сграда под ъгъл: събира се в
+                                                //   по-едър мащаб. Без поле или 0 – северът е нагоре
   "cvetna": true, "sever": true, "ramka": false,  // "ramka": true – рамка около чертежа (листът на ситуационната
                                                 //   схема има своя рамка по Приложение № 2а – там е излишна)
   "legenda": false,                             // true – легенда, мащаб ("mashtab") и вятър под чертежа
@@ -223,6 +229,211 @@ def label_point(b, fires):
 def scale_step(units):
     raw = units / 5
     return next((v for v in (1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000) if v >= raw), 1000)
+
+def _rot(p, c, sn, a):
+    return (p[0] * c - p[1] * sn, p[0] * sn + p[1] * c)
+
+
+def main_wall_angle(pts):
+    """The direction of the longest wall of an outline, in degrees within (-90, 90]."""
+    best, ang = -1.0, 0.0
+    for a, b in zip(pts, pts[1:] + pts[:1]):
+        ln = math.dist(a, b)
+        if ln > best:
+            best, ang = ln, math.degrees(math.atan2(b[1] - a[1], b[0] - a[0]))
+    while ang <= -90:
+        ang += 180
+    while ang > 90:
+        ang -= 180
+    return ang
+
+
+def zavarti(d):
+    """"zavartane": turns the whole scheme by an angle (counter-clockwise, degrees) – "avto" lays the longest wall
+    of the main building horizontally. Returns a new dict with every coordinate turned, the terrain cut round the
+    object (the streets run off the drawing) and "_sever_ugal" – where north points on the drawing. Water sources
+    given by "lat"/"lon" are turned into x, y first. The cadastre offset ("kais") is dropped – the .dxf is then in
+    the coordinates of the drawing, as it is printed."""
+    z = d.get("zavartane")
+    if z in (None, "", 0, "0", False):
+        return d
+    import copy
+    d = copy.deepcopy(d)
+    if str(z).strip().lower() in ("avto", "auto"):
+        main = next((b for b in items(d, "sgradi") if not b.get("sasedna")), None)
+        if not main or not main.get("kontur"):
+            d.pop("zavartane", None)
+            return d                                    # a rectangle is already parallel to the axes
+        ang = -main_wall_angle([pt(p, "sgradi.kontur") for p in main["kontur"]])
+    else:
+        ang = num(z, "zavartane")
+    if abs(ang) < 0.5:
+        d.pop("zavartane", None)
+        return d
+    kais, geo = d.get("kais"), d.get("geo")
+    for i, w in enumerate(items(d, "vodoiztochnitsi")):      # lat/lon → x, y before turning
+        if w.get("x") is None and w.get("lat") is not None:
+            if kais:
+                w["x"], w["y"] = from_kais(num(w["lat"], "lat"), num(w["lon"], "lon"), num(kais.get("x0"), "kais.x0"),
+                                           num(kais.get("y0"), "kais.y0"))
+            elif geo:
+                w["x"], w["y"] = from_geo(num(w["lat"], "lat"), num(w["lon"], "lon"), num(geo.get("lat"), "geo.lat"),
+                                          num(geo.get("lon"), "geo.lon"))
+            w.pop("lat", None)
+            w.pop("lon", None)
+    c, sn = math.cos(math.radians(ang)), math.sin(math.radians(ang))
+    R = lambda p: list(_rot((float(p[0]), float(p[1])), c, sn, ang))      # noqa: E731
+    RL = lambda pts: [R(p) for p in pts]                                    # noqa: E731
+
+    for b in items(d, "sgradi"):                         # rectangles become outlines
+        if b.get("kontur"):
+            b["kontur"] = RL(b["kontur"])
+        else:
+            x, y, w, h = (num(b.get(k), f"sgradi.{k}") for k in ("x", "y", "w", "h"))
+            b["kontur"] = RL([(x, y), (x + w, y), (x + w, y + h), (x, y + h)])
+        for k in ("x", "y", "w", "h"):
+            b.pop(k, None)
+    for key in ("obekti", "pozhar", "zadimyavane", "bez_parkirane"):   # small boxes: the centre turns, the box stays
+        for o in items(d, key):
+            w, h = num(o.get("w", 5), f"{key}.w"), num(o.get("h", 3), f"{key}.h")
+            cx, cy = R((num(o.get("x"), f"{key}.x") + w / 2, num(o.get("y"), f"{key}.y") + h / 2))
+            o["x"], o["y"] = cx - w / 2, cy - h / 2
+    for key in ("avtomobili", "vodoiztochnitsi", "vhodove", "razklonitel", "gaz_armatura", "shtab", "pbt", "tekst"):
+        for o in items(d, key):
+            o["x"], o["y"] = R((num(o.get("x"), f"{key}.x"), num(o.get("y"), f"{key}.y")))
+            if key in ("avtomobili", "razklonitel", "gaz_armatura") and o.get("ugal") is not None:
+                o["ugal"] = num(o["ugal"], f"{key}.ugal") + ang
+            if key == "avtomobili" and o.get("ugal") is None:
+                o["ugal"] = 90 + ang
+            if key == "tekst" and o.get("ugal") not in (None, 0):
+                o["ugal"] = num(o["ugal"], "tekst.ugal") + ang
+    d["ognishte"] = [dict(o, **dict(zip(("x", "y"), R((num(o["x"], "x"), num(o["y"], "y")))))) if isinstance(o, dict)
+                     else R(o) for o in (d.get("ognishte") or [])]
+    for key in ("linii", "vodoprovod", "gazoprovod"):
+        for ln in items(d, key):
+            ln["tochki"] = RL(ln.get("tochki") or [])
+    for key in ("posoka", "napravlenie", "stalbi", "razstoyaniya"):
+        for o in items(d, key):
+            o["ot"], o["do"] = R(o["ot"]), R(o["do"])
+    for u in items(d, "ulitsi"):
+        if u.get("kontur"):
+            u["kontur"] = RL(u["kontur"])
+            u["otvori"] = [RL(h) for h in (u.get("otvori") or [])]
+            if u.get("ime_pos"):
+                u["ime_pos"] = R(u["ime_pos"])
+            u["ime_ugal"] = num(u.get("ime_ugal", 0), "ime_ugal") + ang
+        else:
+            u["tochki"] = RL(u.get("tochki") or [])
+    if isinstance(d.get("imot"), dict) and d["imot"].get("kontur"):
+        d["imot"]["kontur"] = RL(d["imot"]["kontur"])
+    if d.get("ograda"):
+        d["ograda"] = RL(d["ograda"])
+    if isinstance(d.get("vyatar"), dict) and d["vyatar"].get("ugal") is not None:
+        d["vyatar"]["ugal"] = num(d["vyatar"]["ugal"], "vyatar.ugal") + ang
+
+    # the new terrain: round the object itself – the buildings, the parcel, the water, the forces
+    core = []
+    for b in items(d, "sgradi"):
+        core += b["kontur"]
+    if isinstance(d.get("imot"), dict) and d["imot"].get("kontur"):
+        core += d["imot"]["kontur"]
+    for key in ("vodoiztochnitsi", "avtomobili", "obekti", "pozhar", "vhodove", "razklonitel"):
+        core += [(o["x"], o["y"]) for o in items(d, key)]
+    for key in ("razstoyaniya", "posoka", "napravlenie", "stalbi"):
+        for o in items(d, key):
+            core += [o["ot"], o["do"]]
+    for ln in items(d, "linii"):
+        core += ln["tochki"]
+    if d.get("ograda"):
+        core += d["ograda"]
+    xs, ys = [p[0] for p in core], [p[1] for p in core]
+    pad = max(12.0, 0.12 * max(max(xs) - min(xs), max(ys) - min(ys)))
+    ox, oy = min(xs) - pad, min(ys) - pad
+    tw, th = max(xs) - min(xs) + 2 * pad, max(ys) - min(ys) + 2 * pad
+    S = lambda p: [round(p[0] - ox, 2), round(p[1] - oy, 2)]                # noqa: E731
+
+    def shift_all():
+        for b in items(d, "sgradi"):
+            b["kontur"] = [S(p) for p in b["kontur"]]
+        for key in ("obekti", "pozhar", "zadimyavane", "bez_parkirane", "avtomobili", "vodoiztochnitsi", "vhodove",
+                    "razklonitel", "gaz_armatura", "shtab", "pbt", "tekst"):
+            for o in items(d, key):
+                o["x"], o["y"] = S((o["x"], o["y"]))
+        d["ognishte"] = [dict(o, **dict(zip(("x", "y"), S((o["x"], o["y"]))))) if isinstance(o, dict) else S(o)
+                         for o in d["ognishte"]]
+        for key in ("linii", "vodoprovod", "gazoprovod"):
+            for ln in items(d, key):
+                ln["tochki"] = [S(p) for p in ln["tochki"]]
+        for key in ("posoka", "napravlenie", "stalbi", "razstoyaniya"):
+            for o in items(d, key):
+                o["ot"], o["do"] = S(o["ot"]), S(o["do"])
+        for u in items(d, "ulitsi"):
+            if u.get("kontur"):
+                u["kontur"] = [S(p) for p in u["kontur"]]
+                u["otvori"] = [[S(p) for p in h] for h in u["otvori"]]
+                if u.get("ime_pos"):
+                    u["ime_pos"] = S(u["ime_pos"])
+            else:
+                u["tochki"] = [S(p) for p in u["tochki"]]
+        if isinstance(d.get("imot"), dict) and d["imot"].get("kontur"):
+            d["imot"]["kontur"] = [S(p) for p in d["imot"]["kontur"]]
+        if d.get("ograda"):
+            d["ograda"] = [S(p) for p in d["ograda"]]
+    shift_all()
+    inside = lambda p, m=0.0: m <= p[0] <= tw - m and m <= p[1] <= th - m     # noqa: E731
+    d["tekst"] = [t for t in items(d, "tekst") if inside((t["x"], t["y"]), 3)]    # a label cut by the edge – out
+    for u in items(d, "ulitsi"):                    # a street name that fell off the drawing – inside the street again
+        if u.get("kontur") and u.get("ime") and not (u.get("ime_pos") and inside(u["ime_pos"], 6)):
+            u["ime_pos"] = street_label_point(u["kontur"], tw, th)
+    d["teren"] = [round(tw, 1), round(th, 1)]
+    d.pop("kais", None)
+    d.pop("geo", None)
+    if d.pop("fon", None):
+        d.setdefault("_preduprezhdeniya", []).append("фонът от кадастъра не се завърта – чертая без него")
+    d["_sever_ugal"] = 90 + ang
+    d["_zavartane"] = round(ang, 1)
+    d.pop("zavartane", None)
+    return d
+
+
+def street_label_point(kontur, tw, th, step=2.0):
+    """The point inside a street area (and inside the drawing) farthest from its edges – for the name."""
+    from matplotlib.path import Path
+    path = Path(kontur)
+    edges = list(zip(kontur, kontur[1:] + kontur[:1]))
+    best, best_d = None, 0.0
+    y = 6.0
+    while y <= th - 6:
+        x = 6.0
+        while x <= tw - 6:
+            if path.contains_point((x, y)):
+                dd = min(dist_to_segment((x, y), a, b) for a, b in edges)
+                if dd > best_d:
+                    best, best_d = [round(x, 1), round(y, 1)], dd
+            x += step
+        y += step
+    return best
+
+
+def wall_dimensions(b, off):
+    """The overall dimensions of a building: [(a, b, text, offset vector), …] – along its walls when the
+    outline lies at an angle, otherwise along the axes."""
+    k = b.get("kontur")
+    if k:
+        ang = main_wall_angle(k)
+        if abs(ang) >= 5 and abs(abs(ang) - 90) >= 5:     # really at an angle – not a wall a little off the axis
+            t = math.radians(ang)
+            c, sn = math.cos(t), math.sin(t)
+            uv = [(p[0] * c + p[1] * sn, -p[0] * sn + p[1] * c) for p in k]
+            u0, u1 = min(p[0] for p in uv), max(p[0] for p in uv)
+            v0, v1 = min(p[1] for p in uv), max(p[1] for p in uv)
+            W = lambda u, v: (u * c - v * sn, u * sn + v * c)                # noqa: E731
+            nx, ny = sn, -c                                                  # outwards from the v0 side
+            return [(W(u0, v0), W(u1, v0), f"{round(u1 - u0, 2):g}", (nx * off, ny * off)),
+                    (W(u1, v0), W(u1, v1), f"{round(v1 - v0, 2):g}", (c * off, sn * off))]
+    return [((b["x"], b["y"]), (b["x"] + b["w"], b["y"]), f"{round(b['w'], 2):g}", (0, -off)),
+            ((b["x"] + b["w"], b["y"]), (b["x"] + b["w"], b["y"] + b["h"]), f"{round(b['h'], 2):g}", (off, 0))]
+
 
 def load(d):
     warnings = []
@@ -674,10 +885,8 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
             ax.text(lx, ly, b["etiket"].replace("\\n", "\n"), ha="center", va="center", fontsize=fs + 0.5, zorder=4,
                     linespacing=1.2, bbox=dict(fc="white", ec="none", pad=1.0, alpha=0.9))
         if b["razmeri"]:
-            off = 0.75 * s
-            draw_dimension(ax, (b["x"], b["y"]), (b["x"] + b["w"], b["y"]), f"{b['w']:g}", (0, -off), fs - 0.5)
-            draw_dimension(ax, (b["x"] + b["w"], b["y"]), (b["x"] + b["w"], b["y"] + b["h"]), f"{b['h']:g}",
-                           (off, 0), fs - 0.5)
+            for a_, b_, txt, off_ in wall_dimensions(b, 0.75 * s):
+                draw_dimension(ax, a_, b_, txt, off_, fs - 0.5)
     for r in data["razstoyaniya"]:
         draw_dimension(ax, r["ot"], r["do"], r["etiket"], (0, 0), fs - 0.5)
     for g in data["gaz_armatura"]:
@@ -733,7 +942,7 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
     # the north–south sign of the library – in the upper left corner (чл. 9, ал. 5 от Указанията Iз-2749);
     # the wind – in the legend, when there is one
     if d.get("sever", True):
-        draw_kompas(ax, x0 + 0.9 * s, y1 - 2.3 * s, s, fs)
+        draw_kompas(ax, x0 + 0.9 * s, y1 - 2.3 * s, s, fs, ugal=d.get("_sever_ugal", 90))
     return hoses
 
 
@@ -893,8 +1102,9 @@ def draw_sheet(fig, lst, scale, fs):
             fax.text(bx + a + 1, y + h / 2, cap + (" " + val if val else ""), ha="left", va="center", fontsize=small, zorder=3)
         else:
             fax.text(bx + a + 1, y + h - 1.6, cap, ha="left", va="center", fontsize=small, zorder=3)
-            if val:
-                fax.text(bx + (a + b) / 2, y + 2.6, val, ha="center", va="center", fontsize=small + 0.8, zorder=3)
+            if val:                                    # a long value (the file name) – smaller, to fit its cell
+                size = min(small + 0.8, (b - a - 2) / (len(val) * 0.55 * 0.3528))
+                fax.text(bx + (a + b) / 2, y + 2.6, val, ha="center", va="center", fontsize=size, zorder=3)
     y, h = rows[2]
     fax.plot([bx + 63, bx + 63], [y, y + h], color=INK, lw=0.5, zorder=2)
     obekt = str(lst.get("obekt") or "")
@@ -909,7 +1119,10 @@ def draw_sheet(fig, lst, scale, fs):
 
 
 def render(d, out_png, out_svg=None, width_cm=None, height_cm=None, out_dxf=None):
+    d = zavarti(d)
     data, warnings = load(d)
+    warnings = list(d.get("_preduprezhdeniya") or []) + warnings
+    sever = d.get("_sever_ugal", 90)
     pal = Pal(bool(d.get("cvetna", True)))
     x0, y0, x1, y1 = data["box"]
     wu, hu = x1 - x0, y1 - y0
@@ -945,7 +1158,7 @@ def render(d, out_png, out_svg=None, width_cm=None, height_cm=None, out_dxf=None
         kax.axis("off")
         kax.set_zorder(6)
         kax.add_patch(Rectangle((1.2, SHEET_H - 23), 15.5, 21.8, fc="white", ec="none"))   # streets end under it
-        draw_kompas(kax, 9, SHEET_H - 13, 6, fs)
+        draw_kompas(kax, 9, SHEET_H - 13, 6, fs, ugal=sever)
         extra_out["mashtab"] = f"1:{scale}"
         sheet = {"scale": scale, "x_mm": ax_mm, "y_mm": ay_mm, "list": lst}
         warnings += situation_gaps(data)
@@ -1037,7 +1250,7 @@ def situation_gaps(data):
             gaps.append(f"сграда „{name}“: липсва {', '.join(missing)} (чл. 7, ал. 3, т. 1, б. „б“)")
     if len(own) > 1 and not data["razstoyaniya"]:
         gaps.append("няма разстояния между сградите – \"razstoyaniya\" (б. „а“)")
-    if not data["vhodove"]:
+    if not data["vhodove"] and not any("вход" in t["tekst"].lower() for t in data["tekst"]):
         gaps.append("няма входове – \"vhodove\" (б. „а“)")
     if not data["ulitsi"]:
         gaps.append("няма улици – \"ulitsi\" (б. „а“ и „е“)")

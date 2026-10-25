@@ -287,6 +287,30 @@ def test_dxf():
     check(not os.path.exists(os.path.splitext(out)[0] + ".dxf"), "--bez-dxf – none")
 
 
+def test_rotation_and_wall_dims():
+    print("shema.py – \"zavartane\" and dimensions along the walls (an invented building at 40°)")
+    import math
+    c, sn = math.cos(math.radians(40)), math.sin(math.radians(40))
+    rect = [(0, 0), (60, 0), (60, 25), (0, 25)]
+    k = [[round(50 + x * c - y * sn, 2), round(20 + x * sn + y * c, 2)] for x, y in rect]
+    base = {"sgradi": [{"kontur": k, "etiket": "Склад"}],
+            "vodoiztochnitsi": [{"vid": "hidrant", "x": 120, "y": 30}],
+            "tekst": [{"x": 300, "y": 300, "tekst": "далеч"}]}
+    dims = shema.wall_dimensions(shema.load(base)[0]["sgradi"][0], 1.0)
+    check(sorted(t for _, _, t, _ in dims) == ["25", "60"], f"the walls, not the axes: {[t for _, _, t, _ in dims]}")
+    d = shema.zavarti({**base, "zavartane": "avto"})
+    check(abs(d["_zavartane"] + 40) < 0.2 and abs(d["_sever_ugal"] - 50) < 0.2,
+          f"avto lays the long wall horizontally (turn {d['_zavartane']}°, north at {d['_sever_ugal']}°)")
+    ys = sorted(round(p[1], 1) for p in d["sgradi"][0]["kontur"])
+    check(ys[0] == ys[1] and ys[2] == ys[3], "the building is parallel to the axes after the turn")
+    check(all(0 <= p[0] <= d["teren"][0] and 0 <= p[1] <= d["teren"][1] for p in d["sgradi"][0]["kontur"]),
+          "the terrain is cut round the object")
+    check(d["tekst"] == [], "a label left outside the cut terrain is dropped")
+    check("zavartane" not in shema.zavarti(base), "without \"zavartane\" nothing changes")
+    r, out = run({**base, "zavartane": 30})
+    check(r.returncode == 0, "renders a turned scheme" + (": " + r.stderr[:200] if r.returncode else ""))
+
+
 if __name__ == "__main__":
     test_fixture()
     test_defaults()
@@ -302,5 +326,6 @@ if __name__ == "__main__":
     test_situacionna_sheet()
     test_situacionna_docx()
     test_library()
+    test_rotation_and_wall_dims()
     print("FAILURES: " + "; ".join(failures) if failures else "ALL OK")
     sys.exit(1 if failures else 0)

@@ -210,17 +210,16 @@ def write(data, d, out, s, sheet=None):
         cx, cy = centroid(pts) if b["kontur"] else (b["x"] + b["w"] / 2, b["y"] + b["h"] / 2)
         text(cx, cy, b["etiket"], layer="SGRADI")
         if b["razmeri"]:
+            from shema import wall_dimensions   # noqa: E402
             off = max(1.2 * s, 2 * th)
-            dim = msp.add_linear_dim(base=P((b["x"], b["y"] - off)), p1=P((b["x"], b["y"])), p2=P((b["x"] + b["w"], b["y"])),
-                                     dimstyle="EZDXF", override={"dimtxt": th, "dimasz": th * 0.8, "dimexo": th * 0.3, "dimlfac": 1,
-                                                                 "dimdec": 2},
-                                     dxfattribs={"layer": "RAZMERI"})
-            dim.render()
-            dim = msp.add_linear_dim(base=P((b["x"] + b["w"] + off, b["y"])), p1=P((b["x"] + b["w"], b["y"])),
-                                     p2=P((b["x"] + b["w"], b["y"] + b["h"])), angle=90, dimstyle="EZDXF",
-                                     override={"dimtxt": th, "dimasz": th * 0.8, "dimexo": th * 0.3, "dimlfac": 1, "dimdec": 2},
-                                     dxfattribs={"layer": "RAZMERI"})
-            dim.render()
+            for a_, b_, _txt, (ox_, oy_) in wall_dimensions(b, off):
+                dim = msp.add_aligned_dim(p1=P(a_), p2=P(b_), distance=math.hypot(ox_, oy_) * (
+                                              1 if (b_[0] - a_[0]) * oy_ - (b_[1] - a_[1]) * ox_ > 0 else -1),
+                                          dimstyle="EZDXF",
+                                          override={"dimtxt": th, "dimasz": th * 0.8, "dimexo": th * 0.3, "dimlfac": 1,
+                                                    "dimdec": 2},
+                                          dxfattribs={"layer": "RAZMERI"})
+                dim.render()
     for o in data["obekti"]:
         poly([(o["x"], o["y"]), (o["x"] + o["w"], o["y"]), (o["x"] + o["w"], o["y"] + o["h"]), (o["x"], o["y"] + o["h"])],
              "SGRADI", closed=True)
@@ -327,14 +326,16 @@ def write(data, d, out, s, sheet=None):
     else:
         kx, ky = x0 + 1.5 * s, y1 - 2.5 * s
         n = s / 6
-    # the north arrow – upper left
+    # the north arrow – upper left; turned with the drawing ("zavartane")
     L = 6 * n if sheet else 2 * s
-    msp.add_lwpolyline([P((kx, ky + L / 2)), P((kx + L / 6, ky)), P((kx, ky - L / 2)), P((kx - L / 6, ky))],
+    t_n = math.radians(float(d.get("_sever_ugal", 90)) - 90)
+    K = lambda dx, dy: P((kx + dx * math.cos(t_n) - dy * math.sin(t_n), ky + dx * math.sin(t_n) + dy * math.cos(t_n)))  # noqa: E731
+    msp.add_lwpolyline([K(0, L / 2), K(L / 6, 0), K(0, -L / 2), K(-L / 6, 0)],
                        close=True, dxfattribs={"layer": "SEVER"})
     hatch = msp.add_hatch(color=7, dxfattribs={"layer": "SEVER"})
-    hatch.paths.add_polyline_path([P((kx, ky + L / 2)), P((kx + L / 6, ky)), P((kx - L / 6, ky))], is_closed=True)
-    for t_, yy in (("С", ky + L / 2 + L * 0.25), ("Ю", ky - L / 2 - L * 0.25)):
+    hatch.paths.add_polyline_path([K(0, L / 2), K(L / 6, 0), K(-L / 6, 0)], is_closed=True)
+    for t_, dy in (("С", L / 2 + L * 0.25), ("Ю", -L / 2 - L * 0.25)):
         ent = msp.add_text(t_, height=L * 0.22, dxfattribs={"layer": "SEVER", "style": "BG"})
-        ent.set_placement(P((kx, yy)), align=ezdxf.enums.TextEntityAlignment.MIDDLE_CENTER)
+        ent.set_placement(K(0, dy), align=ezdxf.enums.TextEntityAlignment.MIDDLE_CENTER)
     doc.saveas(out)
     return out
