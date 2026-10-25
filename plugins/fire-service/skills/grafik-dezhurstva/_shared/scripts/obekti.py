@@ -2,11 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 obekti.py — регистърът на обектите: всеки обект има своя папка в Google Drive (fire-service/Обекти)
-с всичко за него – ситуационна схема, оперативна картичка, схеми за ПТЗ и планове, снимки – и
+с всичко за него – ситуационна схема (старото име: оперативна картичка), схеми за ПТЗ и планове, снимки – и
 history.md с промените. Индексът obekti.csv в корена намира обекта. Пази се само последната версия
 на всеки документ – със същото име, без дати и без дубликати. Всеки с личен ключ чете и пише (n8n).
 
-ПРЕДИ ДА ИЗГОТВИШ документ за обект (ситуационна схема, оперативна картичка, схема, план) – провери:
+ПРЕДИ ДА ИЗГОТВИШ документ за обект (ситуационна схема / оперативна картичка, схема, план) – провери:
     python3 _shared/scripts/obekti.py tarsi --ime "Магазин Х" --adres "ул. Примерна 1" --masto Плевен
     python3 _shared/scripts/obekti.py tarsi --lat 43.4196 --lon 24.6078
     python3 _shared/scripts/obekti.py tarsi "Ново име"              # и по стари имена
@@ -27,7 +27,8 @@ history.md с промените. Индексът obekti.csv в корена н
     python3 _shared/scripts/obekti.py istoriya OB-0001
 
 Видове документи (--vid) – едно текущо копие на вид, файловете се казват <вид>.<разширение>:
-    situacionna_shema, operativna_kartichka, plan_za_pozharogasene, shema_<тема> (схема на силите по сценарий),
+    situacionna_shema (= оперативна картичка – старото име; --vid operativna_kartichka се записва като нея),
+    plan_za_pozharogasene, shema_<тема> (схема на силите по сценарий),
     ptz_<тема> (план-конспект за ПТЗ: .docx, схемата му …_shema.png/.dxf и входът .json).
     Към всеки документ се пази и входният му .json – от него документът се изгражда наново, когато нещо
     се промени, вместо да се чертае от нулата.
@@ -63,9 +64,9 @@ PHOTOS = "snimki"
 FIELDS = ["id", "ime", "predishni_imena", "naseleno_masto", "adres", "lat", "lon", "kadastar", "eik", "sluzhba",
           "papka_id", "papka", "sazdaden", "promenen", "promenil", "belezhka"]
 EDITABLE = ["naseleno_masto", "adres", "lat", "lon", "kadastar", "eik", "sluzhba", "belezhka"]
+SINONIMI = {"operativna_kartichka": "situacionna_shema"}   # „оперативна картичка“ is the old name of the situational scheme
 VIDOVE = {
     "situacionna_shema": "Ситуационна схема",
-    "operativna_kartichka": "Оперативна картичка",
     "plan_za_pozharogasene": "План за пожарогасене",
 }
 SUFFIXES = ("_grafichna", "_legenda", "_shema")   # parts of one document: the picture of a docx, its scheme
@@ -433,8 +434,9 @@ def target_name(vid, path):
 def cmd_zapishi(store, reg, a):
     row = reg.find(a.id)
     vid = a.vid.strip().lower()
+    vid = SINONIMI.get(vid, vid)
     if not valid_vid(vid):
-        raise Problem("BAD_VID: --vid е situacionna_shema, operativna_kartichka, plan_za_pozharogasene, "
+        raise Problem("BAD_VID: --vid е situacionna_shema (оперативна картичка), plan_za_pozharogasene, "
                       "shema_<тема> или ptz_<тема>")
     existing = {f["name"]: f for f in store.list(row["papka_id"]) if not f["folder"]}
     done, same = [], []
@@ -581,14 +583,25 @@ def main():
             out = describe(store, row)
             if a.svali:
                 os.makedirs(a.out, exist_ok=True)
+                a.svali = SINONIMI.get(a.svali, a.svali)
                 files = (out["dokumenti"].get(a.svali) or {}).get("failove", [])
                 if not files:
                     raise Problem(f"NOT_FOUND: {row['id']} няма {a.svali}")
-                got = []
+                got, stem = [], None
+                src = store.get(row["papka_id"], a.svali + ".json")
+                if src:     # the name the title block shows ("Име на файла") – the files go back under it
+                    try:
+                        fail = str((json.loads(src).get("list") or {}).get("fail") or "")
+                        stem = re.sub(r"\.dxf$", "", fail, flags=re.I) or None
+                    except ValueError:
+                        stem = None
                 for f in files:
                     data = store.get(row["papka_id"], f["name"])
                     os.makedirs(os.path.join(a.out, row["id"]), exist_ok=True)
-                    dest = os.path.join(a.out, row["id"], f["name"])     # the names the title block refers to
+                    name = f["name"]
+                    if stem and not name.endswith(".json"):
+                        name = stem + name[len(a.svali):]
+                    dest = os.path.join(a.out, row["id"], name)
                     with open(dest, "wb") as fh:
                         fh.write(data)
                     got.append(dest)

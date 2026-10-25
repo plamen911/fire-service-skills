@@ -76,6 +76,8 @@ ok([s["name"] for s in r["kachi"]][:3] == ["situacionna_shema.docx", "situacionn
 r = out("zapishi", "OB-0004", "--vid", "situacionna_shema", docs[0])
 ok(r["zapisani"] == [] and r["bez_promyana"] == ["situacionna_shema.docx"] and "kachi" not in r, "unchanged skipped")
 ok(run("zapishi", "OB-0004", "--vid", "nyakakva", docs[0]).returncode == 1, "unknown kind refused")
+r = out("zapishi", "OB-0004", "--vid", "operativna_kartichka", docs[0])
+ok(r["bez_promyana"] == ["situacionna_shema.docx"], "оперативна картичка = ситуационна схема")
 r = out("pokazhi", "OB-0004")
 ok(list(r["dokumenti"]) == ["situacionna_shema"] and len(r["dokumenti"]["situacionna_shema"]["failove"]) == 3, "one document")
 
