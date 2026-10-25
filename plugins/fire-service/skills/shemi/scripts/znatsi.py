@@ -273,7 +273,7 @@ def draw_dimension(ax, a, b, text, off, fs):
         rot -= 180
     if abs(rot + 90) < 1e-6:
         rot = 90
-    ax.text(mx, my, text, ha="center", va="center", fontsize=fs, rotation=rot, zorder=4,
+    ax.text(mx, my, text, ha="center", va="center", fontsize=fs, rotation=rot, zorder=6.5,   # the value is never crossed by a line
             bbox=dict(fc="white", ec="none", pad=0.6))
 
 def draw_fire(ax, f, pal):
