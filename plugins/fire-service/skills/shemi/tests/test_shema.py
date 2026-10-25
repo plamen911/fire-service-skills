@@ -307,6 +307,10 @@ def test_rotation_and_wall_dims():
           "the terrain is cut round the object")
     check(d["tekst"] == [], "a label left outside the cut terrain is dropped")
     check("zavartane" not in shema.zavarti(base), "without \"zavartane\" nothing changes")
+    loaded = shema.load({**base, "prohodi": [{"x": 10, "y": 5, "shirina": 6}]})[0]
+    check(loaded["prohodi"] == [{"x": 10.0, "y": 5.0, "shirina": 6.0}], "an entrance from the street is read")
+    d2 = shema.zavarti({**base, "zavartane": "avto", "prohodi": [{"x": 50, "y": 20}]})
+    check(0 <= d2["prohodi"][0]["x"] <= d2["teren"][0], "the entrance turns and shifts with the drawing")
     r, out = run({**base, "zavartane": 30})
     check(r.returncode == 0, "renders a turned scheme" + (": " + r.stderr[:200] if r.returncode else ""))
 

@@ -67,6 +67,8 @@ shema.py — чертае СХЕМА за разполагане на силит
   "ulitsi": [{"tochki": [[0, -6], [120, -6]], "shirina": 8, "ime": "ул. „Примерна“"},   // знакът „Шосе“, кафяв;
              {"kontur": [[x, y], …], "otvori": [], "ime": "бул. „Примерен“", "ime_pos": [60, 20], "ime_ugal": 0}],
                                                 //   или улица като площ – поземленият имот от КАИС (kais.py)
+  "prohodi": [{"x": 60, "y": -2, "shirina": 8}],              // вход към обекта от улицата: линията на улицата
+                                                //   (ръбът ѝ) се прекъсва в кръг с този диаметър, m
   "razstoyaniya": [{"ot": [46, 66], "do": [60, 66]}],          // разстояние между сгради – стойността се смята
   "vodoprovod": [{"tochki": [[0, -2], [120, -2]], "vid": "skluchena", "diametar": 150, "natisk": 0.5}],
                                                 // или като текст: "diametar": "70/80", "natisk": "3–5" (bar)
@@ -146,7 +148,7 @@ import re
 import sys
 import textwrap
 
-from matplotlib.patches import Polygon, Rectangle
+from matplotlib.patches import Circle, Polygon, Rectangle
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from znatsi import (FENCES, INK, LEGEND_ORDER, LINE_KINDS, NETWORKS, NOZZLES, PLACES, SPLITTERS, TRUCKS,  # noqa: E402,F401
@@ -300,7 +302,8 @@ def zavarti(d):
             w, h = num(o.get("w", 5), f"{key}.w"), num(o.get("h", 3), f"{key}.h")
             cx, cy = R((num(o.get("x"), f"{key}.x") + w / 2, num(o.get("y"), f"{key}.y") + h / 2))
             o["x"], o["y"] = cx - w / 2, cy - h / 2
-    for key in ("avtomobili", "vodoiztochnitsi", "vhodove", "razklonitel", "gaz_armatura", "shtab", "pbt", "tekst"):
+    for key in ("avtomobili", "vodoiztochnitsi", "vhodove", "razklonitel", "gaz_armatura", "shtab", "pbt", "tekst",
+                "prohodi"):
         for o in items(d, key):
             o["x"], o["y"] = R((num(o.get("x"), f"{key}.x"), num(o.get("y"), f"{key}.y")))
             if key in ("avtomobili", "razklonitel", "gaz_armatura") and o.get("ugal") is not None:
@@ -360,7 +363,7 @@ def zavarti(d):
         for b in items(d, "sgradi"):
             b["kontur"] = [S(p) for p in b["kontur"]]
         for key in ("obekti", "pozhar", "zadimyavane", "bez_parkirane", "avtomobili", "vodoiztochnitsi", "vhodove",
-                    "razklonitel", "gaz_armatura", "shtab", "pbt", "tekst"):
+                    "razklonitel", "gaz_armatura", "shtab", "pbt", "tekst", "prohodi"):
             for o in items(d, key):
                 o["x"], o["y"] = S((o["x"], o["y"]))
         d["ognishte"] = [dict(o, **dict(zip(("x", "y"), S((o["x"], o["y"]))))) if isinstance(o, dict) else S(o)
@@ -446,7 +449,7 @@ def load(d):
     out = {k: [] for k in ("sgradi", "obekti", "pozhar", "zadimyavane", "ognishte", "posoka", "napravlenie",
                            "avtomobili", "vodoiztochnitsi", "linii", "razklonitel", "stalbi", "shtab", "pbt",
                            "tekst", "vhodove", "ulitsi", "razstoyaniya", "vodoprovod", "gazoprovod",
-                           "gaz_armatura", "bez_parkirane")}
+                           "gaz_armatura", "bez_parkirane", "prohodi")}
     out["ograda"] = None
     out["vyatar"] = None
     out["ograda_vid"] = d.get("ograda_vid") or None
@@ -589,6 +592,9 @@ def load(d):
                                     "etiket": str(g.get("etiket") or ""), "ugal": num(g.get("ugal", 0), f"gaz_armatura[{i}].ugal")})
     for i, z in enumerate(items(d, "bez_parkirane")):
         out["bez_parkirane"].append(rect(z, f"bez_parkirane[{i}]"))
+    for i, g in enumerate(items(d, "prohodi")):          # an entrance from the street: a gap in its edge line
+        out["prohodi"].append({"x": num(g.get("x"), f"prohodi[{i}].x"), "y": num(g.get("y"), f"prohodi[{i}].y"),
+                               "shirina": num(g.get("shirina", 8), f"prohodi[{i}].shirina")})
     if d.get("ograda"):
         out["ograda"] = [pt(p, "ograda") for p in d["ograda"]]
         if len(out["ograda"]) < 3:
@@ -866,6 +872,8 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
     if data.get("imot"):                               # the parcel's boundary – from the library
         draw_parcel(ax, data["imot"]["kontur"], data["imot"]["etiket"], s, fs, building_outlines(data))
     draw_streets(ax, data["ulitsi"], fs, pal)          # the situation first – under everything else
+    for g in data["prohodi"]:                          # the entrances from the street: the edge line is cut there
+        ax.add_patch(Circle((g["x"], g["y"]), g["shirina"] / 2, fc="white", ec="none", zorder=1.27))
     for z in data["bez_parkirane"]:
         draw_no_parking(ax, z, pal)
     for v in data["vodoprovod"]:

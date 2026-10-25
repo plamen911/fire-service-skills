@@ -163,6 +163,10 @@ def write(data, d, out, s, sheet=None):
                                (SHEET_W - NO_BOX[0], SHEET_H - NO_BOX[1], SHEET_W, SHEET_H), (0, SHEET_H - 24, 17, SHEET_H)):
             holes.append((sx_ + a_ * n_, sy_ + b_ * n_, sx_ + c_ * n_, sy_ + d_ * n_))
 
+    for g in data.get("prohodi") or []:               # the entrances from the street – gaps in its edge
+        r_ = g["shirina"] / 2
+        holes.append((g["x"] - r_, g["y"] - r_, g["x"] + r_, g["y"] + r_))
+
     def street_line(a, b):
         c = _clip(a, b, box)
         if c:
