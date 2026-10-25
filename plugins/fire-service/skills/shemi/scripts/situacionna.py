@@ -341,9 +341,26 @@ def build(d, out):
     typo_all(doc)
     doc.save(out)
     report(out, letterhead=False)
+    pad_to_page(png)                                   # the .png on its own: the whole A4 page, with its margins
     return {"output": out, "grafichna": png, "dxf": extra.get("dxf"), "mashtab": extra.get("mashtab"), "redove": n,
             "izgotvil": lst.get("izgotvil") or None, "marshrut": marshrut,
             "preduprezhdeniya": warnings + gaps + table_gaps(tab)}
+
+
+def pad_to_page(png, dpi=300):
+    """The framed sheet as a whole A4 page: white margins round the frame (left 2 cm for binding, 1 cm on the
+    other sides – the margins of the .docx), so the picture printed or viewed on its own has room round the
+    frame. Called after the picture went into the .docx, where the page margins already give that room."""
+    try:
+        from PIL import Image
+    except ImportError:                                # pragma: no cover – Pillow comes with matplotlib
+        return
+    mm = dpi / 25.4
+    im = Image.open(png)
+    l, r, t, b = (round(MARGINS[k] * 10 * mm) for k in ("left", "right", "top", "bottom"))
+    page_ = Image.new("RGB", (im.width + l + r, im.height + t + b), "white")
+    page_.paste(im.convert("RGB"), (l, t))
+    page_.save(png, dpi=(dpi, dpi))
 
 
 def main():
