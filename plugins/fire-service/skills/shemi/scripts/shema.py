@@ -258,6 +258,29 @@ def main_wall_angle(pts):
     return ang
 
 
+def v_teren(d, x, y):
+    """A point measured on the turned drawing ("zavartane") → the same point in the coordinates of the JSON (the
+    terrain, before turning). Use it to place an entrance, a label or a no-parking area where it is seen on the
+    drawing or on a reference sheet: the drawing's x, y in metres go in, the values for the JSON come out. Without
+    "zavartane" the two are the same."""
+    import copy
+    k = next((b for b in items(d, "sgradi") if b.get("kontur")), None)
+    if not d.get("zavartane") or k is None:
+        return [round(float(x), 3), round(float(y), 3)]
+    cx = sum(p[0] for p in k["kontur"]) / len(k["kontur"])
+    cy = sum(p[1] for p in k["kontur"]) / len(k["kontur"])
+    probe = copy.deepcopy(d)
+    probe["tekst"] = [{"x": cx, "y": cy, "tekst": "_a"}, {"x": cx + 20, "y": cy, "tekst": "_b"},
+                      {"x": cx, "y": cy + 20, "tekst": "_c"}]
+    t = {o["tekst"]: (o["x"], o["y"]) for o in zavarti(probe)["tekst"] if o["tekst"] in ("_a", "_b", "_c")}
+    (ax, ay), (bx, by), (qx, qy) = t["_a"], t["_b"], t["_c"]
+    ux, uy, vx, vy = (bx - ax) / 20, (by - ay) / 20, (qx - ax) / 20, (qy - ay) / 20   # drawing = a + s·u + r·v
+    det = ux * vy - uy * vx
+    dx, dy = float(x) - ax, float(y) - ay
+    s, r = (dx * vy - dy * vx) / det, (ux * dy - uy * dx) / det
+    return [round(cx + s, 3), round(cy + r, 3)]
+
+
 def zavarti(d):
     """"zavartane": turns the whole scheme by an angle (counter-clockwise, degrees) – "avto" lays the longest wall
     of the main building horizontally. Returns a new dict with every coordinate turned, the terrain cut round the
