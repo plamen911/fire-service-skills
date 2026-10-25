@@ -22,6 +22,8 @@ validate.py — проверява репозиторито преди push (и 
   • шапката в шаблоните е еднаква (shared/conventions.md, „Шапката“);
   • версията е една и съща в plugin.json, marketplace.json и най-горния запис на CHANGELOG.md;
   • библиотеките за проверката са с точни версии (requirements-dev.txt), същите като в CI;
+  • всяка библиотека от skills/*/requirements.txt е и в requirements-dev.txt (освен редовете с
+    „# по избор“), иначе тестовете на скила падат в CI, макар локално да минават;
   • тестовете в skills/*/tests/ и в tests/ минават;
   • с --live: и нормативната база в Drive – сваля я и я проверява с tools/kb_lint.py (tools/kb_schema.md).
 """
@@ -126,7 +128,26 @@ def check_requirements():
         for ref in re.findall(r"python-version:\s*\"?([^\"\s]+)", text):
             if not re.fullmatch(r"\d+\.\d+", ref):
                 err(f"{os.path.relpath(wf, ROOT)}: python-version {ref} – give major.minor")
+    pinned = {_pkg(l) for l in lines}
+    for req in sorted(glob.glob(os.path.join(SKILLS, "*", "requirements.txt"))):
+        rel = os.path.relpath(req, ROOT)
+        for raw in open(req, encoding="utf-8"):
+            line = raw.strip()
+            if not line or line.startswith("#") or line.startswith("-"):
+                continue
+            if re.search(r"#\s*по избор", line, re.I):
+                continue
+            name = _pkg(line)
+            if name not in pinned:
+                err(f"{rel}: {name} is not in requirements-dev.txt – CI will not install it "
+                    f"(add it with an exact version, or mark the line „# по избор“ if the skill works without it)")
     print(f"✓ {len(lines)} pinned libraries")
+
+
+def _pkg(line):
+    """The normalised package name of a requirements line (PEP 503): „Pillow-HEIF>=0.13 # …“ → „pillow-heif“."""
+    name = re.split(r"[\s<>=!~;\[#]", line.strip(), 1)[0]
+    return re.sub(r"[-_.]+", "-", name).lower()
 
 
 def check_skill(d):
