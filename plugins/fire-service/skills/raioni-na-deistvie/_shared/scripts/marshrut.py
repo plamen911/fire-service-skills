@@ -149,6 +149,33 @@ def by_order(masto, obshtina):
     return None
 
 
+def by_quarter(p, note):
+    """A town shared by several services (the note of Заповед № 8121з-208 names the ж.к. and streets of each):
+    the service whose ж.к. or street the point lies in, by OpenStreetMap's address of the point – (service,
+    "ж.к. „…“") or None (no match, or no network)."""
+    try:
+        url = ("https://nominatim.openstreetmap.org/reverse?format=json&zoom=17&addressdetails=1"
+               f"&lat={p[0]}&lon={p[1]}&accept-language=bg")
+        req = urllib.request.Request(url, headers={"User-Agent": "fire-service/marshrut"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            addr = json.load(r).get("address") or {}
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+    areas = [norm(addr.get(k, "")) for k in ("suburb", "quarter", "neighbourhood", "city_district")]
+    road = norm(addr.get("road", ""))
+    for seg in re.split(r";", note):
+        svc = re.findall(r"((?:РСПБЗН|УПБЗН|РС ПБЗН|У ПБЗН)\s*[–-]\s*[А-ЯA-Z][\w ]*?)(?=[,;.]|$|\s+–|\s*\()", seg)
+        if not svc:
+            continue
+        for name in re.findall(r"ж\.к\.\s*[„\"]([^“\"]+)[“\"]", seg):
+            if any(norm(name) and norm(name) in a for a in areas):
+                return svc[-1].strip(), f"ж.к. „{name}“"
+        for name in re.findall(r"ул\.\s*[„\"]([^“\"]+)[“\"]", seg):
+            if road and norm(name).split()[-1] in road:
+                return svc[-1].strip(), f"ул. „{name}“"
+    return None
+
+
 def route(a, b, fail=None):
     """(km, min, streets) by OSRM; a and b are (lat, lon)."""
     if fail:
@@ -227,7 +254,12 @@ def main():
             st = find_sluzhba(order.get("uchastak") or order["sluzhba"])
             how = f"по Заповед № 8121з-208/16.02.2026 г. ({pl['vid']} {pl['naseleno_masto']})"
             if order.get("belezhka"):
-                notes.append("заповедта: " + order["belezhka"])
+                part = by_quarter(dest, order["belezhka"])   # a town split between services: by its ж.к./streets
+                if part:
+                    st = find_sluzhba(part[0])
+                    how = f"по Заповед № 8121з-208/16.02.2026 г. ({pl['vid']} {pl['naseleno_masto']}, {part[1]})"
+                else:
+                    notes.append("заповедта: " + order["belezhka"])
         else:
             st = min(sluzhbi(), key=lambda r: dist_km(dest, (float(r["lat"]), float(r["lon"]))))
             how = "най-близката по права линия (заповедта не е прочетена – без ключ или мястото е извън района)"

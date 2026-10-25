@@ -346,7 +346,7 @@ def cmd_obekt(a):
             if (dims(s["kontur"])[1] or 0) < SMALL_M:      # an annex: no name and no dimension lines over its neighbour
                 b["etiket"], b["razmeri"], b["kratko"] = "", False, True
             if s.get("etazhi"):
-                b["etazhnost"] = f"{s['etazhi']} ет."
+                b["etazhnost"] = f"+{s['etazhi']}"
             sh["sgradi"].append(b)
         # the neighbouring buildings (чл. 7, ал. 3, т. 1, б. „е“): the buildings of the parcels that border the
         # object, from КАИС as well – thin outlines with their floors; those wholly outside the terrain stay out
@@ -368,7 +368,7 @@ def cmd_obekt(a):
                     seen.add(s["id"])
                     b = {"kontur": local(k, bx0, by0), "etiket": label(s), "kais_id": s["id"], "sasedna": True}
                     if s.get("etazhi"):
-                        b["etazhnost"] = f"{s['etazhi']} ет."
+                        b["etazhnost"] = f"+{s['etazhi']}"
                     sh["sgradi"].append(b)
                     near.append({"id": s["id"], "predn": s.get("predn"), "etazhi": s.get("etazhi"),
                                  "zastroena_m2": s.get("zastroena_m2")})

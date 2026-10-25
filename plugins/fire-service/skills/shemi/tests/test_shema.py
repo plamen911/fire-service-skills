@@ -134,7 +134,7 @@ def test_situacionna_sheet():
     check(res["preduprezhdeniya"] == [], f"a complete situation gives no warnings: {res['preduprezhdeniya']}")
     text = open(svg, encoding="utf-8").read()
     for name in ("Ситуационна схема", "№ на плана", "Собственик:", "Утвърдил / дата:", "М 1:500",
-                 "С-150/5", "Т-100/4", "ПК-1", "1 подз. ет., 2 ет. · Ф1.1 · II ст."):
+                 "С-150/5", "Т-100/4", "ПК-1", "-1 +2 · Ф1.1 · II ст."):
         check(name in text, f"the sheet shows „{name}“")
     for colour in ("#8b5a2b", "#d9a400", "#f28c00"):
         check(colour in text.lower(), f"the colour {colour} of чл. 9, ал. 9")
@@ -195,11 +195,12 @@ def test_outline_building():
 
 
 def test_floors_text():
-    print("shema.py – the floors as „N ет.“")
-    check(shema.floors_text("+3") == "3 ет.", "„+3“ → „3 ет.“")
-    check(shema.floors_text("-1 +2 +Т") == "1 подз. ет., 2 ет., тав. ет.", "basement, floors and attic")
-    check(shema.floors_text("3 ет.") == "3 ет." and shema.floors_text("") == "", "other text stays as it is")
-
+    print("shema.py – the floors as чл. 8 writes them („-1 +2 +Т“)")
+    check(shema.floors_text("+3") == "+3" and shema.floors_text("3") == "+3", "„+3“, „3“ → „+3“")
+    check(shema.floors_text("3 ет.") == "+3", "„3 ет.“ → „+3“")
+    check(shema.floors_text("-1 +2 +Т") == "-1 +2 +Т", "basement, floors and attic stay as чл. 8 writes them")
+    check(shema.floors_text("1 подз. ет., 2 ет., тав. ет.") == "-1 +2 +Т", "the long form → чл. 8")
+    check(shema.floors_text("") == "" and shema.floors_text("партер") == "партер", "other text stays as it is")
 
 def test_label_avoids_fire():
     print("shema.py – the building's name is not under the fire")
@@ -320,6 +321,11 @@ def test_rotation_and_wall_dims():
     check(one["ulitsi"][0]["bez_ruba"] == "desen", "a band without one edge is read")
     r, out = run({**base, "ulitsi": [{"tochki": [[0, -5], [150, -5]], "shirina": 7, "bez_ruba": "lyav"}]})
     check(r.returncode == 0, "draws a band without one edge" + (": " + r.stderr[:200] if r.returncode else ""))
+    grass = shema.load({**base, "trevni": [{"kontur": [[0, 0], [10, 0], [10, 5]]}]})[0]
+    check(len(grass["trevni"]) == 1, "a grass area is read")
+    r, out = run({**base, "trevni": [{"kontur": [[0, 0], [10, 0], [10, 5]]}], "legenda": True,
+                  "zavartane": 30})
+    check(r.returncode == 0, "draws grass areas" + (": " + r.stderr[:200] if r.returncode else ""))
     r, out = run({**base, "zavartane": 30})
     check(r.returncode == 0, "renders a turned scheme" + (": " + r.stderr[:200] if r.returncode else ""))
 

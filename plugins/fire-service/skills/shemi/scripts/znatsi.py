@@ -70,7 +70,7 @@ WATER = ("vodoem", "hidrant", "nadzemen_hidrant", "kran", "kula")
 
 NETWORKS = {"skluchena": "С", "tupikova": "Т"}     # the letter of the water main's label „С-150/5“
 
-SITUATION = ("imot", "ulitsa", "bez_parkirane", *NETWORKS, "gazoprovod", "gaz_armatura")
+SITUATION = ("imot", "ulitsa", "trevna", "bez_parkirane", *NETWORKS, "gazoprovod", "gaz_armatura")
 PARCEL_LS = (0, (6, 2, 1, 2))                       # the parcel's boundary: dash-dot (not a sign of Приложение № 6 –
                                                     #   drawn per чл. 9, ал. 9–10 and named in the legend)
 
@@ -121,6 +121,7 @@ LEGEND_TEXT = {
     "kula": "Водонапорна кула",
     "imot": "Граница на поземлен имот (кадастрална карта)",
     "ulitsa": "Улица, път",
+    "trevna": "Тревна площ",
     "bez_parkirane": "Площ, неразрешена за паркиране на автомобили",
     "skluchena": "Сключена водопроводна мрежа (С – диаметър, mm / налягане, bar)",
     "tupikova": "Тупикова водопроводна мрежа (Т – диаметър, mm / налягане, bar)",
@@ -169,6 +170,7 @@ class Pal:
         self.road = "#8b5a2b" if colour else INK        # чл. 9, ал. 9: кафяв – улици и пътища
         self.gas = "#d9a400" if colour else INK         # жълт – инсталации и арматура за горими газове
         self.parking = "#f28c00" if colour else "#555555"   # оранжев – площи, неразрешени за паркиране
+        self.grass = "#2e8b3a" if colour else "#555555"     # зелен – тревни площи (чл. 9, ал. 9, т. 5)
 
 def chaikin(points, rounds=3):
     """Smooths a polyline (keeps the end points) – the hose lines are drawn as soft curves."""
@@ -580,6 +582,11 @@ def draw_parcel(ax, kontur, label, s, fs, avoid=()):
         ax.text(tx, ty + 0.4 * s, label, ha="center", va="bottom", fontsize=fs - 0.5, zorder=4,
                 bbox=dict(fc="white", ec="none", pad=0.6, alpha=0.85))
 
+def draw_grass(ax, kontur, pal, z=1.1):
+    """A grass area – green outline and sparse green dots (чл. 9, ал. 9, т. 5); under the streets."""
+    ax.add_patch(Polygon(kontur, closed=True, fill=False, hatch="..", ec=pal.grass, lw=0.5, zorder=z))
+
+
 def draw_no_parking(ax, r, pal):
     """An area where parking is not allowed – orange frame and hatching (чл. 9, ал. 9, т. 7)."""
     ax.add_patch(Rectangle((r["x"], r["y"]), r["w"], r["h"], fill=False, hatch="////", ec=pal.parking, lw=0.8,
@@ -867,6 +874,8 @@ def obrazets(ax, entry, x, y, pal, fs):
         draw_street(ax, [(x - w, y), (x + w, y)], 0.1, "", fs, pal)
     elif key == "bez_parkirane":
         draw_no_parking(ax, {"x": x - w, "y": y - k, "w": 2 * w, "h": 2 * k}, pal)
+    elif key == "trevna":
+        draw_grass(ax, [(x - w, y - k), (x + w, y - k), (x + w, y + k), (x - w, y + k)], pal, z=2)
     elif key in NETWORKS:
         draw_main(ax, [(x - w, y), (x + w, y)], key, "", 0.2, fs, pal)
         ax.text(x, y + 0.06, NETWORKS[key] + "-150/5" if key == "skluchena" else NETWORKS[key] + "-100/4",
