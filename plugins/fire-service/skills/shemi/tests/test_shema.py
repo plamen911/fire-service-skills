@@ -309,7 +309,32 @@ def test_rotation_and_wall_dims():
     check(d["tekst"] == [], "a label left outside the cut terrain is dropped")
     check("zavartane" not in shema.zavarti(base), "without \"zavartane\" nothing changes")
     loaded = shema.load({**base, "prohodi": [{"x": 10, "y": 5, "shirina": 6}]})[0]
-    check(loaded["prohodi"] == [{"x": 10.0, "y": 5.0, "shirina": 6.0}], "an entrance from the street is read")
+    check(loaded["prohodi"] == [{"x": 10.0, "y": 5.0, "shirina": 6.0, "ramena": 6.0}], "an entrance from the street is read")
+    # the street edges put right by themselves (ulitsi_avto.py)
+    street = {"kontur": [[0, 0], [100, 0], [100, 8], [0, 8]], "ime": "ул. „Примерна“"}
+    one = shema.load({"teren": [100, 60], "sgradi": [{"x": 30, "y": 20, "w": 20, "h": 10}], "ulitsi": [street],
+                      "prohodi": [{"x": 40, "y": 8, "shirina": 8}]})[0]
+    arms = one["ulitsi_rab"]
+    check(len(arms) == 2 and all(abs(a[0][1] - 8) < 0.01 and a[1][1] > a[0][1] + 5 for a in arms),
+          f"an entrance from the street gets two arms inwards: {arms}")
+    none = shema.load({"teren": [100, 60], "sgradi": [{"x": 30, "y": 20, "w": 20, "h": 10}], "ulitsi": [street],
+                       "prohodi": [{"x": 40, "y": 8, "shirina": 8, "ramena": 0}]})[0]
+    check(none["ulitsi_rab"] == [], "\"ramena\": 0 – no arms")
+    cross = shema.load({"teren": [100, 60], "sgradi": [{"x": 30, "y": 30, "w": 20, "h": 10}],
+                        "ulitsi": [{"kontur": [[0, 10], [40, 10], [40, 18], [0, 18]], "ime": ""},
+                                   {"tochki": [[44, 9], [44, 19]], "shirina": 7, "ime": ""}]})[0]
+    check(any(abs(a[0] - 40) < 0.01 and abs(b[0] - 40) < 0.01 for a, b in cross["ulitsi_skrij"]),
+          f"the cross-cut of a cadastral street into a road of OpenStreetMap is hidden: {cross['ulitsi_skrij']}")
+    check(cross["ulitsi"][1].get("bez_ruba") == "desen" or cross["ulitsi"][1].get("bez_ruba") == "lyav",
+          "the inner edge of the OpenStreetMap road at the junction is left out")
+    plain = shema.load({"teren": [100, 60], "sgradi": [{"x": 30, "y": 30, "w": 20, "h": 10}], "avto_ulitsi": False,
+                        "ulitsi": [street], "prohodi": [{"x": 40, "y": 8, "shirina": 8}]})[0]
+    check(plain["ulitsi_rab"] == [], "\"avto_ulitsi\": false – nothing added")
+    # a street along the frame shows both its edges
+    grown = shema.whole_streets({"ulitsi": [{"kontur": [[-50, 50], [150, 50], [150, 70], [-50, 70]]}]}, 0, 0, 100, 60)
+    check(abs(grown[3] - 73) < 0.01, f"the terrain reaches the other edge of the street: {grown}")
+    far = shema.whole_streets({"ulitsi": [{"kontur": [[-50, 50], [150, 50], [150, 130], [-50, 130]]}]}, 0, 0, 100, 60)
+    check(far == (0, 0, 100, 60), "not when the other edge is far away")
     d2 = shema.zavarti({**base, "zavartane": "avto", "prohodi": [{"x": 50, "y": 20}]})
     check(0 <= d2["prohodi"][0]["x"] <= d2["teren"][0], "the entrance turns and shifts with the drawing")
     fixed = shema.load({**base, "ulitsi_skrij": [[[0, 0], [5, 0]]], "ulitsi_rab": [[[0, 0], [2, 3], [5, 5]]]})[0]

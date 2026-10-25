@@ -74,7 +74,11 @@ shema.py — чертае СХЕМА за разполагане на силит
                                                 //   кадастрален имот, начертан напреки на пътя)
   "ulitsi_rab": [[[x, y], [x, y], [x, y]]],     // ръб на улица, начертан на ръка – кафява линия, заоблена
   "prohodi": [{"x": 60, "y": -2, "shirina": 8}],              // вход към обекта от улицата: линията на улицата
-                                                //   (ръбът ѝ) се прекъсва в кръг с този диаметър, m
+                                                //   (ръбът ѝ) се прекъсва в кръг с този диаметър, m, и от двата края влизат рамена навътре, по
+                                                //   6 m ("ramena": m, 0 – без; без рамена и до отвор в ограда)
+  "avto_ulitsi": true,                          // ръбовете на улиците – оправени сами (scripts/ulitsi_avto.py): краят на
+                                                //   кадастрален имот през платното не се чертае, дъгата на кръстовището
+                                                //   се затваря, вътрешният ръб на улица от OpenStreetMap отпада; false – не
   "razstoyaniya": [{"ot": [46, 66], "do": [60, 66]}],          // разстояние между сгради – стойността се смята
   "vodoprovod": [{"tochki": [[0, -2], [120, -2]], "vid": "skluchena", "diametar": 150, "natisk": 0.5}],
                                                 // или като текст: "diametar": "70/80", "natisk": "3–5" (bar)
@@ -281,7 +285,71 @@ def v_teren(d, x, y):
     return [round(cx + s, 3), round(cy + r, 3)]
 
 
-def zavarti(d):
+WHOLE_STREET_M = 40.0                                 # how far beyond the frame the other edge of a street is fetched
+
+
+def _spans(poly, c, vertical):
+    """The intervals of a polygon on the line x = c (vertical) or y = c – [(lo, hi), …]."""
+    cuts = []
+    for (x1, y1), (x2, y2) in zip(poly, poly[1:] + poly[:1]):
+        a1, b1, a2, b2 = (x1, y1, x2, y2) if vertical else (y1, x1, y2, x2)
+        if (a1 > c) != (a2 > c):
+            cuts.append(b1 + (c - a1) * (b2 - b1) / (a2 - a1))
+    cuts.sort()
+    return list(zip(cuts[0::2], cuts[1::2]))
+
+
+def whole_streets(d, ox, oy, tw, th):
+    """The cut terrain grown so that a street running along its edge shows both its edges: where the frame crosses a
+    street parcel along most of a side and the parcel's other edge is at most WHOLE_STREET_M beyond it, the frame
+    goes out to it (+3 m) – a road is two lines, never one."""
+    streets = [u["kontur"] for u in items(d, "ulitsi") if u.get("kontur") and len(u["kontur"]) >= 3]
+    if not streets:
+        return ox, oy, tw, th
+    x0, y0, x1, y1 = ox, oy, ox + tw, oy + th
+    for side in ("top", "bottom", "left", "right"):
+        vertical = side in ("top", "bottom")
+        lo, hi = (x0, x1) if vertical else (y0, y1)
+        edge = {"top": y1, "bottom": y0, "left": x0, "right": x1}[side]
+        n = 24
+        for k in streets:
+            far = []
+            for i in range(n):
+                c = lo + (hi - lo) * (i + 0.5) / n
+                for a, b in _spans(k, c, vertical):
+                    if a < edge < b:                       # the street crosses this side of the frame here
+                        far.append(b if side in ("top", "right") else a)
+            if len(far) < 0.6 * n:
+                continue
+            reach = max(far) if side in ("top", "right") else min(far)
+            if abs(reach - edge) <= WHOLE_STREET_M:
+                if side == "top":
+                    y1 = max(y1, reach + 3)
+                elif side == "bottom":
+                    y0 = min(y0, reach - 3)
+                elif side == "right":
+                    x1 = max(x1, reach + 3)
+                else:
+                    x0 = min(x0, reach - 3)
+    return x0, y0, x1 - x0, y1 - y0
+
+
+def zavarti(d, cyali_ulitsi=None):
+    """The turn below, done twice when it matters: with the terrain grown to show both edges of a street along the
+    frame (whole_streets) and without – the grown one is kept unless it makes the sheet's scale smaller."""
+    if cyali_ulitsi is not None or not d.get("zavartane"):
+        return _zavarti(d, bool(cyali_ulitsi))
+    d1, d0 = _zavarti(d, True), _zavarti(d, False)
+    if d1.get("teren") == d0.get("teren") or not isinstance(d.get("list"), dict):
+        return d1
+    try:
+        n1, n0 = sheet_scale(load(d1)[0])[0], sheet_scale(load(d0)[0])[0]
+    except (SystemExit, Exception):                     # noqa: BLE001 – the plain one is always safe
+        return d0
+    return d1 if n1 <= n0 else d0
+
+
+def _zavarti(d, cyali_ulitsi=True):
     """"zavartane": turns the whole scheme by an angle (counter-clockwise, degrees) – "avto" lays the longest wall
     of the main building horizontally. Returns a new dict with every coordinate turned, the terrain cut round the
     object (the streets run off the drawing) and "_sever_ugal" – where north points on the drawing. Water sources
@@ -390,6 +458,8 @@ def zavarti(d):
     pad = max(12.0, 0.12 * max(max(xs) - min(xs), max(ys) - min(ys)))
     ox, oy = min(xs) - pad, min(ys) - pad
     tw, th = max(xs) - min(xs) + 2 * pad, max(ys) - min(ys) + 2 * pad
+    if cyali_ulitsi:
+        ox, oy, tw, th = whole_streets(d, ox, oy, tw, th)
     S = lambda p: [round(p[0] - ox, 2), round(p[1] - oy, 2)]                # noqa: E731
 
     def shift_all():
@@ -676,7 +746,8 @@ def load(d):
             out[key].append(pts)
     for i, g in enumerate(items(d, "prohodi")):          # an entrance from the street: a gap in its edge line
         out["prohodi"].append({"x": num(g.get("x"), f"prohodi[{i}].x"), "y": num(g.get("y"), f"prohodi[{i}].y"),
-                               "shirina": num(g.get("shirina", 8), f"prohodi[{i}].shirina")})
+                               "shirina": num(g.get("shirina", 8), f"prohodi[{i}].shirina"),
+                               "ramena": num(g.get("ramena", 6), f"prohodi[{i}].ramena")})
     if d.get("ograda"):
         out["ograda"] = [pt(p, "ograda") for p in d["ograda"]]
         if len(out["ograda"]) < 3:
@@ -765,6 +836,12 @@ def load(d):
             g["horiz"] = abs(best[1][0] - best[0][0]) >= abs(best[1][1] - best[0][1])
             if dist_to_segment((g["x"], g["y"]), *best) > 2:
                 warnings.append(f"входът „{g['etiket'] or g['x']}“ не е върху оградата")
+
+    # the street edges put right as on the approved model (ulitsi_avto.py): cross-cuts of the cadastral parcels hidden,
+    # the arc of a junction closed, the inner edge of an OpenStreetMap band left out, the arms of an entrance
+    if d.get("avto_ulitsi", True) and out["ulitsi"]:
+        import ulitsi_avto
+        out["avto_ulitsi"] = ulitsi_avto.popravi(out, out.get("box"))
 
     # every hose line must start at a fire engine, a splitter, a water source or the end of another line
     anchors = [(t["x"], t["y"]) for t in out["avtomobili"]] + [(r["x"], r["y"]) for r in out["razklonitel"]] + \
