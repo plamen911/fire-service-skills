@@ -495,6 +495,12 @@ def draw_streets(ax, streets, fs, pal, hidden=()):
                     path = MPath.make_compound_path(*[MPath(list(r) + [r[0]], closed=True) for r in rings])
                     ax.add_patch(PathPatch(path, fc="white", ec="none", lw=0, zorder=z))
                 continue
+            if extra and u.get("bez_ruba"):            # only the other edge: a line just outside the white core
+                keep = -1 if u["bez_ruba"] == "lyav" else 1
+                off = keep * (u["shirina"] / 2 + extra / 4 / max(pt_per_m, 1e-9))
+                xs, ys = zip(*offset_polyline(u["tochki"], off))
+                ax.plot(xs, ys, color=colour, lw=extra / 2, zorder=z, solid_capstyle="butt", solid_joinstyle="round")
+                continue
             xs, ys = zip(*u["tochki"])
             ax.plot(xs, ys, color=colour, lw=max(u["shirina"] * pt_per_m + extra, 0.5), zorder=z,
                     solid_capstyle="butt", solid_joinstyle="round")
