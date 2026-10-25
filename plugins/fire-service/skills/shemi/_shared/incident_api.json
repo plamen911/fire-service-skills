@@ -12,5 +12,6 @@
  "mail_url": "https://n8n.fire-expert.uk/webhook/fire-mail",
  "metrics_url": "https://n8n.fire-expert.uk/webhook/fire-metrics",
  "dnevnik_url": "https://n8n.fire-expert.uk/webhook/fire-dnevnik",
- "kais_url": "https://n8n.fire-expert.uk/webhook/fire-kais"
+ "kais_url": "https://n8n.fire-expert.uk/webhook/fire-kais",
+ "obekti_url": "https://n8n.fire-expert.uk/webhook/fire-obekti"
 }
