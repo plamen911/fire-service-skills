@@ -53,6 +53,7 @@ import re
 import subprocess
 import sys
 import urllib.error
+import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -61,6 +62,7 @@ import api_config  # noqa: E402
 CONFIG_FIELD = "kais_url"
 EXACT = ("проверена", "вик")       # the water sources whose coordinates are exact (voda.py)
 SMALL_M = 8.0                     # a building narrower than this is drawn without a name and dimensions
+MAX_RAZSTOYANIE_M = 80.0          # the neighbours farther than this get no distance line
 MAX_SASEDI = 12                   # the bordering parcels read for their buildings (one КАИС call each)
 
 
@@ -216,6 +218,41 @@ def point_in(p, ring):
     return c
 
 
+def nearest_on(p, a, b):
+    """The point of segment a–b nearest to p."""
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    L2 = dx * dx + dy * dy
+    t = 0.0 if not L2 else max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L2))
+    return (a[0] + t * dx, a[1] + t * dy)
+
+
+def osm_grass(x0, y0, x1, y1):
+    """The grass areas (landuse=grass/meadow, leisure=park, village_green) in the frame, as rings in КС2005 –
+    from the OpenStreetMap API ([], error text) on failure."""
+    import xml.etree.ElementTree as ET
+    corners = [kc_to_wgs(x, y) for x, y in ((x0, y0), (x1, y0), (x0, y1), (x1, y1))]
+    la = [c[0] for c in corners]
+    lo = [c[1] for c in corners]
+    url = (f"https://api.openstreetmap.org/api/0.6/map?bbox={min(lo):.6f},{min(la):.6f},{max(lo):.6f},{max(la):.6f}")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "fire-service/kais"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            root = ET.fromstring(r.read())
+    except (urllib.error.URLError, OSError, ET.ParseError) as e:
+        return [], f"{e}"
+    nodes = {n.get("id"): (float(n.get("lat")), float(n.get("lon"))) for n in root.iter("node")}
+    out = []
+    for w in root.iter("way"):
+        tags = {t.get("k"): t.get("v") for t in w.iter("tag")}
+        if not (tags.get("landuse") in ("grass", "meadow", "village_green") or tags.get("leisure") == "park"):
+            continue
+        refs = [nd.get("ref") for nd in w.iter("nd")]
+        if len(refs) < 4 or refs[0] != refs[-1] or not all(r_ in nodes for r_ in refs):
+            continue
+        out.append([list(wgs_to_kc(*nodes[r_])) for r_ in refs[:-1]])
+    return out, ""
+
+
 def street_name(name):
     """„бул. Русе“ → „бул. „Русе““ – the plugin's typography for street names; other names stay as they are."""
     m = re.match(r"^(ул\.|бул\.|пл\.|ж\.к\.|кв\.)\s*(.+)$", name.strip())
@@ -335,8 +372,14 @@ def cmd_obekt(a):
             "kais": {"x0": bx0, "y0": by0, "imot": imot["id"], "data": res["data_na_spravkata"]},
             "sgradi": [],
         }
-        if not a.bez_granitsa:
+        if ring:                                       # the turned, cut terrain keeps the whole parcel ("zavartane")
+            sh["teren_tochki"] = local(ring, bx0, by0)
+        if a.granitsa and not a.bez_granitsa:          # the parcel's boundary only on request – by default not drawn
             sh["imot"] = {"kontur": local(ring, bx0, by0), "etiket": f"ПИ {imot['id']}"}
+        if a.ograda and ring:                          # a fenced parcel: the boundary is the fence (as at ЗИТА)
+            sh["ograda"] = local(ring, bx0, by0)
+            if a.ograda != "da":
+                sh["ograda_vid"] = a.ograda
         if fon_png and a.fon:
             sh["fon"] = {"png": fon_png, "ramka": [fx0 - bx0, fy0 - by0, fx1 - bx0, fy1 - by0]}
         for s in sgradi:
@@ -433,6 +476,19 @@ def cmd_obekt(a):
                     part = part + [b_] if part else [a_, b_]
                 if len(part) > 1:
                     complement.append((u, part))
+        inner_dropped = 0
+        if ring and not a.s_vatreshni:                 # unnamed roads inside the parcel – driveways and parking aisles of
+            kept = []                                  #   an asphalt yard, not streets: left out (with a note)
+            for u, part in complement:
+                inside = sum(point_in(p_, ring) for p_ in part) / len(part)
+                if not u.get("ime") and inside >= 0.5:
+                    inner_dropped += 1
+                    continue
+                kept.append((u, part))
+            complement = kept
+        if inner_dropped:
+            notes.append(f"{inner_dropped} пътя без име от OpenStreetMap вътре в имота не са начертани – алеи и паркинг "
+                         "на асфалтиран плац (`--s-vatreshni` ги връща); надпиши плаца, напр. „асфалтиран плац с паркинг“.")
         for u, part in complement:
             if length(part) > 3:
                 name = street_name(u.get("ime") or "")
@@ -494,7 +550,7 @@ def cmd_obekt(a):
             if corners:
                 hx, hy = sh["vodoiztochnitsi"][0]["x"], sh["vodoiztochnitsi"][0]["y"]
                 c = min(corners, key=lambda p: math.dist(p, (hx, hy)))
-                sh["razstoyaniya"] = [{"ot": [round(c[0], 1), round(c[1], 1)], "do": [hx, hy]}]
+                sh.setdefault("razstoyaniya", []).append({"ot": [round(c[0], 1), round(c[1], 1)], "do": [hx, hy]})
                 summary["do_vodoiztochnika_m"] = round(math.dist(c, (hx, hy)))
             summary["vodoiztochnitsi"] = len(hydrants)
             # the water main: along the street of the nearest hydrant (its centre line from OpenStreetMap), with the
@@ -529,6 +585,31 @@ def cmd_obekt(a):
                     summary["vodoprovod"] = a.vodoprovod
                     notes.append(f"Водопроводът е приет по улицата на хидранта, Ø {a.vodoprovod}, налягане {a.natisk} bar "
                                  "(няма данни от ВиК) – провери вида (сключена или тупикова), диаметъра и налягането.")
+        # the distances between the object's buildings and the neighbouring ones (б. „а“) – the nearest points
+        own = [b["kontur"] for b in sh["sgradi"] if not b.get("sasedna") and not b.get("kratko")]
+        for b in [b for b in sh["sgradi"] if b.get("sasedna")]:
+            best = None
+            for k in own:
+                for P_, Q_ in ((k, b["kontur"]), (b["kontur"], k)):
+                    for p_ in P_:
+                        for a_, b_ in zip(Q_, Q_[1:] + Q_[:1]):
+                            q_ = nearest_on(p_, a_, b_)
+                            d_ = math.dist(p_, q_)
+                            if best is None or d_ < best[0]:
+                                best = (d_, p_, q_) if P_ is k else (d_, q_, p_)
+            if best and 1.0 < best[0] <= MAX_RAZSTOYANIE_M:
+                sh.setdefault("razstoyaniya", []).append({"ot": [round(best[1][0], 2), round(best[1][1], 2)],
+                                                          "do": [round(best[2][0], 2), round(best[2][1], 2)]})
+        # the grass areas (чл. 9, ал. 9, т. 5) – КАИС has none: from OpenStreetMap, straight from its API
+        if not a.bez_trevni:
+            grass, err = osm_grass(bx0, by0, bx1, by1)
+            if grass:
+                sh["trevni"] = [{"kontur": local(k, bx0, by0)} for k in grass]
+                summary["trevni"] = len(grass)
+                notes.append("Тревните площи са от OpenStreetMap (приблизителни). Ако някоя излиза на платното между два "
+                             "имота на улици, запълни празнината с улица-площ без ръб (shemi).")
+            elif err:
+                notes.append("Тревните площи не се взеха от OpenStreetMap: " + err)
         with open(a.shema, "w", encoding="utf-8") as f:
             json.dump(sh, f, ensure_ascii=False, indent=1)
         summary["shema"] = os.path.abspath(a.shema)
@@ -556,7 +637,15 @@ def main():
     o.add_argument("--radius", type=int, default=40, help="метри около имота (30–300, по подразбиране 40)")
     o.add_argument("--fon", action="store_true",
                    help="и картинката на кадастралната карта като блед фон (не по Приложение № 2а – за работа и сверка)")
-    o.add_argument("--bez-granitsa", action="store_true", help="с --shema: без границата на поземления имот")
+    o.add_argument("--granitsa", action="store_true",
+                   help="с --shema: и границата на поземления имот (по подразбиране не се чертае)")
+    o.add_argument("--bez-granitsa", action="store_true", help=argparse.SUPPRESS)   # the old default – kept for old calls
+    o.add_argument("--ograda", nargs="?", const="da", default=None,
+                   help="с --shema: имотът е ограден – границата му се чертае като ограда (вид: zhelezobetonna, "
+                        "kamenna, metalna, darvena, bodliva; без вид – пунктир „Ограда“)")
+    o.add_argument("--s-vatreshni", action="store_true",
+                   help="с --shema: и пътищата без име от OpenStreetMap вътре в имота (по подразбиране – не)")
+    o.add_argument("--bez-trevni", action="store_true", help="с --shema: без тревните площи от OpenStreetMap")
     o.add_argument("--vodoprovod", default="70/80",
                    help="с --voda: диаметърът на водопровода по улицата на хидранта (по подразбиране 70/80; „не“ – без него)")
     o.add_argument("--natisk", default="3–5",
