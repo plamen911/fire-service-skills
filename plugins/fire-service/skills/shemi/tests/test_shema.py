@@ -311,6 +311,11 @@ def test_rotation_and_wall_dims():
     check(loaded["prohodi"] == [{"x": 10.0, "y": 5.0, "shirina": 6.0}], "an entrance from the street is read")
     d2 = shema.zavarti({**base, "zavartane": "avto", "prohodi": [{"x": 50, "y": 20}]})
     check(0 <= d2["prohodi"][0]["x"] <= d2["teren"][0], "the entrance turns and shifts with the drawing")
+    fixed = shema.load({**base, "ulitsi_skrij": [[[0, 0], [5, 0]]], "ulitsi_rab": [[[0, 0], [2, 3], [5, 5]]]})[0]
+    check(len(fixed["ulitsi_skrij"]) == 1 and len(fixed["ulitsi_rab"][0]) == 3, "street-edge corrections are read")
+    r, out = run({**base, "ulitsi": [{"tochki": [[0, -5], [150, -5]], "shirina": 8}],
+                  "ulitsi_skrij": [[[20, -1], [30, -1]]], "ulitsi_rab": [[[20, -1], [25, 2], [30, -1]]]})
+    check(r.returncode == 0, "draws the street-edge corrections" + (": " + r.stderr[:200] if r.returncode else ""))
     r, out = run({**base, "zavartane": 30})
     check(r.returncode == 0, "renders a turned scheme" + (": " + r.stderr[:200] if r.returncode else ""))
 

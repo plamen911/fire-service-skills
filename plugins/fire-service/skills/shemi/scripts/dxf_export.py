@@ -95,6 +95,21 @@ def _split_at(a, b, verts):
     return list(zip(pts, pts[1:]))
 
 
+def _split_hidden(a, b, hidden):
+    """Segment a–b cut at the ends of the hidden pieces that lie on it – so only the hidden part is dropped."""
+    from shema import dist_to_segment
+    cuts = [0.0, 1.0]
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    L2 = dx * dx + dy * dy or 1.0
+    for p_, q_ in hidden:
+        for r in (p_, q_):
+            if dist_to_segment(r, a, b) < 0.3:
+                cuts.append(min(1.0, max(0.0, ((r[0] - a[0]) * dx + (r[1] - a[1]) * dy) / L2)))
+    cuts = sorted(set(cuts))
+    pt_ = lambda t: (a[0] + t * dx, a[1] + t * dy)   # noqa: E731
+    return [(pt_(t0), pt_(t1)) for t0, t1 in zip(cuts, cuts[1:]) if t1 - t0 > 1e-6]
+
+
 def _shared_edges_removed(rings):
     """The edges of the street parcels without those two parcels share – the outline of the streets as one area."""
     key = lambda p: (round(p[0], 2), round(p[1], 2))  # noqa: E731
@@ -167,17 +182,36 @@ def write(data, d, out, s, sheet=None):
         r_ = g["shirina"] / 2
         holes.append((g["x"] - r_, g["y"] - r_, g["x"] + r_, g["y"] + r_))
 
+    hidden = [seg for ln in data.get("ulitsi_skrij") or [] for seg in zip(ln, ln[1:])]
+
+    def on_hidden(p, q):
+        from shema import dist_to_segment
+        m = ((p[0] + q[0]) / 2, (p[1] + q[1]) / 2)
+        return any(dist_to_segment(m, a_, b_) < 0.3 and dist_to_segment(p, a_, b_) < 0.3 and
+                   dist_to_segment(q, a_, b_) < 0.3 for a_, b_ in hidden)
+
+    def visible(p):                                   # a street name: inside the drawing, not under a field of the sheet
+        return box[0] <= p[0] <= box[2] and box[1] <= p[1] <= box[3] and \
+            not any(h[0] <= p[0] <= h[2] and h[1] <= p[1] <= h[3] for h in holes)
+
     def street_line(a, b):
         c = _clip(a, b, box)
         if c:
             for p, q in _minus(c[0], c[1], holes):
-                msp.add_line(P(p), P(q), dxfattribs={"layer": "ULITSI"})
+                for p2, q2 in _split_hidden(p, q, hidden):
+                    if not on_hidden(p2, q2):
+                        msp.add_line(P(p2), P(q2), dxfattribs={"layer": "ULITSI"})
     for a, b in _shared_edges_removed(rings):
         street_line(a, b)
+    from shema import chaikin   # noqa: E402
+    for ln in data.get("ulitsi_rab") or []:           # the street edges drawn by hand
+        pts_ = chaikin(ln) if len(ln) > 2 else ln
+        for a, b in zip(pts_, pts_[1:]):
+            street_line(a, b)
     from shema import offset_polyline   # noqa: E402  (the same offsets as the drawing)
     for u in data["ulitsi"]:
         if "kontur" in u:
-            if u["ime"] and u.get("ime_pos"):
+            if u["ime"] and u.get("ime_pos") and visible(u["ime_pos"]):
                 from znatsi import readable
                 text(u["ime_pos"][0], u["ime_pos"][1], u["ime"], rot=readable(u.get("ime_ugal") or 0))
             continue
@@ -185,9 +219,9 @@ def write(data, d, out, s, sheet=None):
             edge = offset_polyline(u["tochki"], side * u["shirina"] / 2)
             for a, b in zip(edge, edge[1:]):
                 street_line(a, b)
-        if u["ime"]:
+        a, b = max(zip(u["tochki"], u["tochki"][1:]), key=lambda ab: math.dist(*ab))
+        if u["ime"] and visible(((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)):
             from znatsi import readable
-            a, b = max(zip(u["tochki"], u["tochki"][1:]), key=lambda ab: math.dist(*ab))
             text((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, u["ime"],
                  rot=readable(math.degrees(math.atan2(b[1] - a[1], b[0] - a[0]))))
     if data.get("imot"):
@@ -318,7 +352,7 @@ def write(data, d, out, s, sheet=None):
                 ltext(bx + a_ + 1, y_ + h_ / 2, cap + (" " + val if val else ""), 1.6, "MIDDLE_LEFT")
             else:
                 ltext(bx + a_ + 1, y_ + h_ - 1.6, cap, 1.6, "MIDDLE_LEFT")
-                ltext(bx + (a_ + b_) / 2, y_ + 2.6, val, 1.9)
+                ltext(bx + (a_ + b_) / 2, y_ + 2.6, val, min(1.9, (b_ - a_ - 2) / (max(len(val), 1) * 0.62)))
         msp.add_line(P(M(bx + 63, 0)), P(M(bx + 63, 17)), dxfattribs={"layer": "LIST"})
         import textwrap
         obekt = str(lst.get("obekt") or "Наименование на обекта, адрес, телефон")

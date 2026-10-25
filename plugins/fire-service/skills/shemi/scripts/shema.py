@@ -67,6 +67,9 @@ shema.py — чертае СХЕМА за разполагане на силит
   "ulitsi": [{"tochki": [[0, -6], [120, -6]], "shirina": 8, "ime": "ул. „Примерна“"},   // знакът „Шосе“, кафяв;
              {"kontur": [[x, y], …], "otvori": [], "ime": "бул. „Примерен“", "ime_pos": [60, 20], "ime_ugal": 0}],
                                                 //   или улица като площ – поземленият имот от КАИС (kais.py)
+  "ulitsi_skrij": [[[x, y], [x, y]]],          // парче от ръба на улица, което не се чертае (напр. краят на
+                                                //   кадастрален имот, начертан напреки на пътя)
+  "ulitsi_rab": [[[x, y], [x, y], [x, y]]],     // ръб на улица, начертан на ръка – кафява линия, заоблена
   "prohodi": [{"x": 60, "y": -2, "shirina": 8}],              // вход към обекта от улицата: линията на улицата
                                                 //   (ръбът ѝ) се прекъсва в кръг с този диаметър, m
   "razstoyaniya": [{"ot": [46, 66], "do": [60, 66]}],          // разстояние между сгради – стойността се смята
@@ -317,6 +320,8 @@ def zavarti(d):
     for key in ("linii", "vodoprovod", "gazoprovod"):
         for ln in items(d, key):
             ln["tochki"] = RL(ln.get("tochki") or [])
+    for key in ("ulitsi_skrij", "ulitsi_rab"):
+        d[key] = [RL(ln) for ln in (d.get(key) or [])]
     for key in ("posoka", "napravlenie", "stalbi", "razstoyaniya"):
         for o in items(d, key):
             o["ot"], o["do"] = R(o["ot"]), R(o["do"])
@@ -371,6 +376,8 @@ def zavarti(d):
         for key in ("linii", "vodoprovod", "gazoprovod"):
             for ln in items(d, key):
                 ln["tochki"] = [S(p) for p in ln["tochki"]]
+        for key in ("ulitsi_skrij", "ulitsi_rab"):
+            d[key] = [[S(p) for p in ln] for ln in (d.get(key) or [])]
         for key in ("posoka", "napravlenie", "stalbi", "razstoyaniya"):
             for o in items(d, key):
                 o["ot"], o["do"] = S(o["ot"]), S(o["do"])
@@ -449,7 +456,7 @@ def load(d):
     out = {k: [] for k in ("sgradi", "obekti", "pozhar", "zadimyavane", "ognishte", "posoka", "napravlenie",
                            "avtomobili", "vodoiztochnitsi", "linii", "razklonitel", "stalbi", "shtab", "pbt",
                            "tekst", "vhodove", "ulitsi", "razstoyaniya", "vodoprovod", "gazoprovod",
-                           "gaz_armatura", "bez_parkirane", "prohodi")}
+                           "gaz_armatura", "bez_parkirane", "prohodi", "ulitsi_skrij", "ulitsi_rab")}
     out["ograda"] = None
     out["vyatar"] = None
     out["ograda_vid"] = d.get("ograda_vid") or None
@@ -592,6 +599,12 @@ def load(d):
                                     "etiket": str(g.get("etiket") or ""), "ugal": num(g.get("ugal", 0), f"gaz_armatura[{i}].ugal")})
     for i, z in enumerate(items(d, "bez_parkirane")):
         out["bez_parkirane"].append(rect(z, f"bez_parkirane[{i}]"))
+    for key in ("ulitsi_skrij", "ulitsi_rab"):           # corrections of the street edges, by hand
+        for i, ln in enumerate(d.get(key) or []):
+            pts = [pt(p, f"{key}[{i}]") for p in ln]
+            if len(pts) < 2:
+                bad(f"{key}[{i}]: трябват поне две точки")
+            out[key].append(pts)
     for i, g in enumerate(items(d, "prohodi")):          # an entrance from the street: a gap in its edge line
         out["prohodi"].append({"x": num(g.get("x"), f"prohodi[{i}].x"), "y": num(g.get("y"), f"prohodi[{i}].y"),
                                "shirina": num(g.get("shirina", 8), f"prohodi[{i}].shirina")})
@@ -874,6 +887,16 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
     draw_streets(ax, data["ulitsi"], fs, pal)          # the situation first – under everything else
     for g in data["prohodi"]:                          # the entrances from the street: the edge line is cut there
         ax.add_patch(Circle((g["x"], g["y"]), g["shirina"] / 2, fc="white", ec="none", zorder=1.27))
+    for ln in data["ulitsi_skrij"]:                    # a piece of a street edge taken out (e.g. the end of a cadastral
+        xs_, ys_ = zip(*ln)                            #   street parcel drawn across the road) …
+        ax.plot(xs_, ys_, color="white", lw=2.6, solid_capstyle="butt", zorder=1.27)
+        ends_rab = [p_ for r_ in data["ulitsi_rab"] for p_ in (r_[0], r_[-1])]
+        for e_ in (ln[0], ln[-1]):                     # … where a hand-drawn edge joins, the corner mended with a dot
+            if any(math.dist(e_, q_) < 0.5 for q_ in ends_rab):
+                ax.plot([e_[0]], [e_[1]], "o", color=pal.road, ms=1.3, mew=0, zorder=1.28)
+    for ln in data["ulitsi_rab"]:                      # a street edge drawn by hand – the same brown line, smoothed
+        xs_, ys_ = zip(*(chaikin(ln) if len(ln) > 2 else ln))
+        ax.plot(xs_, ys_, color=pal.road, lw=0.9, solid_capstyle="round", zorder=1.28)
     for z in data["bez_parkirane"]:
         draw_no_parking(ax, z, pal)
     for v in data["vodoprovod"]:
