@@ -416,7 +416,56 @@ def draw_street(ax, pts, width, name, fs, pal):
         ax.text((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, name, ha="center", va="center", fontsize=fs, color=INK,
                 rotation=readable(ang), rotation_mode="anchor", zorder=1.3)
 
-def draw_streets(ax, streets, fs, pal):
+def visible_runs(pts, hidden, tol=0.3):
+    """A polyline cut into the runs that do not lie on a hidden piece ([(a, b), …]) – an edge of a street that is
+    taken out by hand is simply not drawn, so the edges going on from it stay whole."""
+    def on(p, q):
+        m = ((p[0] + q[0]) / 2, (p[1] + q[1]) / 2)
+        return any(_dseg(m, a, b) < tol and _dseg(p, a, b) < tol and _dseg(q, a, b) < tol for a, b in hidden)
+    runs, cur = [], [pts[0]]
+    for a, b in zip(pts, pts[1:]):
+        cuts = [0.0, 1.0]
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        L2 = dx * dx + dy * dy or 1.0
+        for h in hidden:
+            for r in h:
+                if _dseg(r, a, b) < tol:
+                    cuts.append(min(1.0, max(0.0, ((r[0] - a[0]) * dx + (r[1] - a[1]) * dy) / L2)))
+        cuts = sorted(set(cuts))
+        for t0, t1 in zip(cuts, cuts[1:]):
+            p, q = (a[0] + t0 * dx, a[1] + t0 * dy), (a[0] + t1 * dx, a[1] + t1 * dy)
+            if on(p, q):
+                if len(cur) > 1:
+                    runs.append(cur)
+                cur = [q]
+            else:
+                if math.dist(cur[-1], p) > 1e-9:
+                    cur.append(p)
+                cur.append(q)
+    if len(cur) > 1:
+        runs.append(cur)
+    return runs
+
+
+def trim_ends(run, d):
+    """A polyline shortened by d at both ends (as long as it stays longer than that)."""
+    run = list(run)
+    for i, j in ((0, 1), (-1, -2)):
+        a, b = run[i], run[j]
+        L = math.dist(a, b)
+        if L > 2 * d:
+            run[i] = (a[0] + (b[0] - a[0]) * d / L, a[1] + (b[1] - a[1]) * d / L)
+    return run
+
+
+def _dseg(p, a, b):
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    L2 = dx * dx + dy * dy
+    t = 0.0 if not L2 else max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L2))
+    return math.dist(p, (a[0] + t * dx, a[1] + t * dy))
+
+
+def draw_streets(ax, streets, fs, pal, hidden=()):
     """All streets at once, so that the junctions merge: a street along a line is a brown band with a white core
     of its width (the edges are the two lines of the sign „Шосе“); a street as an area (its cadastral parcel,
     "kontur") is its outline in brown – drawn twice, wide brown then white over it, so that where two street
@@ -433,7 +482,15 @@ def draw_streets(ax, streets, fs, pal):
                 rings = [u["kontur"]] + list(u.get("otvori") or [])
                 if extra:
                     for r in rings:
-                        ax.add_patch(Polygon(r, closed=True, fill=False, ec=colour, lw=extra, zorder=z, joinstyle="round"))
+                        if not hidden:
+                            ax.add_patch(Polygon(r, closed=True, fill=False, ec=colour, lw=extra, zorder=z,
+                                                 joinstyle="round"))
+                            continue
+                        for run in visible_runs(list(r) + [r[0]], hidden):   # the outline without the hidden pieces
+                            xs, ys = zip(*run)
+                            closed = math.dist(run[0], run[-1]) < 1e-9
+                            ax.plot(xs, ys, color=colour, lw=extra, zorder=z, solid_joinstyle="round",
+                                    solid_capstyle="round" if closed else "butt")
                 else:
                     path = MPath.make_compound_path(*[MPath(list(r) + [r[0]], closed=True) for r in rings])
                     ax.add_patch(PathPatch(path, fc="white", ec="none", lw=0, zorder=z))
