@@ -331,10 +331,11 @@ def zavarti(d):
     if isinstance(d.get("vyatar"), dict) and d["vyatar"].get("ugal") is not None:
         d["vyatar"]["ugal"] = num(d["vyatar"]["ugal"], "vyatar.ugal") + ang
 
-    # the new terrain: round the object itself – the buildings, the parcel, the water, the forces
+    # the new terrain: round the object itself – its buildings, the parcel, the water, the forces
     core = []
-    for b in items(d, "sgradi"):
-        core += b["kontur"]
+    for b in items(d, "sgradi"):                     # the neighbours may run off the drawing, like the streets
+        if not b.get("sasedna"):
+            core += b["kontur"]
     if isinstance(d.get("imot"), dict) and d["imot"].get("kontur"):
         core += d["imot"]["kontur"]
     for key in ("vodoiztochnitsi", "avtomobili", "obekti", "pozhar", "vhodove", "razklonitel"):
