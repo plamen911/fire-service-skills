@@ -316,6 +316,10 @@ def test_rotation_and_wall_dims():
     r, out = run({**base, "ulitsi": [{"tochki": [[0, -5], [150, -5]], "shirina": 8}],
                   "ulitsi_skrij": [[[20, -1], [30, -1]]], "ulitsi_rab": [[[20, -1], [25, 2], [30, -1]]]})
     check(r.returncode == 0, "draws the street-edge corrections" + (": " + r.stderr[:200] if r.returncode else ""))
+    one = shema.load({**base, "ulitsi": [{"tochki": [[0, -5], [50, -5]], "shirina": 7, "bez_ruba": "desen"}]})[0]
+    check(one["ulitsi"][0]["bez_ruba"] == "desen", "a band without one edge is read")
+    r, out = run({**base, "ulitsi": [{"tochki": [[0, -5], [150, -5]], "shirina": 7, "bez_ruba": "lyav"}]})
+    check(r.returncode == 0, "draws a band without one edge" + (": " + r.stderr[:200] if r.returncode else ""))
     r, out = run({**base, "zavartane": 30})
     check(r.returncode == 0, "renders a turned scheme" + (": " + r.stderr[:200] if r.returncode else ""))
 

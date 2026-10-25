@@ -67,6 +67,7 @@ shema.py — чертае СХЕМА за разполагане на силит
   "ulitsi": [{"tochki": [[0, -6], [120, -6]], "shirina": 8, "ime": "ул. „Примерна“"},   // знакът „Шосе“, кафяв;
              {"kontur": [[x, y], …], "otvori": [], "ime": "бул. „Примерен“", "ime_pos": [60, 20], "ime_ugal": 0}],
                                                 //   или улица като площ – поземленият имот от КАИС (kais.py)
+  // в "ulitsi" улица като ивица може да е без единия си ръб: "bez_ruba": "lyav" или "desen" (по посоката на точките)
   "ulitsi_skrij": [[[x, y], [x, y]]],          // парче от ръба на улица, което не се чертае (напр. краят на
                                                 //   кадастрален имот, начертан напреки на пътя)
   "ulitsi_rab": [[[x, y], [x, y], [x, y]]],     // ръб на улица, начертан на ръка – кафява линия, заоблена
@@ -596,8 +597,11 @@ def load(d):
         pts = [pt(p, f"ulitsi[{i}].tochki") for p in (u.get("tochki") or [])]
         if len(pts) < 2:
             bad(f"ulitsi[{i}].tochki: трябват поне две точки")
+        side = u.get("bez_ruba")                      # one edge of the band left out: "lyav" / "desen" (by the direction
+        if side not in (None, "", "lyav", "desen"):   #   of the points) – e.g. a road that runs on into another
+            bad(f"ulitsi[{i}].bez_ruba: „lyav“ или „desen“")
         out["ulitsi"].append({"tochki": pts, "shirina": num(u.get("shirina", 7), f"ulitsi[{i}].shirina"),
-                              "ime": str(u.get("ime") or "")})
+                              "ime": str(u.get("ime") or ""), "bez_ruba": side or None})
     for i, r in enumerate(items(d, "razstoyaniya")):
         a, b = pt(r.get("ot"), f"razstoyaniya[{i}].ot"), pt(r.get("do"), f"razstoyaniya[{i}].do")
         out["razstoyaniya"].append({"ot": a, "do": b, "etiket": str(r.get("etiket") or f"{math.dist(a, b):.0f}")})

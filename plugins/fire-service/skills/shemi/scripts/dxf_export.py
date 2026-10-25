@@ -216,6 +216,8 @@ def write(data, d, out, s, sheet=None):
                 text(u["ime_pos"][0], u["ime_pos"][1], u["ime"], rot=readable(u.get("ime_ugal") or 0))
             continue
         for side in (-1, 1):
+            if (side, u.get("bez_ruba")) in ((1, "lyav"), (-1, "desen")):
+                continue                               # the edge left out
             edge = offset_polyline(u["tochki"], side * u["shirina"] / 2)
             for a, b in zip(edge, edge[1:]):
                 street_line(a, b)
