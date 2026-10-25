@@ -257,6 +257,7 @@ def test_kais(tmp, base):
                          {"ime": "бул. Примерен", "vid": "secondary", "shirina": 12, "tochki": [[x0 + 100, y0 + 95], [x0 + 105, y0 + 95]]},
                          {"ime": "", "vid": "service", "shirina": 5, "tochki": [[x0 + 300, y0 + 300], [x0 + 310, y0 + 310]]}],
               "istochnik": "КАИС", "zaiavki_kais": 9}
+    kais.osm_grass = lambda *a: ([[[x0 + 20, y0 + 20], [x0 + 30, y0 + 20], [x0 + 30, y0 + 30]]], "")   # no network
     Stub.plan, Stub.seen = [(200, answer)], []
     out, sh = os.path.join(tmp, "k", "kais.json"), os.path.join(tmp, "k", "shema.json")
     code, printed, err = call(kais.main, ["obekt", "--link", "43.41,24.65", "-o", out, "--shema", sh])
@@ -266,14 +267,16 @@ def test_kais(tmp, base):
                                                                                 "lat": 43.41, "lon": 24.65},
           "a „ширина,дължина“ point goes to the КАИС address with the key and the radius – no picture by default")
     d = json.load(open(sh, encoding="utf-8"))
-    check("fon" not in d and d["imot"]["etiket"] == "ПИ 99999.10.20", "by default: the parcel's boundary, no picture")
+    check("fon" not in d and "imot" not in d and d["teren_tochki"], "by default: no parcel boundary (only terrain points), no picture")
+    check(d["trevni"][0]["kontur"][0] == [10, 10], "the grass areas from OpenStreetMap, in local metres")
     u = d["ulitsi"]
     check(len(u) == 2 and u[0]["tochki"][0] == [0, 85] and u[0]["tochki"][-1] == [120, 85]
           and all(p[1] == 85 for p in u[0]["tochki"]) and u[0]["shirina"] == 12,
           "a street is cut to the terrain; one far away is left out")
     check(u[0]["ime"] == "бул. „Примерен“" and u[1]["ime"] == "", "the name once, on the longest piece, in „…“")
     Stub.plan = [(200, answer)]
-    code, printed, err = call(kais.main, ["obekt", "--link", "43.41,24.65", "-o", out, "--shema", sh, "--fon"])
+    code, printed, err = call(kais.main, ["obekt", "--link", "43.41,24.65", "-o", out, "--shema", sh, "--fon",
+                                          "--granitsa"])
     check(code is None and Stub.seen[-1]["body"]["fon"] is True, "--fon asks for the picture")
     fon = os.path.join(tmp, "k", "kais_fon.png")
     saved = json.load(open(out, encoding="utf-8"))
@@ -285,8 +288,10 @@ def test_kais(tmp, base):
     check(d["imot"]["kontur"][0] == [40, 40] and len(d["imot"]["kontur"]) == 4 and d["imot"]["etiket"] == "ПИ 99999.10.20",
           "the parcel's outline in local metres, without the closing point")
     Stub.plan = [(200, answer)]
-    call(kais.main, ["obekt", "--id", "99999.10.20", "-o", out, "--shema", sh, "--bez-granitsa"])
-    check("imot" not in json.load(open(sh, encoding="utf-8")), "--bez-granitsa leaves the boundary out")
+    call(kais.main, ["obekt", "--id", "99999.10.20", "-o", out, "--shema", sh, "--ograda", "metalna"])
+    fenced = json.load(open(sh, encoding="utf-8"))
+    check("imot" not in fenced and fenced["ograda"][0] == [40, 40] and fenced["ograda_vid"] == "metalna",
+          "--ograda: a fenced parcel – its boundary drawn as the fence")
     check(kais.clip_polyline([[-5, 5], [5, 5], [5, 15], [15, 15]], 0, 0, 10, 10) == [[(0.0, 5.0), (5.0, 5.0), (5.0, 10.0)]],
           "clipping keeps the inside part of a bent line")
     check(kais.street_name("ул. Васил Левски") == "ул. „Васил Левски“" and kais.street_name("Северна промишлена зона") ==
