@@ -165,7 +165,7 @@ def write(data, d, out, s, sheet=None):
     # streets: the parcels as one area (shared edges dropped), the bands as their two edges
     rings = []
     for u in data["ulitsi"]:
-        if "kontur" in u:
+        if "kontur" in u and not u.get("bez_ruba"):
             rings.append(u["kontur"])
             rings += list(u.get("otvori") or [])
     box = data["box"]                                  # the streets run off the drawing – cut at its edge

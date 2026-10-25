@@ -326,6 +326,11 @@ def test_rotation_and_wall_dims():
     r, out = run({**base, "trevni": [{"kontur": [[0, 0], [10, 0], [10, 5]]}], "legenda": True,
                   "zavartane": 30})
     check(r.returncode == 0, "draws grass areas" + (": " + r.stderr[:200] if r.returncode else ""))
+    fill = shema.load({**base, "ulitsi": [{"kontur": [[0, 0], [10, 0], [10, 5]], "bez_ruba": True}]})[0]
+    check(fill["ulitsi"][0]["bez_ruba"] is True, "a carriageway area without an edge is read")
+    r, out = run({**base, "ulitsi": [{"kontur": [[0, 0], [10, 0], [10, 5]], "bez_ruba": True}],
+                  "trevni": [{"kontur": [[0, 0], [12, 0], [12, 6]]}]})
+    check(r.returncode == 0, "draws a carriageway area without an edge" + (": " + r.stderr[:200] if r.returncode else ""))
     r, out = run({**base, "zavartane": 30})
     check(r.returncode == 0, "renders a turned scheme" + (": " + r.stderr[:200] if r.returncode else ""))
 

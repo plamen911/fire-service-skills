@@ -67,7 +67,8 @@ shema.py — чертае СХЕМА за разполагане на силит
   "ulitsi": [{"tochki": [[0, -6], [120, -6]], "shirina": 8, "ime": "ул. „Примерна“"},   // знакът „Шосе“, кафяв;
              {"kontur": [[x, y], …], "otvori": [], "ime": "бул. „Примерен“", "ime_pos": [60, 20], "ime_ugal": 0}],
                                                 //   или улица като площ – поземленият имот от КАИС (kais.py)
-  // в "ulitsi" улица като ивица може да е без единия си ръб: "bez_ruba": "lyav" или "desen" (по посоката на точките)
+  // в "ulitsi" улица като ивица може да е без единия си ръб: "bez_ruba": "lyav" или "desen" (по посоката на точките);
+  //   улица като площ ("kontur") с "bez_ruba": true е само платно, без ръб – запълва празнина между два имота
   "trevni": [{"kontur": [[x, y], …]}],          // тревни площи – зелени (чл. 9, ал. 9, т. 5)
   "ulitsi_skrij": [[[x, y], [x, y]]],          // парче от ръба на улица, което не се чертае (напр. краят на
                                                 //   кадастрален имот, начертан напреки на пътя)
@@ -596,6 +597,7 @@ def load(d):
                 bad(f"ulitsi[{i}].kontur: трябват поне три точки")
             holes = [[pt(p, f"ulitsi[{i}].otvori") for p in h] for h in (u.get("otvori") or []) if len(h) >= 3]
             out["ulitsi"].append({"kontur": k, "otvori": holes, "ime": str(u.get("ime") or ""),
+                                  "bez_ruba": bool(u.get("bez_ruba")),
                                   "ime_pos": pt(u["ime_pos"], f"ulitsi[{i}].ime_pos") if u.get("ime_pos") else None,
                                   "ime_ugal": num(u.get("ime_ugal", 0), f"ulitsi[{i}].ime_ugal")})
             continue

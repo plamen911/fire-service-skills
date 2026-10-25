@@ -482,6 +482,8 @@ def draw_streets(ax, streets, fs, pal, hidden=()):
         for u in streets:
             if "kontur" in u:
                 rings = [u["kontur"]] + list(u.get("otvori") or [])
+                if extra and u.get("bez_ruba"):        # a piece of carriageway with no edge of its own – only white,
+                    continue                           #   e.g. to fill the gap between two cadastral street parcels
                 if extra:
                     for r in rings:
                         if not hidden:
