@@ -410,6 +410,36 @@ def zavarti(d):
     return d
 
 
+def rab_outer_side(pts, streets):
+    """Which side of a hand-drawn street edge is away from the street (+1 – left, -1 – right, 0 – unknown): the
+    same side as the outside of the cadastral street outline it starts from."""
+    best = None
+    for u in streets:
+        k = u.get("kontur")
+        if not k:
+            continue
+        for i, v in enumerate(k):
+            dd = math.dist(v, pts[0])
+            if dd < 0.5 and (best is None or dd < best[0]):
+                best = (dd, k, i)
+    if not best:
+        return 0
+    _, k, i = best
+    area = sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(k, k[1:] + k[:1]))
+    p, q = k[i - 1], k[i]                              # the outline's edge coming into that vertex
+    ex, ey = q[0] - p[0], q[1] - p[1]
+    out = (ey, -ex) if area > 0 else (-ey, ex)         # outward normal of the edge (right of a CCW ring)
+    rx, ry = pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]
+    left = (-ry, rx)                                   # left normal of the hand-drawn edge
+    dot = left[0] * out[0] + left[1] * out[1]
+    if abs(dot) < 1e-9:
+        p, q = k[i], k[(i + 1) % len(k)]
+        ex, ey = q[0] - p[0], q[1] - p[1]
+        out = (ey, -ex) if area > 0 else (-ey, ex)
+        dot = left[0] * out[0] + left[1] * out[1]
+    return 1 if dot > 0 else -1
+
+
 def street_label_point(kontur, tw, th, step=2.0):
     """The point inside a street area (and inside the drawing) farthest from its edges – for the name."""
     from matplotlib.path import Path
@@ -884,19 +914,20 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
         ax.set_ylim(y0, y1)
     if data.get("imot"):                               # the parcel's boundary – from the library
         draw_parcel(ax, data["imot"]["kontur"], data["imot"]["etiket"], s, fs, building_outlines(data))
-    draw_streets(ax, data["ulitsi"], fs, pal)          # the situation first – under everything else
+    draw_streets(ax, data["ulitsi"], fs, pal,          # the situation first – under everything else
+                 hidden=[seg for ln in data["ulitsi_skrij"] for seg in zip(ln, ln[1:])])
     for g in data["prohodi"]:                          # the entrances from the street: the edge line is cut there
         ax.add_patch(Circle((g["x"], g["y"]), g["shirina"] / 2, fc="white", ec="none", zorder=1.27))
-    for ln in data["ulitsi_skrij"]:                    # a piece of a street edge taken out (e.g. the end of a cadastral
-        xs_, ys_ = zip(*ln)                            #   street parcel drawn across the road) …
-        ax.plot(xs_, ys_, color="white", lw=2.6, solid_capstyle="butt", zorder=1.27)
-        ends_rab = [p_ for r_ in data["ulitsi_rab"] for p_ in (r_[0], r_[-1])]
-        for e_ in (ln[0], ln[-1]):                     # … where a hand-drawn edge joins, the corner mended with a dot
-            if any(math.dist(e_, q_) < 0.5 for q_ in ends_rab):
-                ax.plot([e_[0]], [e_[1]], "o", color=pal.road, ms=1.3, mew=0, zorder=1.28)
-    for ln in data["ulitsi_rab"]:                      # a street edge drawn by hand – the same brown line, smoothed
-        xs_, ys_ = zip(*(chaikin(ln) if len(ln) > 2 else ln))
-        ax.plot(xs_, ys_, color=pal.road, lw=0.9, solid_capstyle="round", zorder=1.28)
+    if data["ulitsi_rab"]:                             # a street edge drawn by hand – the same brown line, smoothed; it
+        t_ = ax.transData                              #   lies where the edges of the streets show: their outer half
+        half_m = 0.45 * ax.figure.dpi / 72 / max(t_.transform((1, 0))[0] - t_.transform((0, 0))[0], 1e-9)
+        for ln in data["ulitsi_rab"]:
+            pts_ = chaikin(ln) if len(ln) > 2 else list(ln)
+            side = rab_outer_side(pts_, data["ulitsi"])
+            if side:
+                pts_ = offset_polyline(pts_, side * half_m)
+            xs_, ys_ = zip(*pts_)
+            ax.plot(xs_, ys_, color=pal.road, lw=0.9, solid_capstyle="butt", solid_joinstyle="round", zorder=1.28)
     for z in data["bez_parkirane"]:
         draw_no_parking(ax, z, pal)
     for v in data["vodoprovod"]:
