@@ -357,6 +357,14 @@ def test_ortofoto(tmp):
     w, h = Image.open(png).size
     check(abs(w - 142 / res) < 3 and abs(h - 169 / res) < 3, "the picture is the frame, at 13 cm a pixel")
     check(len(marks) == 44 and marks[0][0] == 1, "a numbered point on the fence every 10 m")
+    mosaic = Image.new("RGB", (5 * 256, 6 * 256), (10, 120, 10))
+    b = io.BytesIO()
+    mosaic.save(b, "JPEG")
+    png2 = os.path.join(tmp, "o2.png")
+    marks2 = kais.orto_picture({"png_base64": base64.b64encode(b.getvalue()).decode(), "r0": min(tl)[0],
+                                "c0": min(c for _, c in tl), "origin": kais.ORTO_INFO["origin"], "res": res, "tile": 256},
+                               427853, 4809077, 427995, 4809246, png2, rings=[fence], fence=fence)
+    check(Image.open(png2).size == (w, h) and marks2 == marks, "… and the same from the picture n8n stitched")
 
 
 def main():
