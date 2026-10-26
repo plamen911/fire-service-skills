@@ -292,6 +292,31 @@ def write(data, d, out, s, sheet=None):
                  rot=readable(math.degrees(math.atan2(b[1] - a[1], b[0] - a[0]))))
     for ln in data["linii"]:
         poly(ln["tochki"], "VODA")
+    # the water signs of Приложение № 6 – the same lines as on the picture (znatsi), layer VODA
+    import znatsi as Z
+    for r in data.get("reki", []):
+        for line in Z.river_lines(r["tochki"], r["shirina"], s):
+            poly(line, "VODA")
+        for at in r["barazhi"]:
+            for arc in Z.barazh_lines(r["tochki"], r["shirina"], at, s):
+                poly(arc, "TEKST")
+        if r["ime"]:
+            a_, b_ = max(zip(r["tochki"], r["tochki"][1:]), key=lambda ab: math.dist(*ab))
+            text((a_[0] + b_[0]) / 2, (a_[1] + b_[1]) / 2, r["ime"], layer="VODA",
+                 rot=Z.readable(math.degrees(math.atan2(b_[1] - a_[1], b_[0] - a_[0]))))
+    for e in data.get("ezera", []):
+        for ring in Z.lake_lines(e["kontur"], s):
+            poly(ring, "VODA")
+        if e["ime"]:
+            text(sum(p[0] for p in e["kontur"]) / len(e["kontur"]), sum(p[1] for p in e["kontur"]) / len(e["kontur"]),
+                 e["ime"], layer="VODA")
+    for o in data.get("podstapi", []):
+        for seg_ in Z.podstap_lines(o["x"], o["y"], o["ugal"]):
+            poly(seg_, "VODA")
+    for m in data.get("mostove", []):
+        abut, deck = Z.most_lines(m["x"], m["y"], m["ugal"], m["shirina"], s)
+        for seg_ in abut + deck:
+            poly(seg_, "TEKST")
     for g in data["gazoprovod"]:
         poly(g["tochki"], "GAZ")
     for g in data["gaz_armatura"]:

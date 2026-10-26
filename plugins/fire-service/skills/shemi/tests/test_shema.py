@@ -360,7 +360,48 @@ def test_rotation_and_wall_dims():
     check(r.returncode == 0, "renders a turned scheme" + (": " + r.stderr[:200] if r.returncode else ""))
 
 
+def test_water_signs():
+    print("shema.py – the water signs of Приложение № 6 (река, езеро, подстъп, мост)")
+    base = {"sgradi": [{"x": 0, "y": 0, "w": 10, "h": 6}], "teren": [80, 60], "legenda": True}
+    water = {"reki": [{"tochki": [[0, 30], [40, 34], [80, 30]], "shirina": 5, "ime": "р. Примерна",
+                       "barazhi": [[60, 32]]}],
+             "ezera": [{"kontur": [[10, 40], [30, 42], [28, 55], [12, 52]], "ime": "Езеро"}],
+             "podstapi": [{"x": 50, "y": 24, "ugal": 90}],
+             "mostove": [{"x": 30, "y": 33, "ugal": 5, "shirina": 5}]}
+    data, warn = shema.load({**base, **water})
+    check(len(data["reki"]) == 1 and data["reki"][0]["shirina"] == 5 and data["reki"][0]["barazhi"] == [(60.0, 32.0)],
+          "a river is read with its width and barrage")
+    check(len(data["ezera"]) == 1 and len(data["podstapi"]) == 1 and len(data["mostove"]) == 1,
+          "a lake, an access place and a bridge are read")
+    keys = shema.legend_keys(data, 20)[0]
+    check(all(k in keys for k in ("reka", "ezero", "podstap", "most_voda")), f"the legend has the water signs: {keys}")
+    tmp = tempfile.mkdtemp()
+    src, out = os.path.join(tmp, "in.json"), os.path.join(tmp, "out.svg")
+    json.dump({**base, **water}, open(src, "w", encoding="utf-8"), ensure_ascii=False)
+    r = subprocess.run([sys.executable, SCRIPT, src, "-o", os.path.join(tmp, "out.png"), "--svg", out],
+                       capture_output=True, text=True)
+    check(r.returncode == 0, "draws the water signs" + (": " + r.stderr[:200] if r.returncode else ""))
+    if not r.returncode:
+        svg = open(out, encoding="utf-8").read()
+        for name in ("Река, канал", "Езеро, микроязовир", "Подстъп до водоизточник", "Мост, от който"):
+            check(name in svg, f"the legend names „{name}“")
+    import znatsi
+    lines = znatsi.river_lines([(0, 0), (40, 0)], 4, 3.0)
+    check(len(lines) == 4 and all(abs(p[1]) == 2 for p in lines[0] + lines[1]),
+          "a river: two straight banks at half the width")
+    check(all(abs(p[1]) > 2 for p in lines[2] + lines[3]), "and the wavy lines outside them, never inside the water")
+    r, out = run({**base, **water, "zavartane": 25})
+    check(r.returncode == 0, "the water signs turn with the scheme" + (": " + r.stderr[:200] if r.returncode else ""))
+    try:
+        shema.load({**base, "reki": [{"tochki": [[0, 0]]}]})
+        refused = False
+    except SystemExit:
+        refused = True
+    check(refused, "a river with one point is refused")
+
+
 if __name__ == "__main__":
+    test_water_signs()
     test_fixture()
     test_defaults()
     test_minimal_and_colour()
