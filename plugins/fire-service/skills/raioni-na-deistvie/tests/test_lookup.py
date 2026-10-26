@@ -130,6 +130,14 @@ def main():
     ok(m["vreme_reagirane_min"] == 3.3 and m["vreme_min"] == 4, m)
     m = out(MR, "--do", "43.4125702,24.6504731", "--fail", route, env=NO_DATA)
     ok(m["ot"]["sluzhba"] == "РСПБЗН – Плевен" and any("заповедта" in b for b in m["belezhki"]), m)
+    # землището от кадастралния идентификатор, не най-близкият център: точката е край Плевен, а имотът –
+    # в землището на с. Крушовене (ЕКАТТЕ 40195) → по заповедта, както с --masto Крушовене
+    m = out(MR, "--do", "43.4380217,24.5895326", "--kadastar", "40195.12.34", "--fail", route)
+    ok(m["ot"]["sluzhba"] == "УПБЗН – Долна Митрополия" and "с. Крушовене" in m["ot"]["kak"], m["ot"])
+    m = out(MR, "--do", "43.4380217,24.5895326", "--fail", route)
+    ok(any("--kadastar" in b for b in m["belezhki"]), m["belezhki"])
+    r = run(MR, "--do", "43.43,24.58", "--kadastar", "абв", "--fail", route)
+    ok(r.returncode == 2 and "BAD_INPUT" in r.stderr, r.stderr)
     s = out(MR, "--sluzhbi")
     ok(len(s) == 9 and all(r["lat"] and r["lon"] and r["adres"] for r in s), s)
     r = run(MR, "--do", "43.41", "--fail", route)

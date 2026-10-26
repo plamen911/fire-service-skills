@@ -21,6 +21,7 @@ situacionna.json е JSON-ът на схемата (входът – в нача�
                                                // "izgotvil" по подразбиране – потребителят по личния ключ;
                                                // "fail" – името на .dxf файла на графичната част
                                                //   (с конектора – името от whoami); "data" – днешната дата
+  "kadastar": "56722.651.111",                // по желание – иначе от "kais.imot": землището (ЕКАТТЕ) определя службата
   "obekt_gps": "43.4125702,24.6504731",       // точката на обекта или линк към нея – тогава разстоянието и
                                                //   времето се смятат сами от службата по заповедта (marshrut.py:
                                                //   по пътищата, 1 km/min и 1 min излизане); "sluzhba": "…" – от друга служба
@@ -52,6 +53,7 @@ import argparse
 import datetime
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -267,12 +269,23 @@ def own_name():
         return None
 
 
-def route_to(target, ot=None):
+def kadastar_id(d):
+    """The cadastral identifier of the parcel (from kais.py): "kadastar", "kais.imot" or the label of "imot"."""
+    for v in (d.get("kadastar"), (d.get("kais") or {}).get("imot"), (d.get("imot") or {}).get("etiket")):
+        m = re.search(r"\d{5}\.\d+\.\d+", str(v or ""))
+        if m:
+            return m.group(0)
+    return None
+
+
+def route_to(target, ot=None, kadastar=None):
     """Distance and travel time from the responsible service (marshrut.py); None when it cannot be computed."""
     script = os.path.join(os.path.dirname(HERE), "_shared", "scripts", "marshrut.py")
     if not os.path.exists(script):
         script = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(HERE))), "shared", "scripts", "marshrut.py")
     cmd = [sys.executable, script, "--link" if "://" in target else "--do", target] + (["--ot", ot] if ot else [])
+    if kadastar:                       # the land of the parcel (ЕКАТТЕ) decides the settlement, not the nearest centre
+        cmd += ["--kadastar", kadastar]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
         return json.loads(r.stdout) if r.returncode == 0 else None
@@ -299,7 +312,7 @@ def build(d, out):
     target = str(d.get("obekt_gps") or "").strip()
     marshrut = None
     if target and (tab.get("razstoyanie_km") in (None, "") or tab.get("vreme_min") in (None, "")):
-        marshrut = route_to(target, d.get("sluzhba"))     # the table's distance and time – from the service
+        marshrut = route_to(target, d.get("sluzhba"), kadastar_id(d))   # the table's distance and time – from the service
         if marshrut:
             if tab.get("razstoyanie_km") in (None, ""):
                 tab["razstoyanie_km"] = round(marshrut["razstoyanie_km"], 1)
