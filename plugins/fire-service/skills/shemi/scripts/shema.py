@@ -1146,10 +1146,10 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
                                  joinstyle="miter", zorder=3))
         else:
             draw_building(ax, b["x"], b["y"], b["w"], b["h"], b["pokriv"], lw=0.9 if b["sasedna"] else 1.8)
-        if b["etiket"] and b["kontur"]:                # an outline: the label at its centroid, no white box over the walls
-            lx, ly = centroid(b["kontur"])
+        if b["etiket"] and b["kontur"]:                # an outline: the label at its centroid, on a white box so the
+            lx, ly = centroid(b["kontur"])             #   walls and dimension lines under it never cut through the text
             ax.text(lx, ly, b["etiket"].replace("\\n", "\n"), ha="center", va="center", fontsize=fs + 0.5, zorder=4,
-                    linespacing=1.2)
+                    linespacing=1.2, bbox=dict(fc="white", ec="none", pad=1.0, alpha=0.9))
         elif b["etiket"]:
             lx, ly = label_point(b, data["pozhar"] + data["zadimyavane"])
             ax.text(lx, ly, b["etiket"].replace("\\n", "\n"), ha="center", va="center", fontsize=fs + 0.5, zorder=4,
