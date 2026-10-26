@@ -995,7 +995,7 @@ def legend_keys(data, hose_m):
     extra = [(None, o["legenda"], o["etiket"]) for o in data["obekti"] if o["legenda"]]
     return keys, extra
 
-SCALES = (100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000, 20000)
+SCALES = (100, 200, 250, 500, 750, 1000, 1500, 2000, 2500, 5000, 10000, 20000)   # 750 and 1500 – to fill an A4 sheet
 
 # The sheet of a situational scheme (Приложение № 2а): the frame is the page minus its margins
 # (left 20 mm, the rest 10 mm – the page margins of the .docx), in mm.
