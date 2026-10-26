@@ -539,7 +539,7 @@ def street_name(name, ulitsa=True):
     m = re.match(r"^(ул\.|бул\.|пл\.|ж\.к\.|кв\.)\s*(.+)$", name)
     if not m:
         if not ulitsa or re.match(r"^(ул|бул|пл|площад|улица|булевард|път|шосе|АМ|автомагистрала)\b", name, re.I) \
-                or re.match(r"^[IVX]+-\d", name):
+                or re.match(r"^[IVX]+-\d", name) or re.search(r"\b(зона|квартал|парк|местност)\b", name, re.I):
             return name
         core = name.strip('"“”„')
         return "ул. „" + core + "“"
