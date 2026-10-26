@@ -320,7 +320,8 @@ def write(data, d, out, s, sheet=None):
     for g in data["vhodove"]:
         text(g["x"], g["y"], g["etiket"])
     for t in data["tekst"]:
-        text(t["x"], t["y"], t["tekst"], rot=t["ugal"])
+        text(t["x"], t["y"], t["tekst"], rot=t["ugal"],                # the same end as on the picture
+             align="MIDDLE_RIGHT" if t.get("kray") == "desen" else "MIDDLE_LEFT")
 
     # the sheet (Приложение № 2а) in model space, at the scheme's scale
     x0, y0, x1, y1 = data["box"]
