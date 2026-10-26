@@ -1428,8 +1428,10 @@ def render(d, out_png, out_svg=None, width_cm=None, height_cm=None, out_dxf=None
         kax.set_ylim(0, SHEET_H)
         kax.axis("off")
         kax.set_zorder(6)
-        kax.add_patch(Rectangle((1.2, SHEET_H - 23), 15.5, 21.8, fc="white", ec="none"))   # streets end under it
-        draw_kompas(kax, 9, SHEET_H - 13, 6, fs, ugal=sever)
+        # the sign reaches 1.35 × 6 = 8.1 mm from its centre whichever way north points – the centre 12 mm in keeps
+        #   the letters clear of the frame also when the drawing is turned and north lies along the sheet
+        kax.add_patch(Rectangle((1.2, SHEET_H - 23), 21.0, 21.8, fc="white", ec="none"))   # streets end under it
+        draw_kompas(kax, 12.5, SHEET_H - 13, 6, fs, ugal=sever)
         extra_out["mashtab"] = f"1:{scale}"
         sheet = {"scale": scale, "x_mm": ax_mm, "y_mm": ay_mm, "list": lst}
         warnings += situation_gaps(data)
