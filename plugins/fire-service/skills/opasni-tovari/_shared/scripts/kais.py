@@ -13,6 +13,7 @@ kais.py — кадастралната карта на АГКК (КАИС, kais.
     python3 _shared/scripts/kais.py obekt --link "https://www.google.com/maps/place/…/@43.41257,24.65047,17z" -o kais.json
     python3 _shared/scripts/kais.py obekt --id 56722.27.446 -o kais.json --shema shema.json [--voda] [--radius 40]
     python3 _shared/scripts/kais.py tarsi "Плевен ул. Васил Левски 1"
+    python3 _shared/scripts/kais.py mesto "Ларго метанстанция" --masto Плевен
 
 obekt – имотът в точката (или по идентификатора) и всички сгради в него. Записва:
   kais.json         – отговорът: "imot", "sgradi" (контури в КС2005), "ulitsi" (OpenStreetMap), "ramka";
@@ -32,6 +33,8 @@ obekt – имотът в точката (или по идентификатор
                       Имената на ж.к. и кварталите наблизо – от OpenStreetMap;
   --fon             – и кадастралната карта около имота като блед фон (kais_fon.png до kais.json) – за
                       работа и сверка; не е по Приложение № 2а, затова не е по подразбиране.
+mesto – обект по ИМЕ (магазин, бензиностанция, фирма): кандидатите с име, адрес и точка (Google Places, после
+  OpenStreetMap – само в област Плевен); избраният – към obekt --lat/--lon. Без браузър и без Google Maps.
 tarsi – какво намира търсачката на картата по идентификатор или адрес. В промишлените зони много имоти са
 записани само с местността (м. „…“), без улица и номер – тогава търси по точка.
 
@@ -1033,6 +1036,16 @@ def cmd_tarsi(a):
     print(json.dumps(res, ensure_ascii=False, indent=1))
 
 
+def cmd_mesto(a):
+    """An object by its NAME (a shop, a fuel station, a firm) → candidate points, through n8n: Google Places, then
+    OpenStreetMap, only inside област Плевен. Never a browser. The chosen candidate goes to obekt --lat/--lon; the
+    registry keeps the КАИС point and identifier, not Google's point."""
+    body = {"action": "mesto", "tekst": a.tekst}
+    if a.masto:
+        body["masto"] = a.masto
+    print(json.dumps(call(body), ensure_ascii=False, indent=1))
+
+
 def main():
     ap = argparse.ArgumentParser(description="Кадастралната карта (КАИС) за ситуационни схеми и планове")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1078,6 +1091,9 @@ def main():
                    help="с --shema: без сградите в граничещите имоти (по подразбиране са в схемата – б. „е“)")
     t = sub.add_parser("tarsi", help="търсачката на картата")
     t.add_argument("tekst")
+    m = sub.add_parser("mesto", help="обект по ИМЕ (магазин, бензиностанция, фирма) – кандидати с точка, без браузър")
+    m.add_argument("tekst", help="името, напр. „Ларго метанстанция“")
+    m.add_argument("--masto", help="населеното място, напр. Плевен")
     a = ap.parse_args()
     if a.cmd == "obekt" and a.link and "," in a.link and "://" not in a.link:
         try:
@@ -1085,7 +1101,7 @@ def main():
             a.link = None
         except ValueError:
             fail("BAD_INPUT", f"„{a.link}“ не е „ширина,дължина“")
-    {"obekt": cmd_obekt, "tarsi": cmd_tarsi}[a.cmd](a)
+    {"obekt": cmd_obekt, "tarsi": cmd_tarsi, "mesto": cmd_mesto}[a.cmd](a)
 
 
 if __name__ == "__main__":
