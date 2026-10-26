@@ -339,6 +339,26 @@ def test_kais(tmp, base):
     check(abs(la - 43.4125702) < 1e-8 and abs(lo - 24.6504731) < 1e-8, "… and back")
 
 
+def test_ortofoto(tmp):
+    """kais.py --ortofoto: the tiles that cover a frame (checked against the КАИС map) and the stitched picture."""
+    level, res, tl = kais.orto_tiles(427853, 4809077, 427995, 4809246, kais.ORTO_INFO)
+    check(level == 11 and min(tl) == (1285215, 1080923) and max(tl) == (1285220, 1080927),
+          "the tiles of ДГ „Снежанка“ at level 11 – the same the КАИС map loads")
+    from PIL import Image
+    tiles = []
+    for r, c in tl:
+        b = io.BytesIO()
+        Image.new("RGB", (256, 256), (r % 255, c % 255, 0)).save(b, "PNG")
+        tiles.append({"r": r, "c": c, "b64": base64.b64encode(b.getvalue()).decode()})
+    png = os.path.join(tmp, "o.png")
+    fence = [(427870, 4809100), (427970, 4809100), (427970, 4809220), (427870, 4809220)]
+    marks = kais.orto_picture({"tiles": tiles, "origin": kais.ORTO_INFO["origin"], "res": res, "tile": 256},
+                              427853, 4809077, 427995, 4809246, png, rings=[fence], fence=fence)
+    w, h = Image.open(png).size
+    check(abs(w - 142 / res) < 3 and abs(h - 169 / res) < 3, "the picture is the frame, at 13 cm a pixel")
+    check(len(marks) == 44 and marks[0][0] == 1, "a numbered point on the fence every 10 m")
+
+
 def main():
     with tempfile.TemporaryDirectory() as tmp:
         test_key(tmp)
@@ -351,6 +371,7 @@ def main():
         test_mail(tmp, base)
         test_search(tmp)
         test_kais(tmp, base)
+        test_ortofoto(tmp)
         srv.shutdown()
     print("\nALL PASS" if not failures else f"\n{len(failures)} FAILED")
     sys.exit(1 if failures else 0)
