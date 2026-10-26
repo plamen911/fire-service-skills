@@ -7,13 +7,17 @@ marshrut.py — маршрутът на пожарните автомобили 
     python3 _shared/scripts/marshrut.py --do 43.4125702,24.6504731                 # службата – по заповедта
     python3 _shared/scripts/marshrut.py --link "https://www.google.com/maps/place/…/@43.41,24.65,17z"
     python3 _shared/scripts/marshrut.py --do 43.4125702,24.6504731 --ot Сторгозия   # от друга служба
+    python3 _shared/scripts/marshrut.py --do 43.4380217,24.5895326 --kadastar 56722.651.111   # землището – от КАИС
     python3 _shared/scripts/marshrut.py --masto Биволаре                           # до центъра на селото
     python3 _shared/scripts/marshrut.py --sluzhbi                                  # адресите и координатите
     python3 _shared/scripts/marshrut.py --do … --fail route.json                   # маршрутът, свален с WebFetch
 
 Откъде тръгват автомобилите: `_shared/raioni/sluzhbi_pleven.csv` – адресът и координатите на всяка
 РСПБЗН и УПБЗН. Коя служба (или участък – УПБЗН, когато мястото е в района му) – по Заповед № 8121з-208/16.02.2026 г. (koya_sluzhba.py) за населеното място,
-в което е обектът (най-близкото по координати, ако е дадена само точка); без личен ключ – най-близката
+в което е обектът. Населеното място се взима, по реда: от кадастралния идентификатор (`--kadastar` – първите
+пет цифри са ЕКАТТЕ на землището: 56722.651.111 → гр. Плевен), от `--masto`, и чак тогава – най-близкото по
+координати. Последното греши край голям град: обект в промишлена зона на Плевен е по-близо до центъра на
+с. Опанец, отколкото до центъра на Плевен, и попадаше в района на друга служба. Без личен ключ – най-близката
 служба по права линия, с бележка. `--ot` задава службата изрично.
 
 Маршрутът е по пътищата от OpenStreetMap (OSRM – routing.openstreetmap.de, резервно router.project-osrm.org).
@@ -123,6 +127,15 @@ def nearest_place(p):
     return best, dist_km(p, (float(best["lat"]), float(best["lng"])))
 
 
+def place_by_ekatte(code):
+    """The settlement of a cadastral identifier (56722.651.111) or an ЕКАТТЕ code (56722); None outside the area."""
+    m = re.match(r"^\s*(\d{5})(?:\.|$)", str(code or ""))
+    if not m:
+        bad(f"--kadastar: очаква се кадастрален идентификатор (56722.651.111) или ЕКАТТЕ (56722), а е {code!r}")
+    hit = [r for r in read_csv(MESTA) if r["ekatte"] == m.group(1)]
+    return hit[0] if hit else None
+
+
 def place_by_name(name, obshtina=None):
     q = norm(name)
     rows = [r for r in read_csv(MESTA) if norm(r["naseleno_masto"]) == q]
@@ -212,6 +225,8 @@ def main():
     ap.add_argument("--link", help="линк към обекта в Google Maps или друга карта")
     ap.add_argument("--masto", help="населено място (обектът или центърът му, ако няма точка)")
     ap.add_argument("--obshtina", help="общината, ако името на мястото се повтаря")
+    ap.add_argument("--kadastar", help="кадастралният идентификатор на имота (56722.651.111) или ЕКАТТЕ – землището "
+                                       "определя населеното място, а с него и службата по заповедта")
     ap.add_argument("--ot", help="службата, от която тръгват (напр. „Левски“, „УПБЗН – Сторгозия“)")
     ap.add_argument("--skorost", type=float, default=SKOROST, help=f"km/min (по подразбиране {SKOROST:g})")
     ap.add_argument("--izlizane", type=float, default=IZLIZANE, help=f"min от сигнала до излизането (по подразбиране {IZLIZANE:g})")
@@ -241,10 +256,17 @@ def main():
     if a.ot:
         st, how = find_sluzhba(a.ot), "зададена"
     else:
-        if a.masto:
+        pl = place_by_ekatte(a.kadastar) if a.kadastar else None
+        if a.kadastar and not pl:
+            notes.append(f"землището на {a.kadastar} не е в района на РДПБЗН – Плевен")
+        if pl:
+            pass
+        elif a.masto:
             pl = place_by_name(a.masto, a.obshtina)
         else:
             pl, d = nearest_place(dest)
+            notes.append(f"населеното място ({pl['vid']} {pl['naseleno_masto']}) е по най-близкия център – "
+                         "с кадастралния идентификатор (--kadastar) е по землището")
             if d > 3:
                 notes.append(f"най-близкото населено място е {pl['vid']} {pl['naseleno_masto']} на {d:.1f} km – "
                              "провери службата")
