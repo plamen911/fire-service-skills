@@ -226,6 +226,115 @@ def nearest_on(p, a, b):
     return (a[0] + t * dx, a[1] + t * dy)
 
 
+def simplify(pts, tol):
+    """Douglas–Peucker on an open polyline – the small notches of a cadastral boundary go, the real bends stay."""
+    if len(pts) < 3:
+        return list(pts)
+    d, i = max((dist_seg(pts[k], pts[0], pts[-1]), k) for k in range(1, len(pts) - 1))
+    if d <= tol:
+        return [pts[0], pts[-1]]
+    return simplify(pts[:i + 1], tol)[:-1] + simplify(pts[i:], tol)
+
+
+def cross_lines(a, b, c, d):
+    """The crossing of the lines a–b and c–d (None when they are parallel)."""
+    den = (a[0] - b[0]) * (c[1] - d[1]) - (a[1] - b[1]) * (c[0] - d[0])
+    if abs(den) < 1e-9:
+        return None
+    t = ((a[0] - c[0]) * (c[1] - d[1]) - (a[1] - c[1]) * (c[0] - d[0])) / den
+    return (a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]))
+
+
+def segments_cross(ring):
+    """Does the closed ring cross itself?"""
+    n = len(ring)
+    segs = [(ring[i], ring[(i + 1) % n]) for i in range(n)]
+    def ccw(a, b, c):
+        return (c[1] - a[1]) * (b[0] - a[0]) - (b[1] - a[1]) * (c[0] - a[0])
+    for i in range(n):
+        for j in range(i + 2, n):
+            if i == 0 and j == n - 1:
+                continue
+            (a, b), (c, d) = segs[i], segs[j]
+            if ccw(a, b, c) * ccw(a, b, d) < 0 and ccw(c, d, a) * ccw(c, d, b) < 0:
+                return True
+    return False
+
+
+def fence_set_back(fence, street_rings, d, tol=1.0, near=1.0):
+    """The fence moved d metres into the parcel along the street parcels it borders – a sidewalk between the
+    street's edge and the fence. Returns (new fence, number of edges moved) or (None, 0) when nothing borders a
+    street or the result would cross itself."""
+    n = len(fence)
+    signed = sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(fence, fence[1:] + fence[:1])) / 2
+    inward = 1 if signed > 0 else -1                   # left of the direction for a counter-clockwise ring
+    edges = [(fence[i], fence[(i + 1) % n]) for i in range(n)]
+    def on_street(e):
+        m = ((e[0][0] + e[1][0]) / 2, (e[0][1] + e[1][1]) / 2)
+        return any(min(dist_seg(m, p, q) for p, q in zip(r, r[1:] + r[:1])) <= near for r in street_rings)
+    flag = [on_street(e) for e in edges]
+    if not any(flag):
+        return None, 0
+    if all(flag):                                      # walled in by streets on every side
+        start = 0
+    else:
+        start = next(i for i in range(n) if flag[i] and not flag[i - 1])
+    out, moved, i = [], 0, start
+    order = [(start + k) % n for k in range(n)]
+    runs, cur = [], []
+    for k in order:
+        if flag[k]:
+            cur.append(k)
+        elif cur:
+            runs.append(cur)
+            cur = []
+    if cur:
+        runs.append(cur)
+    new = [list(p) for p in fence]
+    replace = {}                                       # first vertex index of a run -> (last vertex index, new points)
+    for run in runs:
+        verts = [fence[run[0]]] + [fence[(k + 1) % n] for k in run]
+        verts = simplify(verts, tol)
+        segs = []
+        for a, b in zip(verts, verts[1:]):
+            L = math.dist(a, b)
+            if L < 1e-6:
+                continue
+            nx, ny = -(b[1] - a[1]) / L * inward * d, (b[0] - a[0]) / L * inward * d
+            segs.append(((a[0] + nx, a[1] + ny), (b[0] + nx, b[1] + ny)))
+        if not segs:
+            continue
+        pts = []
+        prev_e = edges[(run[0] - 1) % n]
+        next_e = edges[(run[-1] + 1) % n]
+        if len(runs) == 1 and len(run) == n:
+            pts.append(cross_lines(*segs[-1], *segs[0]) or segs[0][0])
+        else:
+            pts.append(cross_lines(*prev_e, *segs[0]) or segs[0][0])
+        for s1, s2 in zip(segs, segs[1:]):
+            pts.append(cross_lines(*s1, *s2) or s1[1])
+        if not (len(runs) == 1 and len(run) == n):
+            pts.append(cross_lines(*segs[-1], *next_e) or segs[-1][1])
+        replace[run[0]] = ((run[-1] + 1) % n, pts)
+        moved += len(run)
+    if len(runs) == 1 and len(runs[0]) == n:
+        ring = [[round(x, 2), round(y, 2)] for x, y in replace[runs[0][0]][1]]
+    else:
+        ring, k, seen = [], start, 0
+        while seen < n:
+            if k in replace:
+                last, pts = replace[k]
+                ring += [[round(x, 2), round(y, 2)] for x, y in pts]
+                steps = (last - k) % n
+                k, seen = (last + 1) % n, seen + steps + 1
+            else:
+                ring.append(new[k])
+                k, seen = (k + 1) % n, seen + 1
+    if len(ring) < 3 or segments_cross(ring):
+        return None, 0
+    return ring, moved
+
+
 def osm_grass(x0, y0, x1, y1):
     """The grass areas (landuse=grass/meadow, leisure=park, village_green) in the frame, as rings in КС2005 –
     from the OpenStreetMap API ([], error text) on failure."""
@@ -516,6 +625,23 @@ def cmd_obekt(a):
         elif "ulitsi" in res or "ulitsi_kais" in res:
             notes.append("Около обекта няма улици нито в КАИС, нито в OpenStreetMap – начертай ги на ръка.")
 
+        # the sidewalk (--trotoar): the fence set back from the edge of the street parcels it borders, so the
+        # sidewalk shows between the street and the fence (approved on ДГ „Снежанка“, Плевен)
+        if a.trotoar and sh.get("ograda"):
+            want = [w_.strip().lower() for w_ in a.trotoar_ulitsa or [] if w_.strip()]
+            st_rings = [st["kontur"] for st in streets if "kontur" in st
+                        and (not want or any(w_ in (st.get("ime") or "").lower() or w_ == st.get("kais_id") for w_ in want))]
+            fence, moved = fence_set_back(sh["ograda"], st_rings, a.trotoar)
+            if fence:
+                sh["ograda"] = fence
+                summary["trotoar_m"] = a.trotoar
+                notes.append(f"Оградата е отместена на {a.trotoar:g} m навътре от ръба на улицата ({moved} страни) – "
+                             "тротоарът се вижда между тях; ширината е приета – провери я. Порталите (`vhodove`) се "
+                             "слагат върху новата ограда, а `prohodi` – на ръба на улицата.")
+            else:
+                notes.append("--trotoar: оградата не граничи с улица от КАИС (или отместването би я пресякло) – "
+                             "оставена е по границата на имота.")
+
         # the named places nearby (ж.к. „…“, квартал) – from OpenStreetMap: inside the terrain at their point, a
         # place outside it (up to 400 m) at the edge of the terrain on its side
         cx, cy = (bx0 + bx1) / 2, (by0 + by1) / 2
@@ -643,6 +769,12 @@ def main():
     o.add_argument("--ograda", nargs="?", const="da", default=None,
                    help="с --shema: имотът е ограден – границата му се чертае като ограда (вид: zhelezobetonna, "
                         "kamenna, metalna, darvena, bodliva; без вид – пунктир „Ограда“)")
+    o.add_argument("--trotoar", type=float, default=0,
+                   help="с --ograda: оградата откъм улиците се отмества толкова метра навътре – тротоарът се вижда "
+                        "между ръба на улицата и оградата (напр. 2.5)")
+    o.add_argument("--trotoar-ulitsa", action="append",
+                   help="с --trotoar: само откъм тази улица (име или част от него, или идентификатор от КАИС); "
+                        "може няколко пъти – без него откъм всички улици")
     o.add_argument("--s-vatreshni", action="store_true",
                    help="с --shema: и пътищата без име от OpenStreetMap вътре в имота (по подразбиране – не)")
     o.add_argument("--bez-trevni", action="store_true", help="с --shema: без тревните площи от OpenStreetMap")
