@@ -335,6 +335,96 @@ def fence_set_back(fence, street_rings, d, tol=1.0, near=1.0):
     return ring, moved
 
 
+# ── the orthophoto of КАИС (МЗХ, published by АГКК) – working material for the entrances, never on the sheet ──────
+ORTO_LEVEL = 11                   # 0,132 m a pixel; level 10 (0,265 m) when the frame is large
+ORTO_MAX_TILES = 64
+ORTO_ZNAK_M = 10.0                # a numbered point on the fence every this many metres
+# the tile scheme of the orthophoto services of АГКК (ArcGIS ImageServer, КС2005, 256 px) – the same for all editions
+ORTO_INFO = {"origin": [-36179500.0, 48335300.0], "tile": 256,
+             "lods": [[8, 1.3229193125052918], [9, 0.5291677250021167], [10, 0.26458386250105836],
+                      [11, 0.13229193125052918]]}
+ORTO_SLOEVE = ["2025", "2022"]   # 2023–2025 and 2020–2022, newest first; n8n knows the service of each
+
+
+def orto_tiles(x0, y0, x1, y1, info):
+    """The tiles (row, col) of the tile scheme that cover the frame, at the finest level that stays under
+    ORTO_MAX_TILES; info = {"origin": [x, y], "lods": [[level, resolution], …], "tile": 256}."""
+    ox, oy = info["origin"]
+    for level, res in sorted(info["lods"], key=lambda l: -l[0]):
+        if level > ORTO_LEVEL:
+            continue
+        span = info.get("tile", 256) * res
+        c0, c1 = int((x0 - ox) // span), int((x1 - ox) // span)
+        r0, r1 = int((oy - y1) // span), int((oy - y0) // span)
+        if (c1 - c0 + 1) * (r1 - r0 + 1) <= ORTO_MAX_TILES:
+            return level, res, [(r, c) for r in range(r0, r1 + 1) for c in range(c0, c1 + 1)]
+    return None, None, []
+
+
+def orto_picture(res, x0, y0, x1, y1, png, rings=(), buildings=(), fence=None, step=ORTO_ZNAK_M):
+    """Stitches the tiles from n8n into one picture of the frame and draws on it the parcel, the buildings
+    and numbered points along the fence (every `step` m) – so an entrance seen on the photo is named by its
+    number. Returns the numbered points in КС2005 [(n, x, y)]."""
+    import io
+    from PIL import Image, ImageDraw, ImageFont
+    ox, oy = res["origin"]
+    rsl, size = res["res"], res.get("tile", 256)
+    span = size * rsl
+    tiles = res.get("tiles") or []
+    if not tiles:
+        return None
+    rows = [t["r"] for t in tiles]
+    cols = [t["c"] for t in tiles]
+    W, H = (max(cols) - min(cols) + 1) * size, (max(rows) - min(rows) + 1) * size
+    big = Image.new("RGB", (W, H), (255, 255, 255))
+    for t in tiles:
+        try:
+            im = Image.open(io.BytesIO(base64.b64decode(t["b64"]))).convert("RGB")
+        except Exception:
+            continue
+        big.paste(im, ((t["c"] - min(cols)) * size, (t["r"] - min(rows)) * size))
+    gx0, gy1 = ox + min(cols) * span, oy - min(rows) * span          # the top-left corner of the mosaic
+    def px(x, y):
+        return ((x - gx0) / rsl, (gy1 - y) / rsl)
+    a, b = px(x0, y1)
+    c, d = px(x1, y0)
+    pic = big.crop((int(a), int(b), int(c), int(d)))
+    dx, dy = int(a), int(b)
+    def pp(x, y):
+        u, v = px(x, y)
+        return (u - dx, v - dy)
+    draw = ImageDraw.Draw(pic)
+    w_ = max(2, int(pic.width / 400))
+    for ring in rings:
+        draw.line([pp(*p) for p in ring + ring[:1]], fill=(0, 200, 255), width=w_ + 1)
+    for ring in buildings:
+        draw.line([pp(*p) for p in ring + ring[:1]], fill=(255, 210, 0), width=w_)
+    marks = []
+    if fence:
+        try:
+            font = ImageFont.truetype("DejaVuSans-Bold.ttf", max(14, int(pic.width / 45)))
+        except OSError:
+            font = ImageFont.load_default()
+        ring = fence + fence[:1]
+        pts = densify(ring, 0.5)
+        n, acc, last = 1, 0.0, pts[0]
+        marks.append((n, last[0], last[1]))
+        for q in pts[1:]:
+            acc += math.dist(last, q)
+            last = q
+            if acc >= step and math.dist(q, pts[0]) > step / 2:     # not again on the first point
+                n, acc = n + 1, 0.0
+                marks.append((n, q[0], q[1]))
+        r_ = max(4, w_ * 2)
+        for n, x, y in marks:
+            u, v = pp(x, y)
+            draw.ellipse((u - r_, v - r_, u + r_, v + r_), fill=(255, 40, 40), outline=(255, 255, 255))
+            draw.text((u + r_ + 2, v - r_ - 2), str(n), fill=(255, 255, 255), font=font,
+                      stroke_width=3, stroke_fill=(0, 0, 0))
+    pic.save(png)
+    return marks
+
+
 def osm_grass(x0, y0, x1, y1):
     """The grass areas (landuse=grass/meadow, leisure=park, village_green) in the frame, as rings in КС2005 –
     from the OpenStreetMap API ([], error text) on failure."""
@@ -642,6 +732,44 @@ def cmd_obekt(a):
                 notes.append("--trotoar: оградата не граничи с улица от КАИС (или отместването би я пресякло) – "
                              "оставена е по границата на имота.")
 
+        # the orthophoto (--ortofoto): where the entrances, the gates and the yard are – the photo of МЗХ from
+        # КАИС, in КС2005 like everything here; numbered points on the fence name an entrance seen on it
+        if a.ortofoto:
+            ring_l = sh.get("ograda") or (local(ring, bx0, by0) if ring else [])
+            pts_kc = [(p[0] + bx0, p[1] + by0) for p in ring_l] or [(p[0], p[1]) for s in sgradi for p in s.get("kontur") or []]
+            if pts_kc:
+                m_ = 15.0
+                ox0, oy0 = min(p[0] for p in pts_kc) - m_, min(p[1] for p in pts_kc) - m_
+                ox1, oy1 = max(p[0] for p in pts_kc) + m_, max(p[1] for p in pts_kc) + m_
+                level, rsl, tl = orto_tiles(ox0, oy0, ox1, oy1, ORTO_INFO)
+                sloeve = ORTO_SLOEVE if a.ortofoto == "nai-novo" else [a.ortofoto]
+                o = None
+                for sloi in sloeve:                    # the newest edition that covers the place
+                    try:
+                        o = call({"action": "ortofoto", "sloi": sloi, "level": level, "tiles": [[r, c] for r, c in tl]})
+                    except SystemExit:
+                        o = None
+                    if o and len(o.get("tiles") or []) >= len(tl) * 0.8:
+                        o.update({"origin": ORTO_INFO["origin"], "res": rsl, "tile": ORTO_INFO["tile"],
+                                  "godina": o.get("godina") or sloi})
+                        break
+                    o = None
+                if o and o.get("tiles"):
+                    png = os.path.splitext(os.path.abspath(a.shema))[0] + "_ortofoto.png"
+                    marks = orto_picture(o, ox0, oy0, ox1, oy1, png,
+                                         rings=[ring] if ring else [],
+                                         buildings=[s["kontur"] for s in sgradi if s.get("kontur")],
+                                         fence=pts_kc if ring_l else None)
+                    summary["ortofoto"] = {"png": png, "godina": o.get("godina"), "pikseli_m": o.get("res"),
+                                           "tochki": [{"n": n, "x": round(x - bx0, 2), "y": round(y - by0, 2)}
+                                                      for n, x, y in marks or []]}
+                    notes.append(f"Ортофото {o.get('godina') or ''} (МЗХ, от КАИС): {png} – работна снимка за входовете и "
+                                 "порталите, не влиза в листа по Приложение № 2а. Номерираните точки по оградата са в "
+                                 "`ortofoto.tochki` (координатите на схемата) – вход при точка N е `vhodove` там.")
+                else:
+                    notes.append("Ортофотото не се взе от КАИС" + (f": {o.get('error')}" if o and o.get('error') else "")
+                                 + " – входовете се питат (формулярът).")
+
         # the named places nearby (ж.к. „…“, квартал) – from OpenStreetMap: inside the terrain at their point, a
         # place outside it (up to 400 m) at the edge of the terrain on its side
         cx, cy = (bx0 + bx1) / 2, (by0 + by1) / 2
@@ -775,6 +903,10 @@ def main():
     o.add_argument("--trotoar-ulitsa", action="append",
                    help="с --trotoar: само откъм тази улица (име или част от него, или идентификатор от КАИС); "
                         "може няколко пъти – без него откъм всички улици")
+    o.add_argument("--ortofoto", nargs="?", const="nai-novo", default=None,
+                   help="с --shema: и ортофотото на имота от КАИС (МЗХ) с границата, сградите и номерирани точки по "
+                        "оградата – за входовете и порталите (*_ortofoto.png); издание: 2025 (2023–2025) или 2022 (2020–2022) – "
+                        "по подразбиране най-новото с покритие")
     o.add_argument("--s-vatreshni", action="store_true",
                    help="с --shema: и пътищата без име от OpenStreetMap вътре в имота (по подразбиране – не)")
     o.add_argument("--bez-trevni", action="store_true", help="с --shema: без тревните площи от OpenStreetMap")
