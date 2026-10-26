@@ -529,11 +529,22 @@ def osm_water(x0, y0, x1, y1):
     return {"reki": out, "ezera": ezera}, ""
 
 
-def street_name(name):
-    """„бул. Русе“ → „бул. „Русе““ – the plugin's typography for street names; other names stay as they are."""
-    m = re.match(r"^(ул\.|бул\.|пл\.|ж\.к\.|кв\.)\s*(.+)$", name.strip())
-    if not m or m.group(2).startswith("„"):
-        return name.strip()
+def street_name(name, ulitsa=True):
+    """„бул. Русе“ → „бул. „Русе““ – the plugin's typography for street names; a street name without its kind
+    („Иван Миндиликов“, as КАИС and OpenStreetMap often give it) gets „ул.“ in front: „ул. „Иван Миндиликов““.
+    ulitsa=False – a place (ж.к., квартал): the name stays as it is."""
+    name = name.strip()
+    if not name:
+        return name
+    m = re.match(r"^(ул\.|бул\.|пл\.|ж\.к\.|кв\.)\s*(.+)$", name)
+    if not m:
+        if not ulitsa or re.match(r"^(ул|бул|пл|площад|улица|булевард|път|шосе|АМ|автомагистрала)\b", name, re.I) \
+                or re.match(r"^[IVX]+-\d", name):
+            return name
+        core = name.strip('"“”„')
+        return "ул. „" + core + "“"
+    if m.group(2).startswith("„"):
+        return name
     core = m.group(2).strip('"“”')
     return m.group(1) + " „" + core + "“"
 
@@ -732,6 +743,8 @@ def cmd_obekt(a):
             if tag and tag[0] not in names_used:
                 st["ime"], st["ime_pos"], st["ime_ugal"] = tag
                 names_used.add(tag[0])
+            elif tag:
+                st["ime_ulitsa"] = tag[0]              # the same street – its name may go here if it fits better
             streets.append(st)
         rings = [r["kontur"] for r in roads]
         complement = []
@@ -770,6 +783,8 @@ def cmd_obekt(a):
                 name = street_name(u.get("ime") or "")
                 streets.append({"tochki": [[round(x - bx0, 1), round(y - by0, 1)] for x, y in part],
                                 "shirina": u.get("shirina") or 6, "ime": "" if name in names_used else name, "_len": length(part)})
+                if name:
+                    streets[-1]["ime_ulitsa"] = name   # every piece knows its street: the name goes where it fits
         for name in {st["ime"] for st in streets if "tochki" in st and st["ime"]}:
             same = [st for st in streets if "tochki" in st and st["ime"] == name]
             longest = max(same, key=lambda st: st["_len"])
@@ -864,7 +879,7 @@ def cmd_obekt(a):
                 k = min((((bx1 - m) - cx) / dx if dx > 0 else ((bx0 + m) - cx) / dx) if dx else 1e9,
                         (((by1 - m) - cy) / dy if dy > 0 else ((by0 + m) - cy) / dy) if dy else 1e9)
                 px, py = cx + dx * k, cy + dy * k
-            texts.append({"x": round(px - bx0, 1), "y": round(py - by0, 1), "tekst": street_name(m_["ime"]),
+            texts.append({"x": round(px - bx0, 1), "y": round(py - by0, 1), "tekst": street_name(m_["ime"], ulitsa=False),
                           "osm": True})
         if texts:
             sh["tekst"] = texts

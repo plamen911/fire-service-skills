@@ -400,7 +400,28 @@ def test_water_signs():
     check(refused, "a river with one point is refused")
 
 
+def test_street_names_inside():
+    print("znatsi.py / kais.py – the street name with „ул.“, inside the street between its lines")
+    sys.path.insert(0, os.path.join(SKILL, "_shared", "scripts"))
+    from kais import street_name
+    check(street_name("Иван Миндиликов") == "ул. „Иван Миндиликов“", "„ул.“ in front of a bare street name")
+    check(street_name("бул. Русе") == "бул. „Русе“", "a boulevard keeps its kind")
+    check(street_name("Дружба 3", ulitsa=False) == "Дружба 3", "a place name gets no „ул.“")
+    import znatsi
+    street = [(0, 0), (60, 0), (60, 8), (0, 8)]                     # an 8 m wide street, 60 m long
+    fit = znatsi.fit_street_label(street, "ул. „Примерна“", (30, 20), 0, 7, 3.78, (0, -20, 60, 40))
+    check(fit is not None and 0 < fit[0][1] < 8, f"a name given outside goes inside the street: {fit}")
+    narrow = [(0, 0), (60, 0), (60, 1), (0, 1)]
+    check(znatsi.fit_street_label(narrow, "ул. „Примерна“", (30, 0.5), 0, 7, 3.78, (0, -20, 60, 40)) is None,
+          "no place in a street too narrow for the name")
+    pipe = [[(0, 4), (60, 4)]]
+    fit = znatsi.fit_street_label([(0, 0), (60, 0), (60, 12), (0, 12)], "ул. „Примерна“", (30, 4), 0, 7, 3.78,
+                                  (0, -20, 60, 40), obstacles=pipe)
+    check(fit is not None and abs(fit[0][1] - 4) > 2, f"the name moves off the water main in the street: {fit}")
+
+
 if __name__ == "__main__":
+    test_street_names_inside()
     test_water_signs()
     test_fixture()
     test_defaults()

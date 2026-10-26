@@ -70,6 +70,9 @@ shema.py — чертае СХЕМА за разполагане на силит
                                                 //   или улица като площ – поземленият имот от КАИС (kais.py)
   // в "ulitsi" улица като ивица може да е без единия си ръб: "bez_ruba": "lyav" или "desen" (по посоката на точките);
   //   улица като площ ("kontur") с "bez_ruba": true е само платно, без ръб – запълва празнина между два имота
+  // името на улицата е винаги между двете ѝ кафяви линии, ако се събира: на мястото "ime_pos", иначе на най-близкото
+  //   място в същата улица, а ако и там не се събира – на друго парче от нея ("ime_ulitsa": „ул. „…““ – kais.py го
+  //   слага на всяко парче); само ако не се събира никъде – на "ime_pos"
   "trevni": [{"kontur": [[x, y], …]}],          // тревни площи – зелени (чл. 9, ал. 9, т. 5)
   "reki": [{"tochki": [[x, y], …], "shirina": 4, "ime": "р. Вит",   // река, канал – знакът „Река, канал с бараж“ от
             "barazhi": [[x, y]], "ime_pos": [x, y], "ime_ugal": 0}],  //   Приложение № 6: на всеки бряг права синя линия
@@ -724,6 +727,7 @@ def load(d):
                 bad(f"ulitsi[{i}].kontur: трябват поне три точки")
             holes = [[pt(p, f"ulitsi[{i}].otvori") for p in h] for h in (u.get("otvori") or []) if len(h) >= 3]
             out["ulitsi"].append({"kontur": k, "otvori": holes, "ime": str(u.get("ime") or ""),
+                                  "ime_ulitsa": str(u.get("ime_ulitsa") or ""),
                                   "bez_ruba": bool(u.get("bez_ruba")),
                                   "ime_pos": pt(u["ime_pos"], f"ulitsi[{i}].ime_pos") if u.get("ime_pos") else None,
                                   "ime_ugal": num(u.get("ime_ugal", 0), f"ulitsi[{i}].ime_ugal")})
@@ -735,7 +739,8 @@ def load(d):
         if side not in (None, "", "lyav", "desen"):   #   of the points) – e.g. a road that runs on into another
             bad(f"ulitsi[{i}].bez_ruba: „lyav“ или „desen“")
         out["ulitsi"].append({"tochki": pts, "shirina": num(u.get("shirina", 7), f"ulitsi[{i}].shirina"),
-                              "ime": str(u.get("ime") or ""), "bez_ruba": side or None})
+                              "ime": str(u.get("ime") or ""), "ime_ulitsa": str(u.get("ime_ulitsa") or ""),
+                              "bez_ruba": side or None})
     for i, r in enumerate(items(d, "razstoyaniya")):
         a, b = pt(r.get("ot"), f"razstoyaniya[{i}].ot"), pt(r.get("do"), f"razstoyaniya[{i}].do")
         out["razstoyaniya"].append({"ot": a, "do": b, "etiket": str(r.get("etiket") or f"{math.dist(a, b):.0f}")})
@@ -1111,7 +1116,8 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
     for m in data["mostove"]:
         draw_most_voda(ax, m["x"], m["y"], m["ugal"], m["shirina"], s, pal)
     draw_streets(ax, data["ulitsi"], fs, pal,          # the situation first – under everything else
-                 hidden=[seg for ln in data["ulitsi_skrij"] for seg in zip(ln, ln[1:])])
+                 hidden=[seg for ln in data["ulitsi_skrij"] for seg in zip(ln, ln[1:])],
+                 obstacles=[v["tochki"] for v in data["vodoprovod"] + data["gazoprovod"]])
     for g in data["prohodi"]:                          # the entrances from the street: the edge line is cut there
         ax.add_patch(Circle((g["x"], g["y"]), g["shirina"] / 2, fc="white", ec="none", zorder=1.27))
     if data["ulitsi_rab"]:                             # a street edge drawn by hand – the same brown line, smoothed; it
