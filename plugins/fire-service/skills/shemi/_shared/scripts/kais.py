@@ -371,19 +371,23 @@ def orto_picture(res, x0, y0, x1, y1, png, rings=(), buildings=(), fence=None, s
     rsl, size = res["res"], res.get("tile", 256)
     span = size * rsl
     tiles = res.get("tiles") or []
-    if not tiles:
+    if res.get("png_base64"):                          # stitched by n8n: one picture from tile (r0, c0)
+        big = Image.open(io.BytesIO(base64.b64decode(res["png_base64"]))).convert("RGB")
+        r_min, c_min = res["r0"], res["c0"]
+    elif tiles:                                        # the tiles themselves – stitched here
+        r_min, c_min = min(t["r"] for t in tiles), min(t["c"] for t in tiles)
+        W = (max(t["c"] for t in tiles) - c_min + 1) * size
+        H = (max(t["r"] for t in tiles) - r_min + 1) * size
+        big = Image.new("RGB", (W, H), (255, 255, 255))
+        for t in tiles:
+            try:
+                im = Image.open(io.BytesIO(base64.b64decode(t["b64"]))).convert("RGB")
+            except Exception:
+                continue
+            big.paste(im, ((t["c"] - c_min) * size, (t["r"] - r_min) * size))
+    else:
         return None
-    rows = [t["r"] for t in tiles]
-    cols = [t["c"] for t in tiles]
-    W, H = (max(cols) - min(cols) + 1) * size, (max(rows) - min(rows) + 1) * size
-    big = Image.new("RGB", (W, H), (255, 255, 255))
-    for t in tiles:
-        try:
-            im = Image.open(io.BytesIO(base64.b64decode(t["b64"]))).convert("RGB")
-        except Exception:
-            continue
-        big.paste(im, ((t["c"] - min(cols)) * size, (t["r"] - min(rows)) * size))
-    gx0, gy1 = ox + min(cols) * span, oy - min(rows) * span          # the top-left corner of the mosaic
+    gx0, gy1 = ox + c_min * span, oy - r_min * span                  # the top-left corner of the mosaic
     def px(x, y):
         return ((x - gx0) / rsl, (gy1 - y) / rsl)
     a, b = px(x0, y1)
@@ -746,15 +750,17 @@ def cmd_obekt(a):
                 o = None
                 for sloi in sloeve:                    # the newest edition that covers the place
                     try:
-                        o = call({"action": "ortofoto", "sloi": sloi, "level": level, "tiles": [[r, c] for r, c in tl]})
+                        o = call({"action": "ortofoto", "sloi": sloi, "level": level, "tiles": [[r, c] for r, c in tl],
+                                  "stitch": True})
                     except SystemExit:
                         o = None
-                    if o and len(o.get("tiles") or []) >= len(tl) * 0.8:
+                    got = o.get("broi", len(o.get("tiles") or [])) if o else 0
+                    if o and (o.get("png_base64") or o.get("tiles")) and got >= len(tl) * 0.8:
                         o.update({"origin": ORTO_INFO["origin"], "res": rsl, "tile": ORTO_INFO["tile"],
                                   "godina": o.get("godina") or sloi})
                         break
                     o = None
-                if o and o.get("tiles"):
+                if o:
                     png = os.path.splitext(os.path.abspath(a.shema))[0] + "_ortofoto.png"
                     marks = orto_picture(o, ox0, oy0, ox1, oy1, png,
                                          rings=[ring] if ring else [],
