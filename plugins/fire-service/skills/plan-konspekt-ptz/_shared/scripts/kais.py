@@ -429,10 +429,15 @@ def orto_picture(res, x0, y0, x1, y1, png, rings=(), buildings=(), fence=None, s
     return marks
 
 
-def osm_grass(x0, y0, x1, y1):
-    """The grass areas (landuse=grass/meadow, leisure=park, village_green) in the frame, as rings in КС2005 –
-    from the OpenStreetMap API ([], error text) on failure."""
+_OSM = {}
+
+
+def osm_map(x0, y0, x1, y1):
+    """The OpenStreetMap data of the frame (КС2005) – (xml root, "") or (None, error text); fetched once per frame."""
     import xml.etree.ElementTree as ET
+    key = (round(x0), round(y0), round(x1), round(y1))
+    if key in _OSM:
+        return _OSM[key]
     corners = [kc_to_wgs(x, y) for x, y in ((x0, y0), (x1, y0), (x0, y1), (x1, y1))]
     la = [c[0] for c in corners]
     lo = [c[1] for c in corners]
@@ -440,9 +445,18 @@ def osm_grass(x0, y0, x1, y1):
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "fire-service/kais"})
         with urllib.request.urlopen(req, timeout=60) as r:
-            root = ET.fromstring(r.read())
+            _OSM[key] = (ET.fromstring(r.read()), "")
     except (urllib.error.URLError, OSError, ET.ParseError) as e:
-        return [], f"{e}"
+        _OSM[key] = (None, f"{e}")
+    return _OSM[key]
+
+
+def osm_grass(x0, y0, x1, y1):
+    """The grass areas (landuse=grass/meadow, leisure=park, village_green) in the frame, as rings in КС2005 –
+    from the OpenStreetMap API ([], error text) on failure."""
+    root, err = osm_map(x0, y0, x1, y1)
+    if root is None:
+        return [], err
     nodes = {n.get("id"): (float(n.get("lat")), float(n.get("lon"))) for n in root.iter("node")}
     out = []
     for w in root.iter("way"):
@@ -454,6 +468,65 @@ def osm_grass(x0, y0, x1, y1):
             continue
         out.append([list(wgs_to_kc(*nodes[r_])) for r_ in refs[:-1]])
     return out, ""
+
+
+# the width a waterway is drawn with when OpenStreetMap gives none (m) – the sign „Река, канал“ of Приложение № 6
+WATERWAY_WIDTH = {"river": 10.0, "canal": 6.0, "stream": 4.0, "ditch": 2.0, "drain": 2.0}
+
+
+def osm_water(x0, y0, x1, y1):
+    """The rivers, canals and streams (waterway=*, not in a tunnel) as axes in КС2005 with name and width, and the
+    lakes and ponds (natural=water) as rings – ({"reki": [...], "ezera": [...]}, "") or (None, error text)."""
+    root, err = osm_map(x0, y0, x1, y1)
+    if root is None:
+        return None, err
+    nodes = {n.get("id"): (float(n.get("lat")), float(n.get("lon"))) for n in root.iter("node")}
+    reki, ezera = [], []
+    for w in root.iter("way"):
+        tags = {t.get("k"): t.get("v") for t in w.iter("tag")}
+        refs = [nd.get("ref") for nd in w.iter("nd")]
+        if not all(r_ in nodes for r_ in refs) or len(refs) < 2:
+            continue
+        pts = [list(wgs_to_kc(*nodes[r_])) for r_ in refs]
+        wt = tags.get("waterway")
+        if wt in WATERWAY_WIDTH and tags.get("tunnel") not in ("yes", "culvert") and tags.get("layer", "0")[:1] != "-":
+            try:
+                width = float(str(tags.get("width", "")).replace(",", ".").split()[0])
+            except (ValueError, IndexError):
+                width = WATERWAY_WIDTH[wt]
+            name = tags.get("name:bg") or tags.get("name") or ""
+            reki.append({"tochki": pts, "shirina": round(min(max(width, 1.5), 40.0), 1),
+                         "ime": ("р. " + name) if name and wt == "river" or (name and wt == "stream") else name})
+        elif tags.get("natural") == "water" and tags.get("water") not in ("river", "canal", "stream") \
+                and refs[0] == refs[-1] and len(refs) >= 4:
+            ezera.append({"kontur": pts[:-1], "ime": tags.get("name:bg") or tags.get("name") or ""})
+    joined = {}                                         # one river is often several ways – join them by name and ends
+    for r in reki:
+        joined.setdefault((r["ime"], r["shirina"]), []).append(r["tochki"])
+    out = []
+    for (name, width), parts in joined.items():
+        parts = [list(p) for p in parts]
+        while parts:
+            line = parts.pop(0)
+            grew = True
+            while grew:
+                grew = False
+                for i, q in enumerate(parts):
+                    if math.dist(line[-1], q[0]) < 0.5:
+                        line += q[1:]
+                    elif math.dist(line[0], q[-1]) < 0.5:
+                        line = q[:-1] + line
+                    elif math.dist(line[-1], q[-1]) < 0.5:
+                        line += q[::-1][1:]
+                    elif math.dist(line[0], q[0]) < 0.5:
+                        line = q[::-1][:-1] + line
+                    else:
+                        continue
+                    parts.pop(i)
+                    grew = True
+                    break
+            out.append({"tochki": line, "shirina": width, "ime": name})
+    return {"reki": out, "ezera": ezera}, ""
 
 
 def street_name(name):
@@ -870,6 +943,30 @@ def cmd_obekt(a):
                              "имота на улици, запълни празнината с улица-площ без ръб (shemi).")
             elif err:
                 notes.append("Тревните площи не се взеха от OpenStreetMap: " + err)
+        # rivers, canals, lakes (Приложение № 6, „Река, канал“, „Езеро, микроязовир“) – КАИС has no names for them and
+        #   the water parcels are not always there: from OpenStreetMap, like the grass
+        if not a.bez_reki:
+            vodi, err = osm_water(bx0, by0, bx1, by1)
+            if vodi and (vodi["reki"] or vodi["ezera"]):
+                fx0, fy0, fx1, fy1 = bx0 - 200, by0 - 200, bx1 + 200, by1 + 200      # keep what reaches the frame
+                def near(pts):
+                    return any(fx0 <= p[0] <= fx1 and fy0 <= p[1] <= fy1 for p in pts)
+                def trim(pts):                          # only the part near the frame (one point past it each way)
+                    keep = [i for i, p in enumerate(pts) if fx0 <= p[0] <= fx1 and fy0 <= p[1] <= fy1]
+                    return pts[max(keep[0] - 1, 0):keep[-1] + 2] if keep else pts
+                reki = [dict(r, tochki=local(trim(r["tochki"]), bx0, by0)) for r in vodi["reki"] if near(r["tochki"])]
+                ezera = [dict(e, kontur=local(e["kontur"], bx0, by0)) for e in vodi["ezera"] if near(e["kontur"])]
+                if reki:
+                    sh["reki"] = reki
+                    summary["reki"] = [r["ime"] or "(без име)" for r in reki]
+                if ezera:
+                    sh["ezera"] = ezera
+                    summary["ezera"] = len(ezera)
+                if reki or ezera:
+                    notes.append("Реките и езерата са от OpenStreetMap – оста и ширината са приблизителни (ширина по "
+                                 "подразбиране: река 10 m, канал 6 m, поток 4 m); провери ги и името (shemi).")
+            elif err:
+                notes.append("Реките не се взеха от OpenStreetMap: " + err)
         with open(a.shema, "w", encoding="utf-8") as f:
             json.dump(sh, f, ensure_ascii=False, indent=1)
         summary["shema"] = os.path.abspath(a.shema)
@@ -916,6 +1013,7 @@ def main():
     o.add_argument("--s-vatreshni", action="store_true",
                    help="с --shema: и пътищата без име от OpenStreetMap вътре в имота (по подразбиране – не)")
     o.add_argument("--bez-trevni", action="store_true", help="с --shema: без тревните площи от OpenStreetMap")
+    o.add_argument("--bez-reki", action="store_true", help="с --shema: без реките, каналите и езерата от OpenStreetMap")
     o.add_argument("--vodoprovod", default="70/80",
                    help="с --voda: диаметърът на водопровода по улицата на хидранта (по подразбиране 70/80; „не“ – без него)")
     o.add_argument("--natisk", default="3–5",

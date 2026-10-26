@@ -71,6 +71,15 @@ shema.py — чертае СХЕМА за разполагане на силит
   // в "ulitsi" улица като ивица може да е без единия си ръб: "bez_ruba": "lyav" или "desen" (по посоката на точките);
   //   улица като площ ("kontur") с "bez_ruba": true е само платно, без ръб – запълва празнина между два имота
   "trevni": [{"kontur": [[x, y], …]}],          // тревни площи – зелени (чл. 9, ал. 9, т. 5)
+  "reki": [{"tochki": [[x, y], …], "shirina": 4, "ime": "р. Вит",   // река, канал – знакът „Река, канал с бараж“ от
+            "barazhi": [[x, y]], "ime_pos": [x, y], "ime_ugal": 0}],  //   Приложение № 6: на всеки бряг права синя линия
+                                                //   по водата и плитка вълнообразна отвън, без запълване; "tochki" – оста,
+                                                //   "shirina" – m; бараж – черни дъги напреки; kais.py ги взима от OSM
+  "ezera": [{"kontur": [[x, y], …], "ime": ""}],  // езеро, микроязовир – брегът, втора линия навътре и черти по водата
+  "podstapi": [{"x": 50, "y": 20, "ugal": 90}],  // подстъп до водоизточник – правоъгълник 6 × 4 m в истински размер;
+                                                //   "ugal" – накъдето е дългата (6 m) страна, към водата
+  "mostove": [{"x": 30, "y": 33, "ugal": 0, "shirina": 4}],  // мост, от който е възможно да се засмуче вода; "ugal" –
+                                                //   посоката на реката, "shirina" – ширината ѝ (m)
   "ulitsi_skrij": [[[x, y], [x, y]]],          // парче от ръба на улица, което не се чертае (напр. краят на
                                                 //   кадастрален имот, начертан напреки на пътя)
   "ulitsi_rab": [[[x, y], [x, y], [x, y]]],     // ръб на улица, начертан на ръка – кафява линия, заоблена
@@ -165,7 +174,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from znatsi import (FENCES, INK, LEGEND_ORDER, LINE_KINDS, NETWORKS, NOZZLES, PLACES, SPLITTERS, TRUCKS,  # noqa: E402,F401
                     LADDERS, WATER, Pal, chaikin, draw_building, draw_dimension, draw_fence, draw_fire, draw_hydrant,
                     draw_gas_line, draw_gas_valve, offset_polyline, draw_main, draw_no_parking, draw_parcel, draw_street, draw_streets, draw_grass, draw_tower, draw_valve_kran,
-                    draw_kompas, draw_label_box, draw_ladder, draw_line, draw_nozzle, draw_reservoir, draw_ring,
+                    draw_kompas, draw_label_box, draw_river, draw_lake, draw_podstap, draw_most_voda, draw_ladder, draw_line, draw_nozzle, draw_reservoir, draw_ring,
                     draw_seat, draw_smoke, draw_splitter, draw_staff, draw_truck, draw_wind, big_arrow, is_el,
                     is_kpp, legend_text, length, obrazets, plt, point_at)
 
@@ -419,6 +428,18 @@ def _zavarti(d, cyali_ulitsi=True):
         d[key] = [RL(ln) for ln in (d.get(key) or [])]
     for t in items(d, "trevni"):
         t["kontur"] = RL(t.get("kontur") or [])
+    for r in items(d, "reki"):                          # the water signs of Приложение № 6
+        r["tochki"] = RL(r.get("tochki") or [])
+        r["barazhi"] = RL(r.get("barazhi") or [])
+        if r.get("ime_pos"):
+            r["ime_pos"] = R(r["ime_pos"])
+            r["ime_ugal"] = num(r.get("ime_ugal", 0), "reki.ime_ugal") + ang
+    for e in items(d, "ezera"):
+        e["kontur"] = RL(e.get("kontur") or [])
+    for key in ("podstapi", "mostove"):
+        for o in items(d, key):
+            o["x"], o["y"] = R((num(o.get("x"), f"{key}.x"), num(o.get("y"), f"{key}.y")))
+            o["ugal"] = num(o.get("ugal", 90 if key == "podstapi" else 0), f"{key}.ugal") + ang
     for key in ("posoka", "napravlenie", "stalbi", "razstoyaniya"):
         for o in items(d, key):
             o["ot"], o["do"] = R(o["ot"]), R(o["do"])
@@ -445,7 +466,7 @@ def _zavarti(d, cyali_ulitsi=True):
             core += b["kontur"]
     if isinstance(d.get("imot"), dict) and d["imot"].get("kontur"):
         core += d["imot"]["kontur"]
-    for key in ("vodoiztochnitsi", "avtomobili", "obekti", "pozhar", "vhodove", "razklonitel"):
+    for key in ("vodoiztochnitsi", "avtomobili", "obekti", "pozhar", "vhodove", "razklonitel", "podstapi", "mostove"):
         core += [(o["x"], o["y"]) for o in items(d, key)]
     for key in ("razstoyaniya", "posoka", "napravlenie", "stalbi"):
         for o in items(d, key):
@@ -479,6 +500,16 @@ def _zavarti(d, cyali_ulitsi=True):
             d[key] = [[S(p) for p in ln] for ln in (d.get(key) or [])]
         for t in items(d, "trevni"):
             t["kontur"] = [S(p) for p in t["kontur"]]
+        for r in items(d, "reki"):
+            r["tochki"] = [S(p) for p in r["tochki"]]
+            r["barazhi"] = [S(p) for p in r["barazhi"]]
+            if r.get("ime_pos"):
+                r["ime_pos"] = S(r["ime_pos"])
+        for e in items(d, "ezera"):
+            e["kontur"] = [S(p) for p in e["kontur"]]
+        for key in ("podstapi", "mostove"):
+            for o in items(d, key):
+                o["x"], o["y"] = S((o["x"], o["y"]))
         for key in ("posoka", "napravlenie", "stalbi", "razstoyaniya"):
             for o in items(d, key):
                 o["ot"], o["do"] = S(o["ot"]), S(o["do"])
@@ -587,7 +618,8 @@ def load(d):
     out = {k: [] for k in ("sgradi", "obekti", "pozhar", "zadimyavane", "ognishte", "posoka", "napravlenie",
                            "avtomobili", "vodoiztochnitsi", "linii", "razklonitel", "stalbi", "shtab", "pbt",
                            "tekst", "vhodove", "ulitsi", "razstoyaniya", "vodoprovod", "gazoprovod",
-                           "gaz_armatura", "bez_parkirane", "prohodi", "ulitsi_skrij", "ulitsi_rab", "trevni")}
+                           "gaz_armatura", "bez_parkirane", "prohodi", "ulitsi_skrij", "ulitsi_rab", "trevni",
+                           "reki", "ezera", "podstapi", "mostove")}
     out["ograda"] = None
     out["vyatar"] = None
     out["ograda_vid"] = d.get("ograda_vid") or None
@@ -740,6 +772,29 @@ def load(d):
         if len(k) < 3:
             bad(f"trevni[{i}].kontur: трябват поне три точки")
         out["trevni"].append(k)
+    for i, r in enumerate(items(d, "reki")):             # rivers and canals – Приложение № 6, „Река, канал с бараж“
+        pts = [pt(p, f"reki[{i}].tochki") for p in (r.get("tochki") or [])]
+        if len(pts) < 2:
+            bad(f"reki[{i}].tochki: трябват поне две точки (оста на реката)")
+        w = num(r.get("shirina", 4), f"reki[{i}].shirina")
+        if w <= 0:
+            bad(f"reki[{i}].shirina: трябва да е положителна")
+        out["reki"].append({"tochki": pts, "shirina": w, "ime": str(r.get("ime") or ""),
+                            "barazhi": [pt(p, f"reki[{i}].barazhi") for p in (r.get("barazhi") or [])],
+                            "ime_pos": pt(r["ime_pos"], f"reki[{i}].ime_pos") if r.get("ime_pos") else None,
+                            "ime_ugal": num(r.get("ime_ugal", 0), f"reki[{i}].ime_ugal")})
+    for i, e in enumerate(items(d, "ezera")):            # lakes and small dams
+        k = [pt(p, f"ezera[{i}].kontur") for p in (e.get("kontur") or [])]
+        if len(k) < 3:
+            bad(f"ezera[{i}].kontur: трябват поне три точки")
+        out["ezera"].append({"kontur": k, "ime": str(e.get("ime") or "")})
+    for i, o in enumerate(items(d, "podstapi")):         # access places to a water source, 6 × 4 m
+        out["podstapi"].append({"x": num(o.get("x"), f"podstapi[{i}].x"), "y": num(o.get("y"), f"podstapi[{i}].y"),
+                                "ugal": num(o.get("ugal", 90), f"podstapi[{i}].ugal")})
+    for i, o in enumerate(items(d, "mostove")):          # bridges from which water can be drawn
+        out["mostove"].append({"x": num(o.get("x"), f"mostove[{i}].x"), "y": num(o.get("y"), f"mostove[{i}].y"),
+                               "ugal": num(o.get("ugal", 0), f"mostove[{i}].ugal"),
+                               "shirina": num(o.get("shirina", 4), f"mostove[{i}].shirina")})
     for key in ("ulitsi_skrij", "ulitsi_rab"):           # corrections of the street edges, by hand
         for i, ln in enumerate(d.get(key) or []):
             pts = [pt(p, f"{key}[{i}]") for p in ln]
@@ -789,7 +844,8 @@ def load(d):
     for b in out["sgradi"] + out["obekti"] + out["pozhar"] + out["zadimyavane"] + out["bez_parkirane"]:
         xs += [b["x"], b["x"] + b["w"]]
         ys += [b["y"], b["y"] + b["h"]]
-    for coll in (out["avtomobili"], out["vodoiztochnitsi"], out["vhodove"], out["razklonitel"], out["gaz_armatura"]):
+    for coll in (out["avtomobili"], out["vodoiztochnitsi"], out["vhodove"], out["razklonitel"], out["gaz_armatura"],
+                 out["podstapi"], out["mostove"]):
         xs += [o["x"] for o in coll]
         ys += [o["y"] for o in coll]
     for p in out["ognishte"] + out["shtab"] + out["pbt"]:
@@ -982,6 +1038,9 @@ def legend_keys(data, hose_m):
         if data[key]:
             used.add({"ulitsi": "ulitsa", "trevni": "trevna"}.get(key, key))
     used.update(w["vid"] for w in data["vodoiztochnitsi"])
+    for key, sign in (("reki", "reka"), ("ezera", "ezero"), ("podstapi", "podstap"), ("mostove", "most_voda")):
+        if data[key]:
+            used.add(sign)
     used.update(ln["vid"] for ln in data["linii"])
     if hose_m and any(ln["vid"] != "smukatelna" for ln in data["linii"]):
         used.add("shlang")
@@ -1044,6 +1103,13 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
         draw_parcel(ax, data["imot"]["kontur"], data["imot"]["etiket"], s, fs, building_outlines(data))
     for k in data["trevni"]:                           # the grass areas – under the streets
         draw_grass(ax, k, pal)
+    for e in data["ezera"]:                            # lakes and rivers – Приложение № 6, blue, not filled
+        draw_lake(ax, e["kontur"], e["ime"], s, fs, pal)
+    for r in data["reki"]:
+        draw_river(ax, r["tochki"], r["shirina"], r["ime"], s, fs, pal, barazhi=r["barazhi"],
+                   name_at=r["ime_pos"], name_angle=r["ime_ugal"], box=data["box"])
+    for m in data["mostove"]:
+        draw_most_voda(ax, m["x"], m["y"], m["ugal"], m["shirina"], s, pal)
     draw_streets(ax, data["ulitsi"], fs, pal,          # the situation first – under everything else
                  hidden=[seg for ln in data["ulitsi_skrij"] for seg in zip(ln, ln[1:])])
     for g in data["prohodi"]:                          # the entrances from the street: the edge line is cut there
@@ -1060,6 +1126,8 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
             ax.plot(xs_, ys_, color=pal.road, lw=0.9, solid_capstyle="butt", solid_joinstyle="round", zorder=1.28)
     for z in data["bez_parkirane"]:
         draw_no_parking(ax, z, pal)
+    for o in data["podstapi"]:
+        draw_podstap(ax, o["x"], o["y"], o["ugal"], fs, pal)
     for v in data["vodoprovod"]:
         draw_main(ax, v["tochki"], v["vid"], v["etiket"], s, fs, pal)
     for g in data["gazoprovod"]:

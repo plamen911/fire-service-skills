@@ -17,7 +17,8 @@ znatsi.py — БИБЛИОТЕКАТА С УСЛОВНИТЕ ЗНАЦИ на с�
 паркиране – в оранжево.
 
 Знаците на ситуационната схема (чл. 7, ал. 3 от Указанията): сключена и тупикова водопроводна мрежа,
-пожарен кран, водонапорна кула, газопровод, улица (знакът „Шосе“) – по Приложение № 6; спирателната
+пожарен кран, водонапорна кула, газопровод, улица (знакът „Шосе“), река или канал с бараж, езеро или
+микроязовир, подстъп до водоизточник и мост, от който е възможно да се засмуче вода – по Приложение № 6; спирателната
 арматура на газопровода и площта, неразрешена за паркиране, нямат знак в приложението – начертани
 са по чл. 9, ал. 9 – 10 (цвят и легенда).
 
@@ -67,6 +68,8 @@ NOZZLES = ("malak", "glaven", "lafeten", "penostruinik", "prahov")
 PLACES = {"pokriv": "п", "etazh": "е", "maze": "м"}
 
 WATER = ("vodoem", "hidrant", "nadzemen_hidrant", "kran", "kula")
+
+VODNI = ("reka", "ezero", "podstap", "most_voda")   # the natural water signs of Приложение № 6 (част Б)
 
 NETWORKS = {"skluchena": "С", "tupikova": "Т"}     # the letter of the water main's label „С-150/5“
 
@@ -119,6 +122,10 @@ LEGEND_TEXT = {
     "nadzemen_hidrant": "Надземен хидрант",
     "kran": "Пожарен кран (№)",
     "kula": "Водонапорна кула",
+    "reka": "Река, канал (баражът – черен)",
+    "ezero": "Езеро, микроязовир",
+    "podstap": "Подстъп до водоизточник (6 × 4 m)",
+    "most_voda": "Мост, от който е възможно да се засмуче вода",
     "imot": "Граница на поземлен имот (кадастрална карта)",
     "ulitsa": "Улица, път",
     "trevna": "Тревна площ",
@@ -153,7 +160,7 @@ LEGEND_TEXT = {
 }
 
 LEGEND_ORDER = ["sgrada", "ograda", *FENCES, *SITUATION, "pozhar", "pozhar_otkrito", "zadimyavane", "ognishte", "posoka",
-                "napravlenie", "vyatar", *TRUCKS, *WATER, "glavna", "malka", "smukatelna", "shlang", "dvupaten",
+                "napravlenie", "vyatar", *TRUCKS, *WATER, *VODNI, "glavna", "malka", "smukatelna", "shlang", "dvupaten",
                 "tripaten", "chetiripaten", *NOZZLES, *PLACES, *LADDERS, "shtab", "pbt", "kpp", "el"]
 
 
@@ -602,6 +609,180 @@ def draw_main(ax, pts, kind, label, s, fs, pal):
     if label:
         label_on_line(ax, pts, label, fs - 0.5, pal.water, 4.6)
 
+def _dense(pts, step):
+    """The polyline with a point every step units (the corners kept) and the distance along it at each."""
+    out, acc = [], []
+    run = 0.0
+    for a, b in zip(pts, pts[1:]):
+        n = max(int(math.dist(a, b) / step), 1)
+        for k in range(n):
+            out.append((a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n))
+            acc.append(run + math.dist(a, b) * k / n)
+        run += math.dist(a, b)
+    out.append(tuple(pts[-1]))
+    acc.append(run)
+    return out, acc
+
+
+def river_lines(pts, width, s):
+    """The four lines of the sign „Река, канал“ (Приложение № 6): on each bank a straight line along the water
+    and outside it a shallow, uneven wavy line. width – the river's width in drawing units; s – the symbol size
+    (the waves keep their printed size whatever the scale). Returns [left bank, right bank, left wave, right wave]."""
+    s = min(s, max(width, 3.0))                       # a big symbol size (a plain scheme) must not swamp a narrow river
+    dense, acc = _dense(pts, 0.06 * s)
+    h = width / 2
+    out = ([], [], [], [])
+    for k, q in enumerate(dense):
+        a, b = dense[max(k - 1, 0)], dense[min(k + 1, len(dense) - 1)]
+        L = math.dist(a, b) or 1.0
+        nx, ny = -(b[1] - a[1]) / L, (b[0] - a[0]) / L
+        for i, (sg, ph) in enumerate(((1, 0.0), (-1, 1.7))):
+            w = 0.27 * s + 0.09 * s * math.sin(2 * math.pi * acc[k] / (1.33 * s) + ph) \
+                + 0.045 * s * math.sin(2 * math.pi * acc[k] / (3.3 * s) + 2 * ph)
+            out[i].append((q[0] + nx * sg * h, q[1] + ny * sg * h))
+            out[2 + i].append((q[0] + nx * sg * (h + w), q[1] + ny * sg * (h + w)))
+    return [list(o) for o in out]
+
+
+def barazh_lines(pts, width, at, s):
+    """A barrage (бараж) across the river at the point nearest to at: two black arcs bank to bank."""
+    best = min(zip(pts, pts[1:]), key=lambda ab: _dseg(at, *ab))
+    (ax_, ay_), (bx, by) = best
+    L = math.dist(*best) or 1.0
+    dx, dy = (bx - ax_) / L, (by - ay_) / L
+    t = max(0.0, min(L, (at[0] - ax_) * dx + (at[1] - ay_) * dy))
+    cx, cy = ax_ + dx * t, ay_ + dy * t
+    nx, ny = -dy, dx
+    h = width / 2 + 0.3 * s
+    arcs = []
+    for off in (-0.12 * s, 0.12 * s):
+        arc = []
+        for k in range(13):
+            u = -1 + 2 * k / 12
+            bulge = 0.25 * s * (1 - u * u)
+            arc.append((cx + dx * (off + bulge) + nx * u * h, cy + dy * (off + bulge) + ny * u * h))
+        arcs.append(arc)
+    return arcs
+
+
+def draw_river(ax, pts, width, name, s, fs, pal, barazhi=(), name_at=None, name_angle=None, box=None):
+    """A river or canal – the sign „Река, канал с бараж“ of Приложение № 6: blue banks (a straight line along the
+    water and a wavy line outside it), not filled; a barrage – black arcs across. The name in blue italics along
+    the river, on its longest part inside the drawing (box), or at name_at."""
+    for line in river_lines(pts, width, s):
+        xs, ys = zip(*line)
+        ax.plot(xs, ys, color=pal.water, lw=0.7, zorder=1.16)
+    for at in barazhi:
+        for arc in barazh_lines(pts, width, at, s):
+            xs, ys = zip(*arc)
+            ax.plot(xs, ys, color=INK, lw=0.7, zorder=1.17)
+    if name:
+        if name_at is not None:
+            (mx, my), ang = name_at, name_angle or 0.0
+        else:
+            segs = list(zip(pts, pts[1:]))
+            if box:
+                x0, y0, x1, y1 = box
+                inner = [(a, b) for a, b in segs if x0 < (a[0] + b[0]) / 2 < x1 and y0 < (a[1] + b[1]) / 2 < y1]
+                segs = inner or segs
+            a, b = max(segs, key=lambda ab: math.dist(*ab))
+            mx, my = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
+            ang = math.degrees(math.atan2(b[1] - a[1], b[0] - a[0]))
+        ax.text(mx, my, name, ha="center", va="center", fontsize=fs, color=pal.water, style="italic",
+                rotation=readable(ang), rotation_mode="anchor", zorder=1.18)
+
+
+def _ring_area(ring):
+    return sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(ring, ring[1:] + ring[:1])) / 2
+
+
+def lake_lines(kontur, s):
+    """The sign „Езеро, микроязовир“: the shore and a second line inside it, about 0.3 s in. Returns
+    [outer ring, inner ring] (closed – the first point repeated)."""
+    ring = [tuple(p) for p in kontur]
+    inward = 0.3 * s if _ring_area(ring) > 0 else -0.3 * s     # left of a counter-clockwise ring is inside
+    closed = ring + ring[:2]
+    inner = offset_polyline(closed, inward)[1:-1]
+    return [ring + ring[:1], inner + inner[:1]]
+
+
+def draw_lake(ax, kontur, name, s, fs, pal):
+    """A lake or small dam (езеро, микроязовир) – the sign of Приложение № 6: the shore in blue, a second line
+    inside it and short horizontal dashes across the water; not filled. The name in blue italics in the middle."""
+    outer, inner = lake_lines(kontur, s)
+    for ring in (outer, inner):
+        xs, ys = zip(*ring)
+        ax.plot(xs, ys, color=pal.water, lw=0.7, zorder=1.16)
+    clip = Polygon(inner, closed=True, fill=False, ec="none")
+    ax.add_patch(clip)
+    xs, ys = zip(*inner)
+    gap, dash = 0.45 * s, 0.35 * s
+    y = min(ys) + gap / 2
+    row = 0
+    while y < max(ys):
+        x = min(xs) + (row % 2) * (dash + gap) / 2
+        while x < max(xs):
+            ln, = ax.plot([x, x + dash], [y, y], color=pal.water, lw=0.6, zorder=1.16)
+            ln.set_clip_path(clip)
+            x += dash + gap
+        y += gap
+        row += 1
+    if name:
+        cx, cy = sum(xs) / len(xs), sum(ys) / len(ys)
+        ax.text(cx, cy, name, ha="center", va="center", fontsize=fs, color=pal.water, style="italic", zorder=1.18,
+                bbox=dict(fc="white", ec="none", pad=0.3))
+
+
+def podstap_lines(x, y, angle):
+    """The sign „Подстъп до водоизточник (размери 6/4 m)“: a rectangle 4 m wide and 6 m long, in true size,
+    its sides running a little past the corners. (x, y) is the centre; angle – the direction of the 6 m side
+    (towards the water), degrees. Returns the four sides as segments."""
+    w, l, e = 2.0, 3.0, 0.6
+    sides = [[(-w - e, -l), (w + e, -l)], [(-w - e, l), (w + e, l)], [(-w, -l - e), (-w, l + e)], [(w, -l - e), (w, l + e)]]
+    return [rotate(x, y, angle - 90, seg_) for seg_ in sides]
+
+
+def draw_podstap(ax, x, y, angle, fs, pal):
+    """An access place to a water source (подстъп до водоизточник) – Приложение № 6: a blue rectangle 6 × 4 m
+    with crossing corners, the sizes „4“ and „6“ beside its sides."""
+    for (a, b) in podstap_lines(x, y, angle):
+        ax.plot([a[0], b[0]], [a[1], b[1]], color=pal.water, lw=0.8, zorder=8)
+    (tx, ty), (sx, sy) = rotate(x, y, angle - 90, [(0, 3.9), (2.9, 0)])
+    ax.text(tx, ty, "4", ha="center", va="center", fontsize=fs - 1.5, color=pal.water, zorder=8,
+            rotation=readable(angle - 90), rotation_mode="anchor")
+    ax.text(sx, sy, "6", ha="center", va="center", fontsize=fs - 1.5, color=pal.water, zorder=8,
+            rotation=readable(angle - 90), rotation_mode="anchor")
+
+
+def most_lines(x, y, angle, width, s):
+    """The sign „Мост, от който е възможно да се засмуче вода“ (Приложение № 6): the two abutments across the river,
+    each with wings turned away from the bridge, and the deck between them – a rectangle with its sides running a
+    little past the corners. (x, y) – the middle of the bridge; angle – the direction the river flows, degrees;
+    width – the river's width. Returns (abutments and wings, deck) as segments."""
+    a, h, wing = 0.55 * s, width / 2 + 0.35 * s, 0.3 * s
+    R = lambda pts: rotate(x, y, angle, pts)      # noqa: E731 – local: u along the river, v across it
+    abut = []
+    for sg in (-1, 1):
+        abut += [R([(sg * a, -h), (sg * a, h)]), R([(sg * a, h), (sg * (a + wing), h + wing)]),
+                 R([(sg * a, -h), (sg * (a + wing), -h - wing)])]
+    d, k, e = 0.38 * a, width / 2 + 0.05 * s, 0.08 * s
+    deck = [R([(-d - e, -k), (d + e, -k)]), R([(-d - e, k), (d + e, k)]),
+            R([(-d, -k - e), (-d, k + e)]), R([(d, -k - e), (d, k + e)])]
+    return abut, deck
+
+
+def draw_most_voda(ax, x, y, angle, width, s, pal):
+    """A bridge from which water can be drawn (Приложение № 6): the river's lines are cut under the bridge, the
+    abutments with their wings and the deck in black."""
+    a, h = 0.55 * s, width / 2 + 0.7 * s
+    ax.add_patch(Polygon(rotate(x, y, angle, [(-a, -h), (a, -h), (a, h), (-a, h)]), closed=True, fc="white",
+                         ec="none", zorder=1.19))
+    abut, deck = most_lines(x, y, angle, width, s)
+    for seg_ in abut + deck:
+        (p, q) = seg_
+        ax.plot([p[0], q[0]], [p[1], q[1]], color=INK, lw=0.8, zorder=1.2)
+
+
 def draw_valve_kran(ax, x, y, s, label, fs, pal):
     """A fire cock (пожарен кран) as in Приложение № 6: a stem with a short bar on top and a circle,
     its lower half filled; the number beside it („ПК-4“)."""
@@ -870,6 +1051,16 @@ def obrazets(ax, entry, x, y, pal, fs):
         draw_valve_kran(ax, x, y - 0.06, 0.11, "", fs, pal)
     elif key == "kula":
         draw_tower(ax, x, y, 0.14, "", fs, pal)
+    elif key == "reka":
+        draw_river(ax, [(x - w, y), (x + w, y)], 0.07, "", 0.2, fs, pal, barazhi=[(x + 0.05, y)])
+    elif key == "ezero":
+        draw_lake(ax, [(x + w * math.cos(t) * (1 - 0.15 * math.sin(t)), y + 0.085 * math.sin(t))
+                       for t in (2 * math.pi * k / 24 for k in range(24))], "", 0.07, fs, pal)
+    elif key == "podstap":
+        draw_podstap_obrazets(ax, x, y, pal)
+    elif key == "most_voda":
+        draw_river(ax, [(x - w, y), (x + w, y)], 0.07, "", 0.2, fs, pal)
+        draw_most_voda(ax, x, y, 0, 0.07, 0.12, pal)
     elif key == "imot":
         ax.plot([x - w, x + w], [y, y], color=INK, lw=0.7, ls=PARCEL_LS)
     elif key == "ulitsa":
@@ -913,6 +1104,13 @@ def obrazets(ax, entry, x, y, pal, fs):
         draw_label_box(ax, x - 0.1, y - 0.06, 0.2, 0.12, "Ел.", fs - 1, pal.truck)
     elif key == "obekt":
         draw_label_box(ax, x - w, y - 0.06, 2 * w, 0.12, entry[2], fs - 1)
+
+
+def draw_podstap_obrazets(ax, x, y, pal):
+    """The access sign in the legend – the same rectangle, small (the legend is not to scale)."""
+    w, l, e = 0.06, 0.09, 0.02
+    for (a, b) in [((-w - e, -l), (w + e, -l)), ((-w - e, l), (w + e, l)), ((-w, -l - e), (-w, l + e)), ((w, -l - e), (w, l + e))]:
+        ax.plot([x + a[0], x + b[0]], [y + a[1], y + b[1]], color=pal.water, lw=0.8)
 
 
 def draw_kompas(ax, x, y, s, fs, ugal=90):
