@@ -23,7 +23,8 @@ obekt – имотът в точката (или по идентификатор
                       КС2005). Допълва се: входове, ограда, водопровод, ел. табло, категория …;
   --voda            – и точните водоизточници (проверени на място или от ВиК) в терена – а ако там няма, най-
                       близкият, като теренът се разширява до него – с разстоянието от сградата до него
-                      (от voda.py – трябва личен ключ);
+                      (от voda.py – трябва личен ключ); хидрант на над 60 m извън терена – надпис на ръба
+                      откъм него (вид, разстояние, посока, адрес) вместо разширяване (--hidrant-v-terena);
   --radius N        – колко метра около имота да обхване теренът (30–300, по подразбиране 40);
   --bez-granitsa    – без границата на поземления имот;
   --vodoprovod D    – с --voda: водопроводът по улицата на хидранта с диаметър D (по подразбиране 70/80 – когато
@@ -73,6 +74,8 @@ _D = math.pi / 180
 _P1, _P2, _P0, _L0 = 42 * _D, (43 + 20 / 60) * _D, 42.66787568333333 * _D, 25.5 * _D
 _X0, _Y0 = 500000.0, 4725824.3591
 
+
+DALECH_HIDRANT_M = 60     # a hydrant farther than this outside the terrain gets a pointer, not a bigger terrain
 
 def _m(p):
     return math.cos(p) / math.sqrt(1 - _E * _E * math.sin(p) ** 2)
@@ -631,7 +634,7 @@ def cmd_obekt(a):
 
         # the water sources (exact ones only): those in the terrain, and the nearest one even outside it – the
         # scheme must show where the water is (чл. 7, ал. 3, т. 1, б. „в“ и „г“), so the terrain grows to it
-        hydrants = []
+        hydrants, far_hydrant = [], None
         if a.voda:
             clat, clon = kc_to_wgs((bx0 + bx1) / 2, (by0 + by1) / 2)
             rows, errs = water(clat, clon, max(400.0, math.hypot(bx1 - bx0, by1 - by0) / 2))
@@ -645,11 +648,21 @@ def cmd_obekt(a):
                         exact.append((x, y, row))
                 inside = [h for h in exact if bx0 <= h[0] <= bx1 and by0 <= h[1] <= by1]
                 hydrants = inside or exact[:1]
+                if not inside and exact and not a.hidrant_v_terena:
+                    hx_, hy_ = exact[0][0], exact[0][1]
+                    out_m = math.hypot(max(bx0 - hx_, 0, hx_ - bx1), max(by0 - hy_, 0, hy_ - by1))
+                    if out_m > DALECH_HIDRANT_M:       # growing the terrain that far shrinks the object to nothing –
+                        far_hydrant, hydrants = exact[0], []   #   a pointer on the terrain's edge instead
                 for x, y, _ in hydrants:
                     bx0, by0 = min(bx0, math.floor(x - 10)), min(by0, math.floor(y - 10))
                     bx1, by1 = max(bx1, math.ceil(x + 10)), max(by1, math.ceil(y + 10))
                 if not exact:
                     notes.append("Няма водоизточници с точни координати до 400 m – виж vodoiztochnitsi за по-далечните.")
+                elif far_hydrant:
+                    notes.append("Най-близкият хидрант е далеч извън терена – "
+                                 "теренът не е разширен до него (обектът щеше да стане нечетим); на ръба на терена откъм "
+                                 "хидранта е надпис с вида, разстоянието, посоката и адреса му, а водопроводът (по улицата на "
+                                 "хидранта) остава извън листа. `--hidrant-v-terena` – теренът да се разшири до него.")
                 elif not inside:
                     notes.append(f"В имота и около него няма хидрант – начертан е най-близкият ({round(exact[0][2].get('razstoyanie_m', 0))} m "
                                  "по права линия), теренът е разширен до него.")
@@ -884,6 +897,25 @@ def cmd_obekt(a):
         if texts:
             sh["tekst"] = texts
             summary["mesta"] = [t["tekst"] for t in texts]
+        if far_hydrant:                                # the far hydrant: a pointer on the terrain's edge, on its side
+            hx_, hy_, row = far_hydrant
+            dx, dy = hx_ - cx, hy_ - cy
+            m = 15.0
+            k = min((((bx1 - m) - cx) / dx if dx > 0 else ((bx0 + m) - cx) / dx) if dx else 1e9,
+                    (((by1 - m) - cy) / dy if dy > 0 else ((by0 + m) - cy) / dy) if dy else 1e9)
+            px, py = cx + dx * k, cy + dy * k
+            corners = [p for s_ in sgradi for p in (s_.get("kontur") or [])] or [(cx, cy)]
+            dist_m = round(min(math.dist(p, (hx_, hy_)) for p in corners))
+            posoki = ["на изток", "на североизток", "на север", "на северозапад", "на запад", "на югозапад", "на юг",
+                      "на югоизток"]
+            posoka = posoki[round(math.degrees(math.atan2(dy, dx)) / 45) % 8]
+            vid = "ПХ " + row["diametar"] if row.get("diametar") else ("водоем" if row.get("vid") == "водоем" else "ПХ")
+            kade = ", ".join(x for x in (("ул. „" + row["ulitsa"] + "“") if row.get("ulitsa") else "",
+                                         row.get("orientir") or "") if x)
+            sh.setdefault("tekst", []).append({"x": round(px - bx0, 1), "y": round(py - by0, 1),
+                                               "tekst": f"{vid} – {dist_m} m {posoka}" + (f",\n{kade}" if kade else ""),
+                                               "kray": "desen" if dx > 0 else "lyav"})   # the text runs inwards
+            summary["dalechen_hidrant"] = {"m": dist_m, "posoka": posoka, "voda_id": row.get("id")}
 
         if hydrants:
             sh["vodoiztochnitsi"] = []
@@ -1032,6 +1064,9 @@ def main():
                    help="с --shema: и пътищата без име от OpenStreetMap вътре в имота (по подразбиране – не)")
     o.add_argument("--bez-trevni", action="store_true", help="с --shema: без тревните площи от OpenStreetMap")
     o.add_argument("--bez-reki", action="store_true", help="с --shema: без реките, каналите и езерата от OpenStreetMap")
+    o.add_argument("--hidrant-v-terena", action="store_true",
+                   help=f"с --voda: теренът да се разшири до най-близкия хидрант и когато е на над {60} m извън него "
+                        "(по подразбиране – надпис на ръба на терена откъм хидранта)")
     o.add_argument("--vodoprovod", default="70/80",
                    help="с --voda: диаметърът на водопровода по улицата на хидранта (по подразбиране 70/80; „не“ – без него)")
     o.add_argument("--natisk", default="3–5",
