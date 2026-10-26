@@ -958,6 +958,9 @@ def cmd_obekt(a):
                              "имота на улици, запълни празнината с улица-площ без ръб (shemi).")
             elif err:
                 notes.append("Тревните площи не се взеха от OpenStreetMap: " + err)
+            else:                                      # OSM has nothing here – the sheet would show the object in a void
+                notes.append("OpenStreetMap няма тревни площи в рамката – нанеси ги от ортофотото като `trevni` "
+                             "(приблизително) и го кажи в чата; без тях обектът „виси“ в празно поле (shemi).")
         # rivers, canals, lakes (Приложение № 6, „Река, канал“, „Езеро, микроязовир“) – КАИС has no names for them and
         #   the water parcels are not always there: from OpenStreetMap, like the grass
         if not a.bez_reki:
