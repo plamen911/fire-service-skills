@@ -62,7 +62,8 @@ shema.py — чертае СХЕМА за разполагане на силит
   "shtab": [{"x": 66, "y": 44}],                                    // място за разположение на щаба
   "pbt": [{"x": 56, "y": 30}],                                      // пост по безопасност на труда
   "vyatar": {"ugal": 200, "sila": "5 m/s"},                         // накъде духа и скоростта – в легендата
-  "tekst": [{"x": 5, "y": 5, "tekst": "ул. „Христо Ботев“", "ugal": 0}],
+  "tekst": [{"x": 5, "y": 5, "tekst": "ул. „Христо Ботев“", "ugal": 0}],   // x, y – левият край на надписа; с
+                                                //   "kray": "desen" – десният (надпис вляво от нещо, напр. от щриха на вход)
   // --- елементите на ситуационната схема (чл. 7, ал. 3, т. 1 от Указанията) – по желание и в обикновената схема
   "ulitsi": [{"tochki": [[0, -6], [120, -6]], "shirina": 8, "ime": "ул. „Примерна“"},   // знакът „Шосе“, кафяв;
              {"kontur": [[x, y], …], "otvori": [], "ime": "бул. „Примерен“", "ime_pos": [60, 20], "ime_ugal": 0}],
@@ -682,7 +683,8 @@ def load(d):
             out[key].append((num(o.get("x"), f"{key}[{i}].x"), num(o.get("y"), f"{key}[{i}].y")))
     for i, t in enumerate(items(d, "tekst")):
         out["tekst"].append({"x": num(t.get("x"), f"tekst[{i}].x"), "y": num(t.get("y"), f"tekst[{i}].y"),
-                             "tekst": str(t.get("tekst") or ""), "ugal": num(t.get("ugal", 0), f"tekst[{i}].ugal")})
+                             "tekst": str(t.get("tekst") or ""), "ugal": num(t.get("ugal", 0), f"tekst[{i}].ugal"),
+                             "kray": "desen" if t.get("kray") == "desen" else "lyav"})
     for i, u in enumerate(items(d, "ulitsi")):
         if u.get("kontur"):                            # a street as an area – its parcel from the cadastre
             k = [pt(p, f"ulitsi[{i}].kontur") for p in u["kontur"]]
@@ -995,7 +997,7 @@ def legend_keys(data, hose_m):
     extra = [(None, o["legenda"], o["etiket"]) for o in data["obekti"] if o["legenda"]]
     return keys, extra
 
-SCALES = (100, 200, 250, 500, 750, 1000, 1500, 2000, 2500, 5000, 10000, 20000)   # 750 and 1500 – to fill an A4 sheet
+SCALES = (100, 200, 250, 500, 750, 1000, 1250, 1500, 2000, 2500, 5000, 10000, 20000)   # 750, 1250 and 1500 – to fill an A4 sheet
 
 # The sheet of a situational scheme (Приложение № 2а): the frame is the page minus its margins
 # (left 20 mm, the rest 10 mm – the page margins of the .docx), in mm.
@@ -1132,7 +1134,8 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
     for x, y in data["pbt"]:
         draw_ring(ax, x, y, 0.6 * s, "ПБТ", fs - 1, pal.truck)
     for t in data["tekst"]:
-        ax.text(t["x"], t["y"], t["tekst"], ha="left", va="center", fontsize=fs, rotation=t["ugal"], zorder=9)
+        ax.text(t["x"], t["y"], t["tekst"], ha="right" if t.get("kray") == "desen" else "left", va="center", fontsize=fs,
+                rotation=t["ugal"], rotation_mode="anchor", zorder=9)
     # the north–south sign of the library – in the upper left corner (чл. 9, ал. 5 от Указанията Iз-2749);
     # the wind – in the legend, when there is one
     if d.get("sever", True):
