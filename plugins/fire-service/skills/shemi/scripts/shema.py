@@ -42,7 +42,9 @@ shema.py — чертае СХЕМА за разполагане на силит
               "etazhnost": "-1 +2", "kategoriya": "Ф5Б", "ogneustoychivost": "II",   // ситуационна схема:
                                                 //   добавят се под името – „1 подз. ет., 2 ет. · Ф5Б · II ст.“
                                                 //   ("+3" се пише „3 ет.“; друг текст – както е даден)
-              "sasedna": false}],               // true – съседна сграда: по-тънък контур, без размери
+              "sasedna": false,                 // true – съседна сграда: по-тънък контур, без размери
+              "naves": false}],                 // true – навес (над колонки, рампа …): контур, двойно по-тънък
+                                                //   от сградите, с размерите; без етажност и огнеустойчивост
   "obekti": [{"x": 3, "y": 58, "w": 4, "h": 3, "etiket": "Ел."}],   // малки обекти в рамка; „Ел.“ влиза в
                                                 //   легендата като „Електрическо табло“; "legenda": "…" – друг текст
   "pozhar": [{"x": 34, "y": 60, "w": 12, "h": 12, "etiket": "≈ 140 m²", "na_otkrito": false}],
@@ -374,7 +376,7 @@ def _zavarti(d, cyali_ulitsi=True):
     import copy
     d = copy.deepcopy(d)
     if str(z).strip().lower() in ("avto", "auto"):
-        main = next((b for b in items(d, "sgradi") if not b.get("sasedna")), None)
+        main = next((b for b in items(d, "sgradi") if not b.get("sasedna") and not b.get("naves")), None)
         if not main or not main.get("kontur"):
             d.pop("zavartane", None)
             return d                                    # a rectangle is already parallel to the axes
@@ -642,7 +644,9 @@ def load(d):
             bad(f"sgradi[{i}].pokriv: „dvuskaten“ или „plosak“")
         sasedna = bool(b.get("sasedna", False))
         out["sgradi"].append({**r, "etiket": building_label(b), "razmeri": b.get("razmeri", not sasedna),
-                              "pokriv": b.get("pokriv"), "sasedna": sasedna, "kontur": kontur,
+                              "pokriv": b.get("pokriv"), "sasedna": sasedna, "naves": bool(b.get("naves", False)),
+                              "ime": " ".join(str(b.get("etiket") or "").replace("\\n", "\n").split()),
+                              "kontur": kontur,
                               "danni": {k: str(b.get(k) or "").strip() for k in ("etazhnost", "kategoriya", "ogneustoychivost")}})
     for i, b in enumerate(items(d, "obekti")):
         out["obekti"].append({**rect(b, f"obekti[{i}]", 5, 3), "etiket": str(b.get("etiket") or ""),
@@ -1142,10 +1146,10 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
         draw_smoke(ax, z, s, pal)
     for b in data["sgradi"]:
         if b["kontur"]:
-            ax.add_patch(Polygon(b["kontur"], closed=True, fill=False, ec=INK, lw=0.9 if b["sasedna"] else 1.8,
+            ax.add_patch(Polygon(b["kontur"], closed=True, fill=False, ec=INK, lw=building_lw(b),
                                  joinstyle="miter", zorder=3))
         else:
-            draw_building(ax, b["x"], b["y"], b["w"], b["h"], b["pokriv"], lw=0.9 if b["sasedna"] else 1.8)
+            draw_building(ax, b["x"], b["y"], b["w"], b["h"], b["pokriv"], lw=building_lw(b))
         if b["etiket"] and b["kontur"]:                # an outline: the label at its centroid, on a white box so the
             lx, ly = centroid(b["kontur"])             #   walls and dimension lines under it never cut through the text
             ax.text(lx, ly, b["etiket"].replace("\\n", "\n"), ha="center", va="center", fontsize=fs + 0.5, zorder=4,
@@ -1511,14 +1515,21 @@ def render(d, out_png, out_svg=None, width_cm=None, height_cm=None, out_dxf=None
     return counts, hoses, warnings, extra_out
 
 
+def building_lw(b):
+    """The outline of a building: 1.8; a neighbouring building and a canopy (навес) – half of it, 0.9."""
+    return 0.9 if b["sasedna"] or b.get("naves") else 1.8
+
+
 def situation_gaps(data):
     """What чл. 7, ал. 3, т. 1 от Указанията asks of the graphic part and the scheme does not show."""
     gaps = []
     own = [b for b in data["sgradi"] if not b["sasedna"]]
     for b in own:
-        name = b["etiket"].split("\n")[0] or f"({b['x']:g}, {b['y']:g})"
-        missing = [t for k, t in (("etazhnost", "етажност"), ("kategoriya", "категория по пожарна опасност"),
-                                  ("ogneustoychivost", "степен на огнеустойчивост")) if not b["danni"][k]]
+        name = b.get("ime") or b["etiket"].split("\n")[0] or f"({b['x']:g}, {b['y']:g})"
+        fields = (("kategoriya", "категория по пожарна опасност"),) if b.get("naves") else (
+            ("etazhnost", "етажност"), ("kategoriya", "категория по пожарна опасност"),
+            ("ogneustoychivost", "степен на огнеустойчивост"))
+        missing = [t for k, t in fields if not b["danni"][k]]
         if missing:
             gaps.append(f"сграда „{name}“: липсва {', '.join(missing)} (чл. 7, ал. 3, т. 1, б. „б“)")
     if len(own) > 1 and not data["razstoyaniya"]:
