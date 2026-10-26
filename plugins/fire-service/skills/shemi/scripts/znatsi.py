@@ -474,7 +474,55 @@ def _dseg(p, a, b):
     return math.dist(p, (a[0] + t * dx, a[1] + t * dy))
 
 
-def draw_streets(ax, streets, fs, pal, hidden=()):
+def fit_street_label(kontur, name, pos, angle, fs, pt_per_m, box, margin=1.0, obstacles=()):
+    """Where the name of a street (an area – its cadastral parcel) fits between the two brown lines: ((x, y), angle)
+    or None. The given place is kept when the whole name lies inside the street and the drawing; otherwise the
+    nearest place inside the street, along it, where it does fit. pt_per_m – points of print per drawing unit."""
+    from matplotlib.path import Path as _P
+    path = _P(list(kontur) + [kontur[0]], closed=True)
+    L = 0.62 * fs * len(name) / max(pt_per_m, 1e-9)     # the name's length and height in drawing units
+    H = 1.25 * fs / max(pt_per_m, 1e-9)
+    bx0, by0, bx1, by1 = box
+    edges = list(zip(kontur, kontur[1:] + kontur[:1]))
+
+    def fits(p, ang):
+        c, sn = math.cos(math.radians(ang)), math.sin(math.radians(ang))
+        pts = []
+        for i in range(9):
+            u = -L / 2 - margin / 2 + (L + margin) * i / 8
+            for v in (-H / 2, 0.0, H / 2):
+                pts.append((p[0] + u * c - v * sn, p[1] + u * sn + v * c))
+        return all(bx0 + margin <= q[0] <= bx1 - margin and by0 + margin <= q[1] <= by1 - margin for q in pts) \
+            and all(path.contains_point(q) for q in pts) and clear(pts)
+
+    def clear(pts):                                    # not over a water main or a gas line running in the street
+        return all(_dseg(q, a, b) > H * 0.6 for q in pts for line in obstacles for a, b in zip(line, line[1:]))
+
+    if pos and fits(pos, angle):
+        return tuple(pos), angle
+    step = max(H * 0.6, 0.5)
+    best = None
+    y = by0 + H
+    while y < by1 - H:
+        x = bx0 + H
+        while x < bx1 - H:
+            if path.contains_point((x, y)):
+                near = min(edges, key=lambda e: _dseg((x, y), *e))     # the street runs along its nearest edge
+                ang = math.degrees(math.atan2(near[1][1] - near[0][1], near[1][0] - near[0][0]))
+                for a_ in (ang, angle):
+                    if fits((x, y), a_):
+                        d = math.dist((x, y), pos) if pos else 0.0
+                        mid = min(_dseg((x, y), *e) for e in edges)      # prefer the middle of the street
+                        score = d - 3 * mid
+                        if best is None or score < best[0]:
+                            best = (score, (x, y), a_)
+                        break
+            x += step
+        y += step
+    return (best[1], best[2]) if best else None
+
+
+def draw_streets(ax, streets, fs, pal, hidden=(), obstacles=()):
     """All streets at once, so that the junctions merge: a street along a line is a brown band with a white core
     of its width (the edges are the two lines of the sign „Шосе“); a street as an area (its cadastral parcel,
     "kontur") is its outline in brown – drawn twice, wide brown then white over it, so that where two street
@@ -515,18 +563,71 @@ def draw_streets(ax, streets, fs, pal, hidden=()):
             xs, ys = zip(*u["tochki"])
             ax.plot(xs, ys, color=colour, lw=max(u["shirina"] * pt_per_m + extra, 0.5), zorder=z,
                     solid_capstyle="butt", solid_joinstyle="round")
+    # the names: each street once, between its two brown lines – on the piece where it fits (the one OpenStreetMap
+    #   named first, else another piece of the same street, "ime_ulitsa"); where it fits nowhere – where it was given
+    x0_, x1_ = ax.get_xlim()
+    y0_, y1_ = ax.get_ylim()
+    box = (x0_, y0_, x1_, y1_)
     for u in streets:
         if not u["ime"]:
             continue
-        if "kontur" in u:
-            if u.get("ime_pos"):
-                ax.text(u["ime_pos"][0], u["ime_pos"][1], u["ime"], ha="center", va="center", fontsize=fs, color=INK,
-                        rotation=readable(u.get("ime_ugal") or 0), rotation_mode="anchor", zorder=1.3)
+        pieces = [u] + [v for v in streets if v is not u and not v.get("ime") and v.get("ime_ulitsa") == u["ime"]]
+        fit = None
+        for v in pieces:
+            fit = street_label_place(v, u["ime"], u if v is u else None, fs, pt_per_m, box, obstacles=obstacles)
+            if fit:
+                break
+        if fit is None:                                 # it fits nowhere: as before, where it was given
+            if "kontur" in u:
+                if not u.get("ime_pos"):
+                    continue
+                fit = (tuple(u["ime_pos"]), u.get("ime_ugal") or 0)
+            else:
+                a, b = max(zip(u["tochki"], u["tochki"][1:]), key=lambda ab: math.dist(*ab))
+                fit = (((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), math.degrees(math.atan2(b[1] - a[1], b[0] - a[0])))
+        (lx, ly), lang = fit
+        if not (x0_ <= lx <= x1_ and y0_ <= ly <= y1_):   # off the drawing – no name rather than a cut one
             continue
-        a, b = max(zip(u["tochki"], u["tochki"][1:]), key=lambda ab: math.dist(*ab))
-        ang = math.degrees(math.atan2(b[1] - a[1], b[0] - a[0]))
-        ax.text((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, u["ime"], ha="center", va="center", fontsize=fs, color=INK,
-                rotation=readable(ang), rotation_mode="anchor", zorder=1.3)
+        ax.text(lx, ly, u["ime"], ha="center", va="center", fontsize=fs, color=INK,
+                rotation=readable(lang), rotation_mode="anchor", zorder=1.3)
+
+
+def street_label_place(v, name, own, fs, pt_per_m, box, margin=1.0, obstacles=()):
+    """Where the name fits inside one piece of a street (an area or a band): ((x, y), angle) or None. own – the
+    piece the name belongs to (its given place is tried first)."""
+    if "kontur" in v:
+        pos = own.get("ime_pos") if own else None
+        ang = (own.get("ime_ugal") or 0) if own else 0
+        return fit_street_label(v["kontur"], name, pos, ang, fs, pt_per_m, box, margin, obstacles)
+    L = 0.62 * fs * len(name) / max(pt_per_m, 1e-9)
+    H = 1.25 * fs / max(pt_per_m, 1e-9)
+    if v["shirina"] < H * 1.1:
+        return None
+    bx0, by0, bx1, by1 = box
+    pts, acc = _dense(v["tochki"], 0.5)               # a window of the name's length along the band, inside the drawing,
+    best = None                                        #   straight enough that the name stays between the lines
+    room = v["shirina"] / 2 - H / 2
+    j = 0
+    for i in range(len(pts)):
+        while j < len(pts) - 1 and acc[j] - acc[i] < L + margin:
+            j += 1
+        if acc[j] - acc[i] < L + margin:
+            break
+        win = pts[i:j + 1]
+        if not all(bx0 + H <= q[0] <= bx1 - H and by0 + H <= q[1] <= by1 - H for q in win):
+            continue
+        a, b = win[0], win[-1]
+        if max(_dseg(q, a, b) for q in win) > room:
+            continue
+        if any(_dseg(q, c, d) <= H * 0.6 for q in win for line in obstacles for c, d in zip(line, line[1:])):
+            continue
+        mid = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+        cx, cy = (bx0 + bx1) / 2, (by0 + by1) / 2
+        score = math.dist(mid, (cx, cy))               # nearer the middle of the drawing
+        if best is None or score < best[0]:
+            best = (score, mid, math.degrees(math.atan2(b[1] - a[1], b[0] - a[0])))
+    return (best[1], best[2]) if best else None
+
 
 def _inside(pt, poly):
     x, y = pt
