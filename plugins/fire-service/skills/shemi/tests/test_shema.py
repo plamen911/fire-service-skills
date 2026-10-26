@@ -420,7 +420,24 @@ def test_street_names_inside():
     check(fit is not None and abs(fit[0][1] - 4) > 2, f"the name moves off the water main in the street: {fit}")
 
 
+def test_naves():
+    data = {"teren": [60, 40], "sgradi": [{"x": 5, "y": 5, "w": 10, "h": 8, "etiket": "Магазин", "etazhnost": "+1"},
+                                          {"x": 25, "y": 5, "w": 10, "h": 20, "etiket": "Навес над\\nколонките",
+                                           "naves": True, "kategoriya": "Ф5А"}]}
+    loaded, _ = shema.load(data)
+    shop, naves = loaded["sgradi"]
+    check(shema.building_lw(naves) == shema.building_lw(shop) / 2, "a canopy is drawn half as thick as a building")
+    gaps = shema.situation_gaps(loaded)
+    check(not any("Навес" in g for g in gaps), f"no floors / fire resistance asked of a canopy: {gaps}")
+    no_cat = shema.load({**data, "sgradi": [data["sgradi"][0], {**data["sgradi"][1], "kategoriya": ""}]})[0]
+    check(any("Навес над колонките" in g and "категория" in g and "етажност" not in g
+              for g in shema.situation_gaps(no_cat)), "a canopy still asks for its category, under its whole label")
+    r, _ = run(data)
+    check(r.returncode == 0, f"renders a scheme with a canopy: {r.stderr}")
+
+
 if __name__ == "__main__":
+    test_naves()
     test_street_names_inside()
     test_water_signs()
     test_fixture()
