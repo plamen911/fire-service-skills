@@ -28,8 +28,8 @@ SECTION_I_MAX = 1900  # characters ≈ half a page in the template (Times New Ro
 
 # Arson wording: checked outside the „Поставени въпроси“ section, where the questions are quoted verbatim from the постановление.
 # The book of Симеонов is cited by its title, like the Методическо ръководство (iztochnitsi.json, kratko).
-SIMEONOV_STAR = (r"\(\s*(?:[^()]*;\s*)?(?:В\.\s*|Веселин\s+)?Симеонов,\s*20\d\d",
-                 "Симеонов се цитира по заглавието – „(Пожаротехническа експертиза, 2007)“; пиши маркера [[simeonov]]")
+SIMEONOV_STAR = (r"\(\s*(?:[^()]*;\s*)?(?:(?:В\.\s*|Веселин\s+)?Симеонов|Пожаротехническа\s+експертиза),\s*20\d\d",
+                 "Симеонов се цитира със съкращението – „(ПТЕ, 2007)“; пиши маркера [[simeonov]]")
 # A request to attach documents („Да бъдат приложени телефонограма …, рапорти и др. налични при Вас документи“)
 # is not a question for the expert – it is skipped: not listed in раздел II, not researched, not answered.
 PRILOZHI = re.compile(r"\bприлож(?:ен|ат|и\b|ете|ено)|\bприлага", re.I)

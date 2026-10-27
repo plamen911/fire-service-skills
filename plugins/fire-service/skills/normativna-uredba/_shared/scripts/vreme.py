@@ -5,8 +5,9 @@ vreme.py — времето по часове за деня на пожара о
   от международния обмен на СМО, архив OGIMET;
 - METAR на летищата в България (Долна Митрополия, Горна Оряховица …) – на час, архив на Iowa Environmental
   Mesonet (Iowa State University).
-С --mesto/--blizo скриптът взима най-близката станция, която има съобщения в прозореца; ако няма – следващата
-по разстояние (в „propusnati“ е защо е пропусната всяка по-близка). Съобщенията се разчитат на български:
+С --mesto/--blizo скриптът взима най-близката синоптична станция на НИМХ, която има съобщения в прозореца –
+дори да има по-близко летище; летищата са резерва, само когато никоя станция на НИМХ до 80 km няма данни
+(в „propusnati“ е защо е пропусната всяка станция преди избраната). Съобщенията се разчитат на български:
 температура, точка на оросяване, относителна влажност, вятър (посока, скорост и пориви в m/s), видимост,
 облачност, явления (гръмотевична дейност, валежи), налягане. Часовете са местни (Europe/Sofia).
 
@@ -20,7 +21,8 @@ vreme.py — времето по часове за деня на пожара о
 
 Отпечатва JSON: станцията и разстоянието до мястото, съобщенията по часове (с оригиналния текст),
 обобщение за прозореца и маркера за позоваване в ЕПТЗ: [[synop:15528: 26.10.2026, 16:00–19:00 ч.]]
-(„(НИМХ, ст. Плевен, 26.10.2026)“) или [[metar:LBPL: 04.08.2026, 16:00–19:00 ч.]] („(METAR LBPL, 04.08.2026)“).
+(в текста само „(НИМХ, 26.10.2026)“ – станцията е в „Използвана литература“) или, като резерва,
+[[metar:LBPL: 04.08.2026, 16:00–19:00 ч.]] („(METAR LBPL, 04.08.2026)“).
 С две дати добавя и месечната справка от бюлетина на НИМХ (Таблица 1 – средна и максимална температура,
 валеж и % от нормата, дни със силен вятър и с гръмотевици) за най-близката станция в бюлетина:
 маркер [[nimh-buletin: 07.2025, Плевен]] („(Бюлетин на НИМХ, 07.2025)“).
@@ -125,11 +127,14 @@ def opisanie(st):
 
 
 def kandidati(lat, lon, max_km=MAX_KM):
-    """All stations (SYNOP and METAR) within max_km, nearest first: [(code, km), …]."""
-    vse = [(k, v[1], v[2]) for k, v in SINOPTICHNI.items()] + [(k, v[1], v[2]) for k, v in STANTSII.items()]
-    out = sorted(((k, round(km((lat, lon), (la, lo)))) for k, la, lo in vse), key=lambda x: x[1])
-    blizki = [x for x in out if x[1] <= max_km]
-    return blizki or out[:1]
+    """Stations within max_km: the НИМХ synoptic stations first (nearest first), then the airports
+    (nearest first) – an ЕПТЗ cites НИМХ; an airport is used only when no НИМХ station has data.
+    [(code, km), …]"""
+    def po_red(tabl):
+        return sorted(((k, round(km((lat, lon), (v[1], v[2])))) for k, v in tabl.items()), key=lambda x: x[1])
+    synop, metar = po_red(SINOPTICHNI), po_red(STANTSII)
+    blizki = [x for x in synop if x[1] <= max_km] + [x for x in metar if x[1] <= max_km]
+    return blizki or sorted(synop + metar, key=lambda x: x[1])[:1]
 
 
 def koordinati(ime):

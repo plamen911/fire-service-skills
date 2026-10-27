@@ -96,12 +96,12 @@ def test_citiraj():
     check(t == "Версията се проверява по т. 7.6 (Методическо ръководство, 2007). Пак (Методическо ръководство, 2007).",
           "two points of one source side by side → one reference; the next sentence keeps its own")
     t, _, _ = s.citiraj("А [[simeonov: с. 5]], а Б [[simeonov: с. 9]].")
-    check(t == "А (Пожаротехническа експертиза, 2007), а Б.", "the same reference twice in one sentence → once")
+    check(t == "А (ПТЕ, 2007), а Б.", "the same reference twice in one sentence → once")
     check(len(lit) == 4 and "Симеонов" in lit[0] and "ICSC 1561" in lit[2] and "Чочев" in lit[3],
           "mandatory first, then cited in order, each once")
     check(lit[-1].endswith(".") and all(x.endswith(";") for x in lit[:-1]), "punctuation of the list")
     t, lit, _ = s.citiraj("Ръчно (Чочев, 2003, прил. № 2) и [[icsc:0087; simeonov]].")
-    check(t.endswith("(ICSC 0087; Пожаротехническа експертиза, 2007)."), "several sources in one marker")
+    check(t.endswith("(ICSC 0087; ПТЕ, 2007)."), "several sources in one marker")
     check(any("Чочев" in x for x in lit), "a hand-typed reference is listed too")
     for bad, why in (("[[nqma]]", "unknown key"), ("[[icsc:9999]]", "card not in the table"),
                      ("(ICSC 9999)", "hand-typed unknown card")):
@@ -311,11 +311,15 @@ def test_vreme():
     d = vreme.razchiti_synop("AAXX 04124 15528 32970 82312 10301 20180==")
     check(d["vyatar_ms"] == 6.2, "SYNOP: wind in knots (iw = 4)")
     check(vreme.vid("15528") == "SYNOP" and vreme.vid("LBPL") == "METAR", "station kind by its code")
-    check([k for k, _ in vreme.kandidati(43.42, 24.61)][:2] == ["15528", "LBPL"], "Плевен → НИМХ Плевен, then the airport")
+    check([k for k, _ in vreme.kandidati(43.42, 24.61)][:2] == ["15528", "15525"], "Плевен → НИМХ Плевен, then НИМХ Ловеч")
+    red = [k for k, _ in vreme.kandidati(43.4118, 24.6274)]  # Търнене: летището е на 7 km, Ловеч – на ~30 km
+    check(red.index("LBPL") > max(red.index(s) for s in red if s.isdigit()), "НИМХ stations before a nearer airport")
     check(vreme.marker("15528", vreme._den("2026-10-26"), "15:00", "16:00") == "[[synop:15528: 26.10.2026, 15:00–16:00 ч.]]",
           "SYNOP marker")
     t, lit, _ = s.citiraj("около 10 °C [[synop:15528: 26.10.2026, 15:00–16:00 ч.]], юли [[nimh-buletin: 07.2025, Плевен]].")
-    check("(НИМХ, ст. Плевен, 26.10.2026)" in t and "(Бюлетин на НИМХ, 07.2025)" in t, "SYNOP and bulletin in the text")
+    check("(НИМХ, 26.10.2026)" in t and "ст. Плевен" not in t and "(Бюлетин на НИМХ, 07.2025)" in t,
+          "SYNOP in the text as „НИМХ“ only, bulletin as before")
+    check(any("синоптична станция Плевен" in l for l in lit), "the station is named in the literature")
     check(any("WMO 15528" in l for l in lit) and any("bulletins.meteo.bg" in l for l in lit), "SYNOP and bulletin in the literature")
     obs = [{**vreme.razchiti("LBPL 221000Z 24010KT 9999 SKC 33/15 Q1008"), "chas": "11:00"}]
     check({"33", "5", "5.1"} <= vreme.chisla(obs), "numbers a text may cite")
