@@ -6,7 +6,7 @@
 скрипт. Скриптовете, които питат n8n, без ключ спират с `NO_KEY`.
 
 **Как познаваш режима.** Ако в разговора има инструментите `incidents`, `staff`, `whoami`,
-`regs_list`, `regs_read`, `duty`, `duty_save`, `samples`, `raioni`, `voda`, `voda_save`, `kais`, `obekti`, `obekti_save` и `dnevnik` (конектор Fire Service),
+`regs_list`, `regs_read`, `duty`, `duty_save`, `samples`, `raioni`, `voda`, `voda_save`, `kais`, `shema`, `obekti`, `obekti_save` и `dnevnik` (конектор Fire Service),
 ползвай **тях** за всичко, което иначе скриптовете взимат от n8n. Ако ги няма, работи със
 скриптовете, както е описано в скила (те намират ключа сами – `_shared/scripts/api_config.py`).
 Ако няма нито инструменти, нито ключ (`NO_KEY`) – кажи, че данните не са достъпни, защото
@@ -33,7 +33,8 @@
 | `voda.py masto` / `sluzhba` / `statistika` | `voda` с `action` и `name` (и `obshtina`) | отговорът е като на скрипта с `--json`; за място на хидрант се дават само точните (`tochni_koordinati: true`) |
 | `voda.py excel` (списък в Excel) | `voda` с `action: "excel"` (по желание `name`, `obshtina`, `sluzhba`, `vid`, `samo_tochni`) | n8n прави `.xlsx` и връща само `link` (24 часа) и броевете – дай линка; не събирай редовете с други извиквания |
 | `voda.py blizo` | `voda` с `action: "blizo"` и `lat`, `lon` (или `masto`) | `broi` до 25; разстоянието е по права линия |
-| `kais.py obekt` / `tarsi` (сградите от кадастъра за схемите) | `kais` с `action: "obekt"` и `id` или `lat`, `lon`; `tarsi` с `tekst` | контурите и улиците (`ulitsi`, от OpenStreetMap) са в КС2005 (метри) – извади началото на `ramka.bbox`; фонът (картинката) не идва през конектора |
+| ситуационна схема (`kais.py obekt --shema` → `situacionna.py` → `obekti.py zapishi`) | `shema` с `action` `nachalo` (`kadastar` или `lat`/`lon`, или `papka_id`) → `promeni` (`operacii`) → `chertai` → `zapishi` | на сървъра, в сесия – JSON-ът и кадастърът не минават през чата; `pokazhi` с `pat` за една част; виж `shemi`, „Ситуационна схема с конектора“ |
+| `kais.py obekt` / `tarsi` (сградите от кадастъра – само за схеми на силите, не за ситуационна) | `kais` с `action: "obekt"` и `id` или `lat`, `lon`; `tarsi` с `tekst` | контурите и улиците (`ulitsi`, от OpenStreetMap) са в КС2005 (метри) – извади началото на `ramka.bbox`; фонът (картинката) не идва през конектора |
 | `kais.py mesto` (обект по име – магазин, бензиностанция, фирма) | `kais` с `action: "mesto"`, `tekst` (името) и `masto` (населеното място) | кандидатите (`ime`, `adres`, `lat`, `lon`, `iztochnik`) – покажи ги за избор, после `kais` `obekt` с `lat`/`lon`; в регистъра – точката и идентификаторът от КАИС, не от Google; без браузър |
 | `kais.py … --ortofoto` (ортофотото за входовете) | `kais` с `action: "ortofoto"` и `bbox` [x0, y0, x1, y1] в КС2005 – контурът на имота от `obekt` плюс ~15 m; `sloi: "2022"` – предишното издание | връща готова картинка (слепена в n8n) – виж я и я покажи на потребителя; номерираните точки по оградата ги няма: опиши входа спрямо сградите и улицата и го потвърди във формуляра |
 | `voda.py dobavi` / `potvardi` / `promeni` / `premahni` | `voda_save` с `action` и същите полета (`promeni` – `id` и `set`; `premahni` – `id` и `prichina`) | всеки може да записва; премахва администраторът или който е въвел точката; първо с `dry_run: true`; координатите са само от потребителя |
