@@ -27,6 +27,20 @@ import unicodedata
 SECTION_I_MAX = 1900  # characters ≈ half a page in the template (Times New Roman 12, 1.15)
 
 # Arson wording: checked outside the „Поставени въпроси“ section, where the questions are quoted verbatim from the постановление.
+# The book of Симеонов is cited by its title, like the Методическо ръководство (iztochnitsi.json, kratko).
+SIMEONOV_STAR = (r"\(\s*(?:[^()]*;\s*)?(?:В\.\s*|Веселин\s+)?Симеонов,\s*20\d\d",
+                 "Симеонов се цитира по заглавието – „(Пожаротехническа експертиза, 2007)“; пиши маркера [[simeonov]]")
+# A request to attach documents („Да бъдат приложени телефонограма …, рапорти и др. налични при Вас документи“)
+# is not a question for the expert – it is skipped: not listed in раздел II, not researched, not answered.
+PRILOZHI = re.compile(r"\bприлож(?:ен|ат|и\b|ете|ено)|\bприлага", re.I)
+PRILOZHI_DOK = re.compile(r"телефонограм|рапорт|документ|справк|копи", re.I)
+
+
+def iska_prilagane(q):
+    """True for a request to attach documents instead of a technical question."""
+    return bool(PRILOZHI.search(q) and PRILOZHI_DOK.search(q))
+
+
 ARSON = (r"\bпалеж|\bподпал|\bумис[ъл]|\bумишлен", "вместо „палеж“, „умисъл“ и „умишлени действия“ се пише „злонамерено внесен външен огнеизточник“")
 
 FORBIDDEN = [
@@ -138,7 +152,13 @@ def check(content, meta, vaprosi=None, materiali=""):
         if n4 > SECTION_VI_MAX:
             za_proverka.append(f"общите изводи са {n4} знака – около страница е достатъчно (~{SECTION_VI_MAX}); "
                                "там са кратките отговори, не изследването отново")
+    for i, l in enumerate(listed, 1):
+        if iska_prilagane(l):
+            greshki.append(f"въпрос № {i} е искане за прилагане на документи – прескача се: не се изброява в раздел II "
+                           f"и не му се отговаря: „{l[:80]}“")
     if vaprosi:
+        # the skipped request to attach documents is not compared with раздел II
+        vaprosi = [q for q in vaprosi if not iska_prilagane(q)]
         if len(vaprosi) != len(listed):
             greshki.append(f"в постановлението въпросите са {len(vaprosi)}, в раздел II – {len(listed)}")
         for i, (q, l) in enumerate(zip(vaprosi, listed), 1):
@@ -228,6 +248,9 @@ def check(content, meta, vaprosi=None, materiali=""):
     m = re.search(ARSON[0], bez_vaprosi, re.I)
     if m:
         greshki.append(f"{ARSON[1]}: „{m.group(0)[:60]}“")
+    m = re.search(SIMEONOV_STAR[0], text)
+    if m:
+        greshki.append(f"{SIMEONOV_STAR[1]}: „{m.group(0)[:60]}“")
 
     # ── personal data ──
     for m in NAME3.finditer(text):

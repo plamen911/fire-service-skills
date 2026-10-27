@@ -175,6 +175,20 @@ ok(any("14:50" in z for z in r["za_proverka"]), "a time not in the materials")
 r = check(GOOD.replace("Обстоятелства по делото.\n\n", "Обстоятелства по делото.\n\n" + "Дълъг текст. " * 200), META)
 ok(any("раздел I" in g for g in r["greshki"]), "section I too long")
 
+# the request to attach documents is skipped – not in раздел II, not compared with the постановление
+PRILOZHI_Q = "Да бъдат приложени телефонограма на произшествието, рапорти и др. налични при Вас документи."
+r = check(GOOD, META, QUESTIONS + [PRILOZHI_Q], MATERIALS)
+ok(not any("въпросите са" in g or "прилагане" in g for g in r["greshki"]),
+   "the attach-documents request in vaprosi.json is ignored")
+r = check(GOOD.replace("2. Къде се е намирало огнището?", "2. Къде се е намирало огнището?\n3. " + PRILOZHI_Q), META)
+ok(any("прилагане на документи" in g for g in r["greshki"]), "the attach-documents request listed in раздел II")
+r = check(GOOD + "\nТова е по литературата (Симеонов, 2007).\n", META)
+ok(any("Пожаротехническа експертиза, 2007" in g for g in r["greshki"]), "the old citation „(Симеонов, 2007)“")
+r = check(GOOD + "\nТова е по литературата (ICSC 0087; Симеонов, 2007).\n", META)
+ok(any("Пожаротехническа експертиза, 2007" in g for g in r["greshki"]), "the old citation inside a combined one")
+r = check(GOOD + "\nТова е по литературата (Пожаротехническа експертиза, 2007).\n", META)
+ok(not any("Симеонов" in g for g in r["greshki"]), "the new citation by title passes")
+
 if failures:
     print(f"\n{len(failures)} FAILED")
     sys.exit(1)
