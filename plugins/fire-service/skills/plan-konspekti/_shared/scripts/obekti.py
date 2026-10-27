@@ -88,7 +88,9 @@ class Remote:
     def __init__(self):
         if not api_config.has_key():
             raise Problem(api_config.NO_KEY + " – инструментите obekti и obekti_save; пусни скрипта с --store")
-        self.by = None
+        # On the server (fire-render) the key is the service's; the history must name the colleague who asked.
+        self.avtor = os.environ.get("FIRE_SERVICE_AVTOR", "").strip()
+        self.by = self.avtor or None
 
     def call(self, body):
         try:
@@ -104,7 +106,7 @@ class Remote:
                 raise Problem(msg or "CONFLICT") from None
             raise Problem(f"N8N_ERROR {e.code}: {msg}") from None
         if isinstance(res, dict) and res.get("by"):
-            self.by = res["by"]
+            self.by = self.avtor or res["by"]
         return res
 
     def list(self, folder):

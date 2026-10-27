@@ -276,7 +276,8 @@ def check_letterhead():
 
 
 def run_tests():
-    tests = sorted(glob.glob(os.path.join(SKILLS, "*", "tests", "test_*.py"))) + sorted(glob.glob(os.path.join(ROOT, "tests", "test_*.py")))
+    tests = sorted(glob.glob(os.path.join(SKILLS, "*", "tests", "test_*.py"))) + sorted(glob.glob(os.path.join(ROOT, "tests", "test_*.py"))) \
+        + sorted(glob.glob(os.path.join(ROOT, "server", "*", "tests", "test_*.py")))
     for t in tests:
         r = subprocess.run([sys.executable, t], cwd=os.path.dirname(os.path.dirname(t)),
                            capture_output=True, text=True,
