@@ -1,7 +1,7 @@
 # fire-render – the situational scheme made on the server (see app.py). The plugin's scripts are not baked
 # in: the entrypoint clones the public repository into the volume and app.py pulls it every 5 minutes.
 FROM python:3.12-slim
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt

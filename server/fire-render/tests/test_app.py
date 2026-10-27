@@ -68,4 +68,14 @@ try:
     ok(False, "path in session id")
 except app.Problem:
     ok(True, "session id checked")
+# /vreme – the input is checked before vreme.py is run (no network here)
+for bad, why in (({"data": "x"}, "date"), ({"data": "2026-10-26", "mesto": "--rm"}, "mesto as an option"),
+                 ({"data": "2026-10-26"}, "no place"), ({"data": "2026-10-26", "stantsiya": "15528", "ot": "25;rm"}, "hour"),
+                 ({"data": "2026-10-26", "stantsiya": "15528; ls"}, "station")):
+    try:
+        app.a_vreme(bad)
+        ok(False, f"vreme accepts a bad {why}")
+    except app.Problem as e:
+        ok(e.code == "BAD_INPUT", f"vreme rejects a bad {why}")
+
 print(f"OK – {checks} проверки")

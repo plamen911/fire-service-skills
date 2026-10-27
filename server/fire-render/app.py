@@ -16,6 +16,9 @@ port, and every request must carry the shared token (X-Render-Token). n8n adds w
     POST /shema {"action": "promeni", "sesiya", "operacii": [{"op": "set"|"add"|"remove"|"merge", "pat", "stoynost"}]}
     POST /shema {"action": "chertai", "sesiya"}
     POST /shema {"action": "zapishi", "sesiya", "obekt": "OB-0001" | "nov": {"ime", "adres", "masto"}}
+    POST /vreme {"data": "2026-10-26", "mesto": "Плевен" | "lat", "lon" | "stantsiya": "15528"|"LBPL",
+                 "ot": "15:00", "do": "16:00", "do_data": "2026-10-28"}   – времето (vreme.py) за колегите,
+                                                                     чиято среда не стига до архивите
     GET  /health
 
 The scripts are the plugin's own (kais.py, situacionna.py, obekti.py) from the public repository, pulled at
@@ -62,13 +65,46 @@ class Problem(Exception):
 
 # ------------------------------------------------------------------------------------------- helpers
 
+APP = os.path.abspath(__file__)
+
+
+def _app_text():
+    try:
+        with open(APP, "rb") as f:
+            return f.read()
+    except OSError:
+        return b""
+
+
+_app_loaded = [_app_text()]
+
+
 def pull():
-    """git pull at most every PULL_EVERY seconds, so a change pushed to the plugin reaches the server."""
+    """git pull at most every PULL_EVERY seconds, so a change pushed to the plugin reaches the server.
+    When the pull changes this very file, the process restarts itself (os.execv) a moment later – a new
+    action of the service needs no manual deploy; only a new system package (Dockerfile) does."""
     with _pull_lock:
         if time.time() - _last_pull[0] < PULL_EVERY:
             return
         subprocess.run(["git", "-C", REPO, "pull", "--ff-only", "-q"], capture_output=True, timeout=120)
         _last_pull[0] = time.time()
+        if APP.startswith(REPO) and _app_text() not in (b"", _app_loaded[0]):
+            threading.Thread(target=_restart, daemon=True).start()
+
+
+def _restart():
+    time.sleep(3)  # let the answers in progress finish
+    sys.stderr.write("app.py changed in the repository – restarting\n")
+    os.execv(sys.executable, [sys.executable, APP])
+
+
+def _puller():
+    while True:
+        time.sleep(PULL_EVERY + 5)
+        try:
+            pull()
+        except Exception:  # noqa: BLE001 – the next round tries again
+            pass
 
 
 def cleanup():
@@ -357,6 +393,53 @@ def a_zapishi(b):
             "za_claude": "Записано в регистъра. Линковете за файловете – obekti list с папката на обекта (поле download)."}
 
 
+VREME = os.path.join(SCRIPTS, "vreme.py")
+DATA_RE = r"\d{4}-\d{2}-\d{2}|\d{2}\.\d{2}\.\d{4}"
+
+
+def a_vreme(b):
+    """vreme.py on the server: the НИМХ SYNOP, the airport METAR and the НИМХ bulletin are fetched here,
+    where the network reaches them; the answer is the script's JSON, unchanged."""
+    pull()
+    data = str(b.get("data") or "").strip()
+    if not re.fullmatch(DATA_RE, data):
+        raise Problem("BAD_INPUT", "\"data\" е ГГГГ-ММ-ДД")
+    args = [VREME]
+    st = str(b.get("stantsiya") or "").strip().upper()
+    if st:
+        if not re.fullmatch(r"\d{5}|[A-Z]{4}", st):
+            raise Problem("BAD_INPUT", "\"stantsiya\" е WMO (15528) или ICAO (LBPL)")
+        args.append(st)
+    args.append(data)
+    if b.get("do_data"):
+        dd = str(b["do_data"]).strip()
+        if not re.fullmatch(DATA_RE, dd):
+            raise Problem("BAD_INPUT", "\"do_data\" е ГГГГ-ММ-ДД")
+        args.append(dd)
+    if b.get("lat") is not None and b.get("lon") is not None:
+        args += ["--blizo", f"{float(b['lat'])},{float(b['lon'])}"]
+    elif b.get("mesto"):
+        m = str(b["mesto"]).strip()
+        if len(m) > 80 or m.startswith("-"):
+            raise Problem("BAD_INPUT", "\"mesto\" е име на населено място")
+        args += ["--mesto", m]
+    elif not st:
+        raise Problem("BAD_INPUT", "дай \"mesto\", \"lat\"/\"lon\" или \"stantsiya\"")
+    for k in ("ot", "do"):
+        if b.get(k):
+            v = str(b[k]).strip()
+            if not re.fullmatch(r"\d{1,2}:\d{2}", v):
+                raise Problem("BAD_INPUT", f"\"{k}\" е ЧЧ:ММ")
+            args += [f"--{k}", v]
+    p = subprocess.run([sys.executable, *args], capture_output=True, text=True, timeout=240,
+                       env={**os.environ, "FIRE_SERVICE_NA_SARVARA": "1"})
+    if p.returncode != 0:
+        msg = (p.stderr or p.stdout).strip()
+        code = msg.split(":", 1)[0] if re.match(r"[A-Z_]+:", msg) else "SCRIPT_ERROR"
+        raise Problem(code, msg.split(":", 1)[-1].strip()[:900], 404 if code == "NO_DATA" else 400)
+    return json.loads(p.stdout)
+
+
 HANDLERS = {"nachalo": a_nachalo, "pokazhi": a_pokazhi, "promeni": a_promeni, "chertai": a_chertai, "zapishi": a_zapishi}
 
 
@@ -383,13 +466,15 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not TOKEN or not secrets.compare_digest(self.headers.get("X-Render-Token", ""), TOKEN):
             return self.send(401, {"error": "UNAUTHORIZED"})
-        if self.path != "/shema":
+        if self.path not in ("/shema", "/vreme"):
             return self.send(404, {"error": "NOT_FOUND"})
         try:
             n = int(self.headers.get("Content-Length") or 0)
             if n > 2_000_000:
                 raise Problem("TOO_LARGE", "заявката е над 2 MB")
             b = json.loads(self.rfile.read(n) or b"{}")
+            if self.path == "/vreme":
+                return self.send(200, a_vreme(b))
             action = str(b.get("action", ""))
             if action not in HANDLERS:
                 raise Problem("BAD_INPUT", "action е " + ", ".join(ACTIONS))
@@ -407,4 +492,5 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     os.makedirs(DATA, exist_ok=True)
+    threading.Thread(target=_puller, daemon=True).start()
     ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("PORT", "8080"))), Handler).serve_forever()
