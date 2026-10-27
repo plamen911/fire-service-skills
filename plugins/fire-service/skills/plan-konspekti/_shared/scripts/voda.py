@@ -16,6 +16,7 @@ voda.py — водоизточниците за пожарогасене в ра
     python3 _shared/scripts/voda.py blizo --masto Тръстеник         # най-близките до центъра на населено място
     python3 _shared/scripts/voda.py statistika                      # колко са, с какви координати, къде няма
     python3 _shared/scripts/voda.py eksport --masto Рибен --format kml -o ribn.kml   # за карта в телефона
+    python3 _shared/scripts/voda.py excel --obshtina Кнежа          # Excel – прави го n8n, връща само линк (24 ч)
 
 Запис (всеки с личен ключ; промяната се прилага на сървъра върху текущата таблица):
     python3 _shared/scripts/voda.py dobavi --masto Биволаре --vid хидрант --tip надземен --lat 43.4852 --lon 24.5591 \
@@ -300,6 +301,24 @@ def nearest(rows, origin, n, radius=None, approx=False, skip_ekatte=None):
             found.append((d, r))
     found.sort(key=lambda x: x[0])
     return found[:n]
+
+
+def cmd_excel(a, store):
+    """The table (or part of it) as .xlsx, made in n8n – only the link and the counts come back, never the rows."""
+    if not api_config.has_key():
+        raise Problem(api_config.NO_KEY + " – инструментът voda с action excel")
+    body = {"action": "excel"}
+    for k in ("masto", "obshtina", "sluzhba", "vid"):
+        if getattr(a, k, None):
+            body[k] = getattr(a, k)
+    if a.samo_tochni:
+        body["samo_tochni"] = True
+    try:
+        res = api_config.post("voda_url", body, timeout=180)
+    except urllib.error.HTTPError as e:
+        raise Problem(f"N8N_ERROR {e.code}: {e.read().decode(errors='ignore')[:300]}") from None
+    emit(a, res, f"{res.get('fayl')}: {res.get('broy')} водоизточника ({res.get('tochni')} с точни координати) – "
+                 f"{res.get('link')} (важи до {res.get('vazhi_do')})")
 
 
 def emit(a, obj, text):
@@ -783,6 +802,8 @@ def main():
     p.add_argument("--broi", type=int, default=5); p.add_argument("--radius-m", type=float)
     p.add_argument("--s-priblizitelni", action="store_true", help="и геокодираните по адрес/улица")
     sub.add_parser("statistika", parents=[common])
+    p = sub.add_parser("excel", parents=[common]); p.add_argument("--masto"); p.add_argument("--obshtina")
+    p.add_argument("--sluzhba"); p.add_argument("--vid", choices=VID); p.add_argument("--samo-tochni", action="store_true")
     p = sub.add_parser("eksport", parents=[common]); p.add_argument("--masto"); p.add_argument("--obshtina")
     p.add_argument("--sluzhba"); p.add_argument("--format", choices=["kml", "csv"], default="kml")
     p.add_argument("--s-priblizitelni", action="store_true"); p.add_argument("-o", "--out", required=True)
@@ -805,7 +826,7 @@ def main():
     if a.csv:
         os.environ["FIRE_SERVICE_VODA_CSV"] = a.csv
     try:
-        {"masto": cmd_masto, "sluzhba": cmd_sluzhba, "blizo": cmd_blizo, "statistika": cmd_statistika,
+        {"masto": cmd_masto, "sluzhba": cmd_sluzhba, "blizo": cmd_blizo, "statistika": cmd_statistika, "excel": cmd_excel,
          "eksport": cmd_eksport, "mesta": cmd_mesta, "karta": cmd_karta, "premahni": cmd_premahni, "dobavi": cmd_dobavi, "potvardi": cmd_potvardi, "promeni": cmd_promeni}[a.cmd](a, Store(a.csv))
     except Problem as e:
         print(str(e), file=sys.stderr)
