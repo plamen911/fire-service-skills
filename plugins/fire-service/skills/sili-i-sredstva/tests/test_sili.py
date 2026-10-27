@@ -162,8 +162,10 @@ def test_room_and_docx():
         out = json.loads(p.stdout)["output"]
         assert os.path.basename(out) == "Razchet_Konkretna_shema_Test.docx" and os.path.exists(out), out
         from docx import Document
-        text = "\n".join(c.text for t in Document(out).tables for row in t.rows for c in row.cells)
-        assert "(13)" in text and "48" in text, text
+        text = "\n".join(p.text for p in Document(out).paragraphs)
+        # the written calculation: the formula, then the numbers put in and the result, with the units in Cyrillic
+        for want in ("1. Свободно време за развитие на пожара", "Fп: 48 м²", "(м²)", "Брой струйници (общо)", "* "):
+            assert want in text, (want, text)
     print("  ok  room cap and the .docx")
 
 

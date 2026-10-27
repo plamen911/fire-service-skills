@@ -321,6 +321,17 @@ def big_arrow(ax, a, b, pal, hatched, scale):
                         hatch="xxxx" if hatched else None)
     ax.add_patch(p)
 
+def draw_evacuation(ax, pts, s, pal):
+    """The way out (чл. 7, ал. 4, т. 1, б. „с“) – a green line with an arrowhead at the exit (green – чл. 9, ал. 9,
+    т. 5), dashed, so that it is not taken for a hose line."""
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    ax.plot(xs[:-1] + [xs[-1]], ys[:-1] + [ys[-1]], color=pal.grass, lw=1.6, ls=(0, (4, 2)), zorder=6,
+            solid_capstyle="round")
+    a, b = pts[-2], pts[-1]
+    ax.add_patch(FancyArrowPatch(a, b, arrowstyle=f"-|>,head_length={0.5 * s},head_width={0.28 * s}",
+                                 mutation_scale=1, color=pal.grass, lw=1.6, zorder=6))
+
+
 def draw_truck(ax, t, s, fs, pal):
     """A fire engine as in Приложение № 6: the body, the cab in front (a trapezium), and inside – the tank
     (a rounded box) or the letters of the special vehicle; a monitor on the roof for the „lafeten“ kinds."""

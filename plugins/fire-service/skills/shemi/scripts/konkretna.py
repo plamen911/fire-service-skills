@@ -81,6 +81,7 @@ def main():
     ap.add_argument("--ulitsi", default="", help="улиците, които да се виждат (по подразбиране – именуваните до 15 m "
                                                  "от сградата; за ориентиране – откъде идват колите), "
                                              "със запетая; заедно с тях – и тревните площи от КАИС/OpenStreetMap")
+    ap.add_argument("--bez-evakuatsiya", action="store_true", help="без стрелките за евакуация (б. „с“)")
     ap.add_argument("-o", "--out", required=True)
     a = ap.parse_args()
 
@@ -205,6 +206,12 @@ def main():
         lines.append({"tochki": [list(p) for p in pts] + [list(front), list(add(front, side, 1.0 * (1 if i % 2 == 0 else -1)))],
                       "vid": "malka", "struinik": "malak"})
 
+    # the way out (б. „с“) – from the door of the room along the corridor to the entrance and out, beside the
+    #   hose lines (on the other side), green; the second exit, when the drawing does not show it, is not guessed
+    ev = [add(dpt, out_v, 1.6)] + list(reversed(path)) + [vc, foot, add(foot, face, 3.5)]
+    ev = [list(add(p, side, -1.3)) for p in ev]
+    evakuatsiya = [] if a.bez_evakuatsiya else [{"tochki": [[round(x, 2), round(y, 2)] for x, y in ev]}]
+
     # the texts of the fire – in the room, on white, as on the approved schemes
     ime = a.pomeshtenie
     sizes = sorted(t.get("razmer", 1.0) for t in pod["tekst"])
@@ -277,7 +284,7 @@ def main():
     flag = add((cx, cy), page_x, -w / 4)
     d = {"podlozhka": pod["podlozhka"], "tekst": tekst, "obekti": pod.get("obekti", []),
          "pozhar": pozhar, "ognishte": [{"x": round(flag[0], 2), "y": round(flag[1], 2)}],
-         "razstoyaniya": dims, "avtomobili": trucks,
+         "razstoyaniya": dims, "avtomobili": trucks, "evakuatsiya": evakuatsiya,
          "vodoiztochnitsi": [{"vid": hyd["vid"], "x": round(hp[0], 2), "y": round(hp[1], 2), "etiket": ""}], "linii": lines,
          "ulitsi": ulitsi, "trevni": trevni, "teren_tochki": teren_tochki,
          "sgradi": [{"kontur": b["kontur"], "etiket": "", "etazhnost": b.get("etazhnost", ""), "kratko": True,

@@ -27,7 +27,8 @@ BROWN = (139, 90, 43)
 LAYERS = {  # name: (ACI colour, true colour or None, linetype)
     "SGRADI": (7, None, "CONTINUOUS"), "RAZMERI": (7, None, "CONTINUOUS"), "IMOT": (7, None, "DASHDOT"),
     "ULITSI": (30, BROWN, "CONTINUOUS"), "VODA": (5, None, "CONTINUOUS"), "GAZ": (2, None, "CONTINUOUS"),
-    "BEZ_PARKIRANE": (30, (255, 140, 0), "CONTINUOUS"), "TREVNI": (3, (46, 139, 58), "CONTINUOUS"), "OGRADA": (7, None, "DASHED"), "POZHAR": (1, None, "CONTINUOUS"),
+    "BEZ_PARKIRANE": (30, (255, 140, 0), "CONTINUOUS"), "TREVNI": (3, (46, 139, 58), "CONTINUOUS"),
+    "EVAKUATSIYA": (3, (46, 139, 58), "DASHED"), "OGRADA": (7, None, "DASHED"), "POZHAR": (1, None, "CONTINUOUS"),
     "TEKST": (7, None, "CONTINUOUS"), "PODLOZHKA": (7, None, "CONTINUOUS"), "LIST": (7, None, "CONTINUOUS"), "SEVER": (7, None, "CONTINUOUS"),
 }
 FONT = "arial.ttf"            # a TrueType font with Cyrillic – AutoCAD and CorelDRAW both have it
@@ -343,6 +344,15 @@ def write(data, d, out, s, sheet=None):
         text(t["x"], t["y"] - W, t["id"], layer="POZHAR")
     for a, b in data["posoka"] + data["napravlenie"]:
         msp.add_line(P(a), P(b), dxfattribs={"layer": "POZHAR"})
+    for e in data.get("evakuatsiya", []):              # the way out – green, with the arrowhead at the exit
+        msp.add_lwpolyline([P(p) for p in e], dxfattribs={"layer": "EVAKUATSIYA", "color": 3})
+        (ax_, ay_), (bx_, by_) = e[-2], e[-1]
+        L_ = math.hypot(bx_ - ax_, by_ - ay_) or 1.0
+        ux, uy = (bx_ - ax_) / L_, (by_ - ay_) / L_
+        hl, hw = 0.5 * s, 0.28 * s
+        msp.add_solid([P((bx_, by_)), P((bx_ - ux * hl - uy * hw, by_ - uy * hl + ux * hw)),
+                       P((bx_ - ux * hl + uy * hw, by_ - uy * hl - ux * hw))],
+                      dxfattribs={"layer": "EVAKUATSIYA", "color": 3})
     for g in data["vhodove"]:
         text(g["x"], g["y"], g["etiket"])
     for t in data["tekst"]:
