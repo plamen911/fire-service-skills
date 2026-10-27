@@ -331,7 +331,8 @@ def write(data, d, out, s, sheet=None):
              "POZHAR", closed=True)
     for f in data["pozhar"]:
         hatch = msp.add_hatch(color=1, dxfattribs={"layer": "POZHAR"})
-        hatch.set_pattern_fill("ANSI37", scale=max(s / 4, 0.2))
+        hatch.set_pattern_fill("ANSI31" if f.get("zashtita") else "ANSI37",    # protected – single hatching
+                               scale=max(s / (2 if f.get("zashtita") else 4), 0.2))
         hatch.paths.add_polyline_path([P((f["x"], f["y"])), P((f["x"] + f["w"], f["y"])), P((f["x"] + f["w"], f["y"] + f["h"])),
                                        P((f["x"], f["y"] + f["h"]))], is_closed=True)
         text(f["x"] + f["w"] / 2, f["y"] + f["h"] / 2, f["etiket"], layer="POZHAR")

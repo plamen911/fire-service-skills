@@ -145,6 +145,72 @@ def back(doc, nomer, title, obekt):
     B.blank(doc)
 
 
+def number_on_every_sheet(doc, nomer):
+    """The field for the plan's number, 20 × 15 mm in the upper right corner of every sheet (чл. 9, ал. 3): in the
+    header of the text pages; a sheet of a scheme has it in its frame and its back in the page – those get none."""
+    from docx.enum.table import WD_TABLE_ALIGNMENT
+    from docx.shared import Pt
+    from prilozhenia import borders, fixed_width, row_height
+    import prilozhenia
+    for sec in doc.sections:
+        has_own = _starts_with_box_or_picture(doc, sec)
+        hdr = sec.header
+        hdr.is_linked_to_previous = False
+        for p in list(hdr.paragraphs)[1:]:
+            p._p.getparent().remove(p._p)
+        for t in list(hdr.tables):
+            t._tbl.getparent().remove(t._tbl)
+        if has_own:
+            continue
+        t = hdr.add_table(rows=1, cols=1, width=Cm(2.0))
+        t.alignment = WD_TABLE_ALIGNMENT.RIGHT
+        borders(t)
+        fixed_width(t, [2.0])
+        row_height(t.rows[0], 1.5, exact=True)
+        c = t.cell(0, 0)
+        p = c.paragraphs[0]
+        p.alignment = 1
+        r = p.add_run("№ на плана")
+        r.font.name, r.font.size = prilozhenia.FONT, Pt(8)
+        if nomer:
+            q = c.add_paragraph()
+            q.alignment = 1
+            r = q.add_run(str(nomer))
+            r.font.name, r.font.size = prilozhenia.FONT, Pt(12)
+
+
+def _body_of(doc, sec):
+    """The body elements of a section (from the end of the one before to its sectPr)."""
+    body = doc.element.body
+    els, cur, secs = [], [], []
+    for el in body.iterchildren():
+        cur.append(el)
+        if el.xpath("./w:pPr/w:sectPr") or el.tag.endswith("}sectPr"):
+            secs.append(cur)
+            cur = []
+    if cur:
+        secs.append(cur)
+    i = 0
+    for k, s_ in enumerate(doc.sections):
+        if s_._sectPr is sec._sectPr:
+            i = k
+    return secs[i] if i < len(secs) else []
+
+
+def _starts_with_box_or_picture(doc, sec):
+    """A sheet of a scheme (its first paragraph is the picture) or a back page (it starts with the number box)."""
+    for el in _body_of(doc, sec):
+        if el.tag.endswith("}tbl"):
+            txt = "".join(el.itertext())
+            return txt.strip().startswith("№ на плана")
+        if el.tag.endswith("}p"):
+            if el.xpath(".//w:drawing"):
+                return True
+            if "".join(el.itertext()).strip():
+                return False
+    return False
+
+
 def pieces(n, one, few):
     return f"{num(n)} {one if n == 1 else few}"
 
@@ -199,7 +265,7 @@ def build(plan, base, out_dir):
             bad(f"вариант {i}: sili – очаква се JSON-ът на sili.py")
         fail = str(v.get("fail") or f"Konkretna_shema_{i}").strip()
         k_out = os.path.join(out_dir, fail + ".docx")
-        k_res = konkretna_docx.build(k, k_out)
+        k_res = konkretna_docx.build(k, k_out, s, v.get("zashtita"))   # its back: the table № 3б and the calculation
         r_out = os.path.join(out_dir, "Razchet_" + fail + ".docx")
         naslov = (k.get("list") or {}).get("naslov") or f"Конкретна схема № {i}"
         doc = B.new_document()                         # only the calculation – the back of the scheme's sheet
@@ -267,8 +333,8 @@ def build(plan, base, out_dir):
         kl = k.get("list") or {}
         sheet(doc, k_res["grafichna"])
         back(doc, kl.get("nomer"), f"{naslov} – таблична част (Приложение № 3б)", kl.get("obekt"))
-        table_3b(doc, k.get("tablitsa_3b") or {})
-        razchet_docx.page(doc, s, naslov, plan.get("obekt"), v.get("pomeshtenie"))
+        konkretna_docx.back_with_calculation(doc, k.get("tablitsa_3b") or {}, s, zashtita=v.get("zashtita"),
+                                             extra_cm=1.2)   # the plan's footer (page number) and its 12 pt style
 
     landscape(doc)
     B.para(doc, f"{3 + len(done)}. БЛАНКА ЗА ОТЧИТАНЕ НА ПРОИЗШЕСТВИЯТА И ЗАНЯТИЯТА (Приложение № 4 към чл. 7, ал. 5)",
@@ -277,6 +343,7 @@ def build(plan, base, out_dir):
     p4 = plan.get("prilozhenie_4") or {}
     table_4(doc, p4.get("redove"), int(p4.get("broi") or 14))
     B.page_numbers(doc)
+    number_on_every_sheet(doc, lst.get("nomer"))
     out = os.path.join(out_dir, name + ".docx")
     doc.save(out)
     B.report(out)
