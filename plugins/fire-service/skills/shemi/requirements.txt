@@ -1,2 +1,6 @@
 matplotlib>=3.7
 ezdxf>=1.1
+svgelements>=1.9    # cdr_import.py – одобрен чертеж от .cdr/.svg
+shapely>=2.0
+scipy>=1.10
+numpy>=1.26

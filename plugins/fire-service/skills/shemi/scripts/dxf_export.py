@@ -28,7 +28,7 @@ LAYERS = {  # name: (ACI colour, true colour or None, linetype)
     "SGRADI": (7, None, "CONTINUOUS"), "RAZMERI": (7, None, "CONTINUOUS"), "IMOT": (7, None, "DASHDOT"),
     "ULITSI": (30, BROWN, "CONTINUOUS"), "VODA": (5, None, "CONTINUOUS"), "GAZ": (2, None, "CONTINUOUS"),
     "BEZ_PARKIRANE": (30, (255, 140, 0), "CONTINUOUS"), "TREVNI": (3, (46, 139, 58), "CONTINUOUS"), "OGRADA": (7, None, "DASHED"), "POZHAR": (1, None, "CONTINUOUS"),
-    "TEKST": (7, None, "CONTINUOUS"), "LIST": (7, None, "CONTINUOUS"), "SEVER": (7, None, "CONTINUOUS"),
+    "TEKST": (7, None, "CONTINUOUS"), "PODLOZHKA": (7, None, "CONTINUOUS"), "LIST": (7, None, "CONTINUOUS"), "SEVER": (7, None, "CONTINUOUS"),
 }
 FONT = "arial.ttf"            # a TrueType font with Cyrillic – AutoCAD and CorelDRAW both have it
 
@@ -238,7 +238,8 @@ def write(data, d, out, s, sheet=None):
         text(pos[0], pos[1], lab, layer="IMOT", h=th * 0.9)
     if data["ograda"]:
         poly(data["ograda"], "OGRADA", closed=True)
-    for k in data.get("trevni") or []:                # grass areas – green outlines, cut at the drawing's edge
+    rings_ = list(data.get("trevni") or []) + [h for hs in (data.get("trevni_otvori") or []) for h in hs]
+    for k in rings_:                                  # grass areas and their holes – green outlines, cut at the edge
         for a_, b_ in zip(k, k[1:] + k[:1]):
             c_ = _clip(a_, b_, data["box"])
             if c_:
@@ -346,7 +347,16 @@ def write(data, d, out, s, sheet=None):
         text(g["x"], g["y"], g["etiket"])
     for t in data["tekst"]:
         text(t["x"], t["y"], t["tekst"], rot=t["ugal"],                # the same end as on the picture
-             align="MIDDLE_RIGHT" if t.get("kray") == "desen" else "MIDDLE_LEFT")
+             align={"desen": "MIDDLE_RIGHT", "sreda": "MIDDLE_CENTER"}.get(t.get("kray"), "MIDDLE_LEFT"),
+             color=1 if t.get("cvyat") == "cherven" else None)
+    for e in data.get("podlozhka", []):                # the underlay of the approved drawing – walls, openings, marks
+        if e["plaska"]:                                # the white mask that cuts an opening – a white fill on top,
+            h_ = msp.add_hatch(dxfattribs={"layer": "PODLOZHKA"})        #   in the drawing's order
+            h_.rgb = (255, 255, 255)
+            h_.paths.add_polyline_path([P(q) for q in e["tochki"]], is_closed=True)
+        else:
+            msp.add_lwpolyline([P(q) for q in e["tochki"]],
+                               dxfattribs={"layer": "PODLOZHKA", "const_width": e["lw_mm"] * (sheet["scale"] / 1000 if sheet else 0.0)})
 
     # the sheet (Приложение № 2а) in model space, at the scheme's scale
     x0, y0, x1, y1 = data["box"]
@@ -391,7 +401,9 @@ def write(data, d, out, s, sheet=None):
         obekt = str(lst.get("obekt") or "Наименование на обекта, адрес, телефон")
         for i, line in enumerate(textwrap.wrap(obekt, 34)[:4]):
             ltext(bx + 31.5, 8.5 + (1.5 - i) * 2.6, line, 1.9)
-        ltext(bx + 106.5, 8.5, "Ситуационна схема", 3.5)
+        _ls = textwrap.wrap(str(lst.get("naslov") or "Ситуационна схема"), 30)
+        for _i, _l in enumerate(_ls):
+            ltext(bx + 106.5, 8.5 + ((len(_ls) - 1) / 2 - _i) * 3.4, _l, 3.5 if len(_ls) == 1 else 2.8)
         ltext(bx - 3, 2, f"М 1:{scale}", 2.5, "BOTTOM_RIGHT")
         kx, ky = M(9, SHEET_H - 13)
     else:

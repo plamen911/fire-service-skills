@@ -64,7 +64,11 @@ shema.py — чертае СХЕМА за разполагане на силит
   "shtab": [{"x": 66, "y": 44}],                                    // място за разположение на щаба
   "pbt": [{"x": 56, "y": 30}],                                      // пост по безопасност на труда
   "vyatar": {"ugal": 200, "sila": "5 m/s"},                         // накъде духа и скоростта – в легендата
-  "tekst": [{"x": 5, "y": 5, "tekst": "ул. „Христо Ботев“", "ugal": 0}],   // x, y – левият край на надписа; с
+  "tekst": [{"x": 5, "y": 5, "tekst": "ул. „Христо Ботев“", "ugal": 0}],   // по желание: "kray": "sreda" – центриран,
+                                                //   "cvyat": "cherven", "razmer": 0.85, "kursiv": true, "fon": true (бял фон)
+  "podlozhka": [{"tochki": [[x, y], …], "lw_mm": 0.7, "cvyat": "#1b1918", "plaska": false}],   // векторна подложка от
+                                                //   одобрен чертеж (стени, врати, прозорци, стълбища) – scripts/cdr_import.py;
+                                                //   чертае се както е, по реда си; "plaska": true – бяла маска (отвор в стена)   // x, y – левият край на надписа; с
                                                 //   "kray": "desen" – десният (надпис вляво от нещо, напр. от щриха на вход)
   // --- елементите на ситуационната схема (чл. 7, ал. 3, т. 1 от Указанията) – по желание и в обикновената схема
   "ulitsi": [{"tochki": [[0, -6], [120, -6]], "shirina": 8, "ime": "ул. „Примерна“"},   // знакът „Шосе“, кафяв;
@@ -75,7 +79,8 @@ shema.py — чертае СХЕМА за разполагане на силит
   // името на улицата е винаги между двете ѝ кафяви линии, ако се събира: на мястото "ime_pos", иначе на най-близкото
   //   място в същата улица, а ако и там не се събира – на друго парче от нея ("ime_ulitsa": „ул. „…““ – kais.py го
   //   слага на всяко парче); само ако не се събира никъде – на "ime_pos"
-  "trevni": [{"kontur": [[x, y], …]}],          // тревни площи – зелени (чл. 9, ал. 9, т. 5)
+  "trevni": [{"kontur": [[x, y], …], "otvori": [[[x, y], …]]}],   // тревни площи – зелени (чл. 9, ал. 9, т. 5);
+                                                //   "otvori" – алеи, настилки, сгради вътре в тях
   "reki": [{"tochki": [[x, y], …], "shirina": 4, "ime": "р. Вит",   // река, канал – знакът „Река, канал с бараж“ от
             "barazhi": [[x, y]], "ime_pos": [x, y], "ime_ugal": 0}],  //   Приложение № 6: на всеки бряг права синя линия
                                                 //   по водата и плитка вълнообразна отвън, без запълване; "tochki" – оста,
@@ -114,6 +119,7 @@ shema.py — чертае СХЕМА за разполагане на силит
                                                 //   "ramka" – x0, y0, x1, y1 на картинката в метри
   "list": {...},                                // ЛИСТ НА СИТУАЦИОННА СХЕМА по Приложение № 2а – виж по-долу
   "shlang_m": 20,                               // дължина на един шланг – чертичка на всеки толкова метра
+  "pole_m": 12,                                 // при "zavartane": полето около обекта, m (по подразбиране ≥ 12)
   "zavartane": "avto",                          // завъртане на целия чертеж, в градуси обратно на часовниковата стрелка;
                                                 //   "avto" – най-дългата стена на главната сграда става хоризонтална.
                                                 //   Знакът за посоките се завърта с чертежа (чл. 9, ал. 5 иска само
@@ -426,13 +432,14 @@ def _zavarti(d, cyali_ulitsi=True):
                 o["ugal"] = num(o["ugal"], "tekst.ugal") + ang
     d["ognishte"] = [dict(o, **dict(zip(("x", "y"), R((num(o["x"], "x"), num(o["y"], "y")))))) if isinstance(o, dict)
                      else R(o) for o in (d.get("ognishte") or [])]
-    for key in ("linii", "vodoprovod", "gazoprovod"):
+    for key in ("linii", "vodoprovod", "gazoprovod", "podlozhka"):
         for ln in items(d, key):
             ln["tochki"] = RL(ln.get("tochki") or [])
     for key in ("ulitsi_skrij", "ulitsi_rab"):
         d[key] = [RL(ln) for ln in (d.get(key) or [])]
     for t in items(d, "trevni"):
         t["kontur"] = RL(t.get("kontur") or [])
+        t["otvori"] = [RL(h) for h in (t.get("otvori") or [])]
     for r in items(d, "reki"):                          # the water signs of Приложение № 6
         r["tochki"] = RL(r.get("tochki") or [])
         r["barazhi"] = RL(r.get("barazhi") or [])
@@ -476,13 +483,14 @@ def _zavarti(d, cyali_ulitsi=True):
     for key in ("razstoyaniya", "posoka", "napravlenie", "stalbi"):
         for o in items(d, key):
             core += [o["ot"], o["do"]]
-    for ln in items(d, "linii"):
+    for ln in items(d, "linii") + items(d, "podlozhka"):
         core += ln["tochki"]
     if d.get("ograda"):
         core += d["ograda"]
     core += RL(d.pop("teren_tochki", None) or [])     # points the cut terrain must also take in (not drawn)
     xs, ys = [p[0] for p in core], [p[1] for p in core]
-    pad = max(12.0, 0.12 * max(max(xs) - min(xs), max(ys) - min(ys)))
+    pad = num(d["pole_m"], "pole_m") if d.get("pole_m") is not None else \
+        max(12.0, 0.12 * max(max(xs) - min(xs), max(ys) - min(ys)))      # "pole_m" – the margin round the object
     ox, oy = min(xs) - pad, min(ys) - pad
     tw, th = max(xs) - min(xs) + 2 * pad, max(ys) - min(ys) + 2 * pad
     if cyali_ulitsi:
@@ -498,13 +506,14 @@ def _zavarti(d, cyali_ulitsi=True):
                 o["x"], o["y"] = S((o["x"], o["y"]))
         d["ognishte"] = [dict(o, **dict(zip(("x", "y"), S((o["x"], o["y"]))))) if isinstance(o, dict) else S(o)
                          for o in d["ognishte"]]
-        for key in ("linii", "vodoprovod", "gazoprovod"):
+        for key in ("linii", "vodoprovod", "gazoprovod", "podlozhka"):
             for ln in items(d, key):
                 ln["tochki"] = [S(p) for p in ln["tochki"]]
         for key in ("ulitsi_skrij", "ulitsi_rab"):
             d[key] = [[S(p) for p in ln] for ln in (d.get(key) or [])]
         for t in items(d, "trevni"):
             t["kontur"] = [S(p) for p in t["kontur"]]
+            t["otvori"] = [[S(p) for p in h] for h in (t.get("otvori") or [])]
         for r in items(d, "reki"):
             r["tochki"] = [S(p) for p in r["tochki"]]
             r["barazhi"] = [S(p) for p in r["barazhi"]]
@@ -703,7 +712,8 @@ def load(d):
         if place not in (None, "", *PLACES):
             bad(f"linii[{i}].myasto: {', '.join(PLACES)}")
         out["linii"].append({"tochki": pts, "vid": kind, "struinik": nozzle or None, "myasto": place or None,
-                             "etiket": str(ln.get("etiket") or ""), "gladka": ln.get("gladka", True)})
+                             "etiket": str(ln.get("etiket") or ""), "gladka": ln.get("gladka", True),
+                             "etiket_pri": ln.get("etiket_pri") if ln.get("etiket_pri") in ("sreda", "nachalo") else "kray"})
     for i, r in enumerate(items(d, "razklonitel")):
         ways = int(num(r.get("patya", 3), f"razklonitel[{i}].patya"))
         if ways not in SPLITTERS:
@@ -723,7 +733,9 @@ def load(d):
     for i, t in enumerate(items(d, "tekst")):
         out["tekst"].append({"x": num(t.get("x"), f"tekst[{i}].x"), "y": num(t.get("y"), f"tekst[{i}].y"),
                              "tekst": str(t.get("tekst") or ""), "ugal": num(t.get("ugal", 0), f"tekst[{i}].ugal"),
-                             "kray": "desen" if t.get("kray") == "desen" else "lyav"})
+                             "kray": t.get("kray") if t.get("kray") in ("desen", "sreda") else "lyav",
+                             "cvyat": t.get("cvyat"), "razmer": num(t.get("razmer", 1.0), f"tekst[{i}].razmer"),
+                             "kursiv": bool(t.get("kursiv")), "fon": bool(t.get("fon"))})
     for i, u in enumerate(items(d, "ulitsi")):
         if u.get("kontur"):                            # a street as an area – its parcel from the cadastre
             k = [pt(p, f"ulitsi[{i}].kontur") for p in u["kontur"]]
@@ -781,6 +793,8 @@ def load(d):
         if len(k) < 3:
             bad(f"trevni[{i}].kontur: трябват поне три точки")
         out["trevni"].append(k)
+        out.setdefault("trevni_otvori", []).append([[pt(p, f"trevni[{i}].otvori") for p in h]
+                                                    for h in (t.get("otvori") or []) if len(h) >= 3])
     for i, r in enumerate(items(d, "reki")):             # rivers and canals – Приложение № 6, „Река, канал с бараж“
         pts = [pt(p, f"reki[{i}].tochki") for p in (r.get("tochki") or [])]
         if len(pts) < 2:
@@ -845,11 +859,20 @@ def load(d):
                           "alpha": min(1.0, max(0.05, num(f.get("prozrachnost", 0.35), "fon.prozrachnost")))}
         else:
             warnings.append(f"фонът {f['png']} го няма – чертая без него")
-    if not out["sgradi"]:
+    out["podlozhka"] = []
+    for i, e in enumerate(items(d, "podlozhka")):
+        pts_ = [pt(q, f"podlozhka[{i}].tochki") for q in (e.get("tochki") or [])]
+        if len(pts_) >= 2:
+            out["podlozhka"].append({"tochki": pts_, "lw_mm": num(e.get("lw_mm", 0.35), f"podlozhka[{i}].lw_mm"),
+                                     "cvyat": str(e.get("cvyat") or INK), "plaska": bool(e.get("plaska"))})
+    if not out["sgradi"] and not out["podlozhka"]:
         bad("няма нито една сграда в \"sgradi\"")
 
     # the extent of the drawing
     xs, ys = [], []
+    for e in out["podlozhka"]:
+        xs += [q[0] for q in e["tochki"]]
+        ys += [q[1] for q in e["tochki"]]
     for b in out["sgradi"] + out["obekti"] + out["pozhar"] + out["zadimyavane"] + out["bez_parkirane"]:
         xs += [b["x"], b["x"] + b["w"]]
         ys += [b["y"], b["y"] + b["h"]]
@@ -1065,7 +1088,7 @@ def legend_keys(data, hose_m):
     extra = [(None, o["legenda"], o["etiket"]) for o in data["obekti"] if o["legenda"]]
     return keys, extra
 
-SCALES = (100, 200, 250, 500, 750, 1000, 1250, 1500, 2000, 2500, 5000, 10000, 20000)   # 750, 1250 and 1500 – to fill an A4 sheet
+SCALES = (100, 200, 250, 300, 500, 750, 1000, 1250, 1500, 2000, 2500, 5000, 10000, 20000)   # 750, 1250 and 1500 – to fill an A4 sheet
 
 # The sheet of a situational scheme (Приложение № 2а): the frame is the page minus its margins
 # (left 20 mm, the rest 10 mm – the page margins of the .docx), in mm.
@@ -1110,8 +1133,8 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
         ax.set_ylim(y0, y1)
     if data.get("imot"):                               # the parcel's boundary – from the library
         draw_parcel(ax, data["imot"]["kontur"], data["imot"]["etiket"], s, fs, building_outlines(data))
-    for k in data["trevni"]:                           # the grass areas – under the streets
-        draw_grass(ax, k, pal)
+    for k, h in zip(data["trevni"], data.get("trevni_otvori") or [[]] * len(data["trevni"])):   # under the streets
+        draw_grass(ax, k, pal, otvori=h)
     for e in data["ezera"]:                            # lakes and rivers – Приложение № 6, blue, not filled
         draw_lake(ax, e["kontur"], e["ime"], s, fs, pal)
     for r in data["reki"]:
@@ -1144,6 +1167,7 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
         draw_gas_line(ax, g["tochki"], s, fs, pal)
     for z in data["zadimyavane"]:
         draw_smoke(ax, z, s, pal)
+    draw_podlozhka(ax, data["podlozhka"])
     for b in data["sgradi"]:
         if b["kontur"]:
             ax.add_patch(Polygon(b["kontur"], closed=True, fill=False, ec=INK, lw=building_lw(b),
@@ -1180,13 +1204,17 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
         big_arrow(ax, a, b, pal, hatched=True, scale=18)
     hoses = 0
     for ln in data["linii"]:
-        pts = chaikin(ln["tochki"]) if ln["gladka"] else ln["tochki"]
+        pts = at_pump(ln["tochki"], data["avtomobili"], s)    # a hose line is coupled at the rear – the pump
+        pts = chaikin(pts) if ln["gladka"] else pts
+        if ln["struinik"]:                             # the nozzle is always in front of the fire, never in it:
+            pts = nozzle_before_fire(pts, data["pozhar"], 1.25 * s)    #   the line ends where its head stays outside
         hoses += draw_line(ax, pts, ln["vid"], s, hose_m, pal)
         _, direction = point_at(pts, length(pts))
         if ln["struinik"] or ln["myasto"]:
             draw_nozzle(ax, pts[-1], direction, ln["struinik"], s, pal, ln["myasto"])
-        if ln["etiket"]:
-            (ex, ey), (dx, dy) = pts[-1], direction
+        if ln["etiket"]:                               # at the end, or "etiket_pri": "sreda" / "nachalo" (by the vehicle)
+            at = {"sreda": length(pts) / 2, "nachalo": min(length(pts) / 3, 2.5 * s)}.get(ln["etiket_pri"])
+            (ex, ey), (dx, dy) = (pts[-1], direction) if at is None else point_at(pts, at)
             ax.text(ex + dx * 0.6 * s - dy * 0.7 * s, ey + dy * 0.6 * s + dx * 0.7 * s, ln["etiket"], ha="center",
                     va="center", fontsize=fs, zorder=7, bbox=dict(fc="white", ec="none", pad=0.3))
     for r in data["razklonitel"]:
@@ -1212,8 +1240,10 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
     for x, y in data["pbt"]:
         draw_ring(ax, x, y, 0.6 * s, "ПБТ", fs - 1, pal.truck)
     for t in data["tekst"]:
-        ax.text(t["x"], t["y"], t["tekst"], ha="right" if t.get("kray") == "desen" else "left", va="center", fontsize=fs,
-                rotation=t["ugal"], rotation_mode="anchor", zorder=9)
+        ax.text(t["x"], t["y"], t["tekst"], ha={"desen": "right", "sreda": "center"}.get(t["kray"], "left"), va="center",
+                fontsize=fs * t["razmer"], color=pal.truck if t["cvyat"] == "cherven" else INK, linespacing=1.15,
+                style="italic" if t["kursiv"] else "normal", rotation=t["ugal"], rotation_mode="anchor", zorder=9,
+                bbox=dict(fc="white", ec="none", pad=0.6) if t["fon"] else None)
     # the north–south sign of the library – in the upper left corner (чл. 9, ал. 5 от Указанията Iз-2749);
     # the wind – in the legend, when there is one
     if d.get("sever", True):
@@ -1389,7 +1419,9 @@ def draw_sheet(fig, lst, scale, fs):
     else:
         fax.text(bx + 31.5, y + h / 2, "Наименование на обекта,\nадрес, телефон", ha="center", va="center",
                  fontsize=small + 0.8, zorder=3)
-    fax.text(bx + 106.5, y + h / 2, "Ситуационна схема", ha="center", va="center", fontsize=fs + 3, zorder=3)
+    naslov = str(lst.get("naslov") or "Ситуационна схема")      # a specific scheme (Приложение № 3а) names its fire
+    fax.text(bx + 106.5, y + h / 2, "\n".join(textwrap.wrap(naslov, 30)), ha="center", va="center",
+             fontsize=fs + (3 if len(naslov) <= 30 else 1.5), linespacing=1.15, zorder=3)
     fax.text(bx - 3, by + 2, f"М 1:{scale}", ha="right", va="bottom", fontsize=fs)
 
 
@@ -1513,6 +1545,76 @@ def render(d, out_png, out_svg=None, width_cm=None, height_cm=None, out_dxf=None
     counts = {k: len(data[k]) for k in ("sgradi", "avtomobili", "linii", "vodoiztochnitsi", "pozhar")}
     counts["razmer_m"] = [round(wu, 1), round(hu, 1)]       # the drawn area – for choosing the page orientation
     return counts, hoses, warnings, extra_out
+
+
+def truck_rear(t, s):
+    """The rear of a fire engine (the pump) – its body is 1.35 s long, the cab in front (znatsi.draw_truck)."""
+    a = math.radians(t["ugal"])
+    return (t["x"] - math.cos(a) * 0.675 * s, t["y"] - math.sin(a) * 0.675 * s)
+
+
+def at_pump(pts, trucks, s):
+    """An end of a hose line that is at a fire engine is moved to its rear, where the pump is – the line never
+    leaves from the cab or the side of the vehicle; a short straight stub out of the rear keeps the curve clean."""
+    pts = [tuple(p) for p in pts]
+    if len(pts) < 2 or not trucks:
+        return pts
+    for end in (0, -1):
+        p = pts[end]
+        t = min(trucks, key=lambda t_: math.dist(p, (t_["x"], t_["y"])))
+        if math.dist(p, (t["x"], t["y"])) <= 2.2 * s:
+            a = math.radians(t["ugal"])
+            r = truck_rear(t, s)
+            stub = (r[0] - math.cos(a) * 0.6 * s, r[1] - math.sin(a) * 0.6 * s)
+            if end == 0:
+                pts = [r, stub] + pts[1:]
+            else:
+                pts = pts[:-1] + [stub, r]
+    return pts
+
+
+def nozzle_before_fire(pts, fires, reach):
+    """Cuts a hose line back until the nozzle at its end – `reach` long along the last stretch – stays outside every
+    hatched fire area: the forces work from in front of the fire (the approved schemes; Приложение № 3а)."""
+    def inside(p):
+        return any(f["x"] - 0.1 <= p[0] <= f["x"] + f["w"] + 0.1 and f["y"] - 0.1 <= p[1] <= f["y"] + f["h"] + 0.1
+                   for f in fires)
+    if not fires or len(pts) < 2:
+        return pts
+    pts = list(pts)
+    total = length(pts)
+    t = total
+    while t > reach:
+        end, d = point_at(pts, t)
+        tip = (end[0] + d[0] * reach, end[1] + d[1] * reach)
+        if not inside(end) and not inside(tip):
+            break
+        t -= 0.2
+    if t >= total:
+        return pts
+    out, acc = [pts[0]], 0.0
+    for a, b in zip(pts, pts[1:]):
+        L = math.dist(a, b)
+        if acc + L >= t:
+            k = (t - acc) / L if L else 0
+            out.append((a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k))
+            break
+        out.append(b)
+        acc += L
+    return out
+
+
+def draw_podlozhka(ax, items_):
+    """The vector underlay of an approved drawing (scripts/cdr_import.py) – walls, the white masks that cut the
+    openings, the door and window marks, the stairs – exactly as in the drawing, in its order and line widths."""
+    for k, e in enumerate(items_):
+        z = 2.9 + k * 1e-5
+        if e["plaska"]:
+            ax.add_patch(Polygon(e["tochki"], closed=True, fc="white", ec="none", zorder=z))
+        else:
+            xs_, ys_ = zip(*e["tochki"])
+            ax.plot(xs_, ys_, color=e["cvyat"], lw=e["lw_mm"] * 72 / 25.4, solid_capstyle="butt",
+                    solid_joinstyle="miter", zorder=z)
 
 
 def building_lw(b):

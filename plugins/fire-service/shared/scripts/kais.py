@@ -400,6 +400,7 @@ def orto_picture(res, x0, y0, x1, y1, png, rings=(), buildings=(), fence=None, s
     c, d = px(x1, y0)
     pic = big.crop((int(a), int(b), int(c), int(d)))
     dx, dy = int(a), int(b)
+    pic.save(os.path.splitext(png)[0] + "_chisto.png")    # the photo itself, without marks – for orto_zeleno()
     def pp(x, y):
         u, v = px(x, y)
         return (u - dx, v - dy)
@@ -473,6 +474,60 @@ def osm_grass(x0, y0, x1, y1):
         if len(refs) < 4 or refs[0] != refs[-1] or not all(r_ in nodes for r_ in refs):
             continue
         out.append([list(wgs_to_kc(*nodes[r_])) for r_ in refs[:-1]])
+    return out, ""
+
+
+# the width an alley is drawn with (m) – OpenStreetMap seldom gives it
+PATH_WIDTH = {"footway": 2.5, "path": 2.0, "pedestrian": 4.0, "cycleway": 2.0, "service": 4.0, "living_street": 5.0}
+
+
+def orto_zeleno(png, x0, y0, x1, y1, inside=None, cell=0.5):
+    """The green of the orthophoto (grass, trees) as rings in КС2005 – what is not green (the alleys, the paved areas
+    round the buildings, the roofs) stays out, so that the paths people and the vehicles use show between them.
+    `png` is the clean photo of the frame x0..x1, y0..y1 (orto_picture … _chisto.png); `inside` – a shapely geometry
+    the result is cut to. Approximate: a path under the crowns of the trees is not seen."""
+    import numpy as np
+    from PIL import Image
+    from shapely.geometry import box, Polygon as _Pa
+    from shapely.ops import unary_union
+    im = np.asarray(Image.open(png).convert("RGB")).astype(float)
+    H, W = im.shape[:2]
+    sx, sy = (x1 - x0) / W, (y1 - y0) / H
+    k = max(1, int(round(cell / sx)))
+    h_, w_ = H // k, W // k
+    im = im[:h_ * k, :w_ * k].reshape(h_, k, w_, k, 3).mean(axis=(1, 3))
+    r, g, b = im[..., 0], im[..., 1], im[..., 2]
+    green = (2 * g - r - b > 18) & (g > r)             # the excess green – grass and the crowns of trees
+    cells = [box(x0 + j * k * sx, y1 - (i + 1) * k * sy, x0 + (j + 1) * k * sx, y1 - i * k * sy)
+             for i, j in zip(*np.nonzero(green))]
+    g_ = unary_union(cells).buffer(0.3).buffer(-0.6).buffer(0.3).simplify(0.4)
+    if inside is not None:
+        g_ = g_.intersection(inside)
+    return [{"kontur": [list(p) for p in part.exterior.coords][:-1],
+             "otvori": [[list(p) for p in h.coords][:-1] for h in part.interiors if _Pa(h.coords).area > 2]}
+            for part in getattr(g_, "geoms", [g_]) if part.geom_type == "Polygon" and part.area > 6]
+
+
+def osm_paths(x0, y0, x1, y1):
+    """The alleys and paths (highway=footway/path/pedestrian/cycleway/service/living_street) in the frame – the ways
+    through the grass and round the buildings that people and the vehicles use; КАИС does not have them. As axes in
+    КС2005 with a width – ([{"tochki", "shirina", "vid"}], "") or ([], error text)."""
+    root, err = osm_map(x0, y0, x1, y1)
+    if root is None:
+        return [], err
+    nodes = {n.get("id"): (float(n.get("lat")), float(n.get("lon"))) for n in root.iter("node")}
+    out = []
+    for w in root.iter("way"):
+        tags = {t.get("k"): t.get("v") for t in w.iter("tag")}
+        hw = tags.get("highway")
+        refs = [nd.get("ref") for nd in w.iter("nd")]
+        if hw not in PATH_WIDTH or len(refs) < 2 or not all(r_ in nodes for r_ in refs) or tags.get("area") == "yes":
+            continue
+        try:
+            width = float(str(tags.get("width", "")).replace(",", ".").split()[0])
+        except (ValueError, IndexError):
+            width = PATH_WIDTH[hw]
+        out.append({"tochki": [list(wgs_to_kc(*nodes[r_])) for r_ in refs], "shirina": width, "vid": hw})
     return out, ""
 
 
@@ -842,6 +897,7 @@ def cmd_obekt(a):
 
         # the orthophoto (--ortofoto): where the entrances, the gates and the yard are – the photo of МЗХ from
         # КАИС, in КС2005 like everything here; numbered points on the fence name an entrance seen on it
+        orto_trevni = None
         if a.ortofoto:
             ring_l = sh.get("ograda") or (local(ring, bx0, by0) if ring else [])
             pts_kc = [(p[0] + bx0, p[1] + by0) for p in ring_l] or [(p[0], p[1]) for s in sgradi for p in s.get("kontur") or []]
@@ -870,6 +926,15 @@ def cmd_obekt(a):
                                          rings=[ring] if ring else [],
                                          buildings=[s["kontur"] for s in sgradi if s.get("kontur")],
                                          fence=pts_kc if ring_l else None)
+                    if a.trevni_ortofoto:              # the grass from the photo – the alleys between it are seen
+                        from shapely.geometry import Polygon as _P, box as _box
+                        frame_ = _box(ox0, oy0, ox1, oy1)
+                        zel = orto_zeleno(os.path.splitext(png)[0] + "_chisto.png", ox0, oy0, ox1, oy1, inside=frame_)
+                        orto_trevni = (frame_, [{"kontur": local(z["kontur"], bx0, by0),
+                                                 "otvori": [local(h_, bx0, by0) for h_ in z["otvori"]]} for z in zel])
+                        notes.append("Тревните площи около обекта са от ортофотото (зеленото на снимката) – алеите и "
+                                     "настилките между тях са това, което не е зелено; приблизително (пътека под "
+                                     "короните на дърветата не се вижда).")
                     summary["ortofoto"] = {"png": png, "godina": o.get("godina"), "pikseli_m": o.get("res"),
                                            "tochki": [{"n": n, "x": round(x - bx0, 2), "y": round(y - by0, 2)}
                                                       for n, x, y in marks or []]}
@@ -988,6 +1053,17 @@ def cmd_obekt(a):
             grass, err = osm_grass(bx0, by0, bx1, by1)
             if grass:
                 sh["trevni"] = [{"kontur": local(k, bx0, by0)} for k in grass]
+                if orto_trevni:                         # round the object – the grass of the photo (--trevni-ortofoto)
+                    from shapely.geometry import Polygon as _P2
+                    from shapely.affinity import translate as _tr
+                    fr_ = _tr(orto_trevni[0], -bx0, -by0)
+                    pieces = []
+                    for t in sh["trevni"]:
+                        rest = _P2(t["kontur"]).buffer(0).difference(fr_)
+                        pieces += [{"kontur": [list(p) for p in q.exterior.coords][:-1],
+                                    "otvori": [[list(p) for p in h.coords][:-1] for h in q.interiors]}
+                                   for q in getattr(rest, "geoms", [rest]) if q.geom_type == "Polygon" and q.area > 6]
+                    sh["trevni"] = pieces + orto_trevni[1]
                 summary["trevni"] = len(grass)
                 notes.append("Тревните площи са от OpenStreetMap (приблизителни). Ако някоя излиза на платното между два "
                              "имота на улици, запълни празнината с улица-площ без ръб (shemi).")
@@ -996,6 +1072,20 @@ def cmd_obekt(a):
             else:                                      # OSM has nothing here – the sheet would show the object in a void
                 notes.append("OpenStreetMap няма тревни площи в рамката – нанеси ги от ортофотото като `trevni` "
                              "(приблизително) и го кажи в чата; без тях обектът „виси“ в празно поле (shemi).")
+        # the alleys and paths through the grass and round the buildings – from OpenStreetMap, like the grass; drawn
+        #   as narrow roads (кафяв, чл. 9, ал. 9, т. 4), so that one sees where people walk and the vehicles drive in
+        if a.pateki:
+            paths, err = osm_paths(bx0, by0, bx1, by1)
+            for pth in paths:
+                for piece in clip_polyline(local(pth["tochki"], bx0, by0), 0, 0, bx1 - bx0, by1 - by0):
+                    if length(piece) > 3:
+                        sh.setdefault("ulitsi", []).append({"tochki": [[round(x, 1), round(y, 1)] for x, y in piece],
+                                                            "shirina": pth["shirina"], "ime": "", "pateka": True})
+            summary["pateki"] = len(paths)
+            if paths:
+                notes.append("Алеите и пътеките са от OpenStreetMap (осите – приблизителни, ширината – приета по вида им).")
+            elif err:
+                notes.append("Алеите не се взеха от OpenStreetMap: " + err)
         # rivers, canals, lakes (Приложение № 6, „Река, канал“, „Езеро, микроязовир“) – КАИС has no names for them and
         #   the water parcels are not always there: from OpenStreetMap, like the grass
         if not a.bez_reki:
@@ -1020,6 +1110,34 @@ def cmd_obekt(a):
                                  "подразбиране: река 10 m, канал 6 m, поток 4 m); провери ги и името (shemi).")
             elif err:
                 notes.append("Реките не се взеха от OpenStreetMap: " + err)
+        # the sign of a river (Приложение № 6) stands on its own – no grass dots inside it: the water and its banks are
+        #   taken out of the grass areas (the photo sees the green banks, OSM's parks run across the river); and grass
+        #   never lies on a street or on the river's parcel in КАИС (the strip between the brown lines)
+        if sh.get("trevni") and (sh.get("reki") or sh.get("ezera") or any(u.get("kontur") for u in sh.get("ulitsi", []))):
+            from shapely.geometry import LineString as _L3, Polygon as _P3
+            from shapely.ops import unary_union as _u3
+            ul_ = _u3([_P3(u["kontur"]).buffer(0) for u in sh.get("ulitsi", []) if len(u.get("kontur") or []) >= 3])
+
+            def koridor(r):                             # the river and its banks – up to the nearest brown line (a
+                ax_ = _L3(r["tochki"])                  #   street parcel) on each side, at most 10 m out
+                band = ax_.buffer(r.get("shirina", 10.0) / 2 + 1.5, cap_style=2)
+                wide = ax_.buffer(10.0, cap_style=2).difference(ul_)
+                parts = [q for q in getattr(wide, "geoms", [wide]) if q.intersects(ax_)]
+                return _u3([band] + parts)
+            voda_ = _u3([koridor(r) for r in sh.get("reki", []) if len(r["tochki"]) >= 2] +
+                        [_P3(e["kontur"]).buffer(1.5) for e in sh.get("ezera", []) if len(e["kontur"]) >= 3] +
+                        [_P3(u["kontur"]).buffer(0) for u in sh.get("ulitsi", []) if len(u.get("kontur") or []) >= 3])
+            dry = []
+            for t in sh["trevni"]:
+                g0 = _P3(t["kontur"], [h for h in (t.get("otvori") or []) if len(h) >= 3]).buffer(0)
+                if not g0.intersects(voda_) or g0.intersection(voda_).area < 0.5:
+                    dry.append(t)                        # untouched – kept as it is
+                    continue
+                g = g0.difference(voda_)
+                dry += [{"kontur": [[round(x, 2), round(y, 2)] for x, y in q.exterior.coords][:-1],
+                         "otvori": [[[round(x, 2), round(y, 2)] for x, y in h.coords][:-1] for h in q.interiors]}
+                        for q in getattr(g, "geoms", [g]) if q.geom_type == "Polygon" and q.area > 4]
+            sh["trevni"] = dry
         with open(a.shema, "w", encoding="utf-8") as f:
             json.dump(sh, f, ensure_ascii=False, indent=1)
         summary["shema"] = os.path.abspath(a.shema)
@@ -1076,6 +1194,10 @@ def main():
     o.add_argument("--s-vatreshni", action="store_true",
                    help="с --shema: и пътищата без име от OpenStreetMap вътре в имота (по подразбиране – не)")
     o.add_argument("--bez-trevni", action="store_true", help="с --shema: без тревните площи от OpenStreetMap")
+    o.add_argument("--trevni-ortofoto", action="store_true",
+                   help="с --ortofoto: тревните площи около обекта – от зеленото на ортофотото (алеите между тях се виждат)")
+    o.add_argument("--pateki", action="store_true",
+                   help="с --shema: и алеите и пътеките от OpenStreetMap (през тревните площи и около сградите)")
     o.add_argument("--bez-reki", action="store_true", help="с --shema: без реките, каналите и езерата от OpenStreetMap")
     o.add_argument("--hidrant-v-terena", action="store_true",
                    help=f"с --voda: теренът да се разшири до най-близкия хидрант и когато е на над {60} m извън него "
