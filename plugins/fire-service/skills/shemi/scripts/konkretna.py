@@ -125,7 +125,24 @@ def main():
     w = max(p[0] for p in rk) - min(p[0] for p in rk)
     h = max(p[1] for p in rk) - min(p[1] for p in rk)
     cx, cy = room["tsentar"]
-    pozhar = [{"x": cx - w / 2, "y": cy - h / 2, "w": round(w, 2), "h": round(h, 2), "etiket": ""}]
+    # a fire smaller than the room (the calculation – e.g. with fire detection, 2 min to the call): a strip as wide
+    #   as the front a, across the room, its depth Fп / a, in the middle (it spreads both ways – n = 2)
+    big_, small_ = room["razmeri_m"]
+    fp_ = float(sili["rezultat"].get("plosht_na_pozhara_m2") or 0)
+    try:
+        a_front = float(str((sili.get("vhodni") or {}).get("a", "")).split()[0].replace(",", "."))
+    except (ValueError, IndexError):
+        a_front = 0.0
+    fw, fh = w, h
+    if a_front and fp_ and fp_ < 0.97 * big_ * small_:
+        along_long = abs(a_front - big_) <= abs(a_front - small_)          # the front runs along the long side
+        other = small_ if along_long else big_
+        frac = min(1.0, (fp_ / a_front) / other)
+        if (w >= h) == along_long:                       # the front along w – the depth is across, in h
+            fh = h * frac
+        else:
+            fw = w * frac
+    pozhar = [{"x": cx - fw / 2, "y": cy - fh / 2, "w": round(fw, 2), "h": round(fh, 2), "etiket": ""}]
 
     # the door to the fire – an inner opening of the room, the one nearest the way in
     doors = merge([o for o in room["otvori"] if not o["vanshen"]])
