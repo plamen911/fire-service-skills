@@ -131,6 +131,7 @@ def tokens(expr):
     return [(re.sub(r"\s+\*\s+", " * ", t) if s is None else t, s, u) for t, s, u in out]
 
 
+SHORT = [False]      # the calculation under the table of Приложение № 3б – without the notes and the source
 SIZE = [11]          # pt – the size of the calculation; chosen by fit() so that it goes on one page
 
 
@@ -221,12 +222,12 @@ def step_lines(doc, st, res):
     if extra:
         line(doc, extra[0].upper() + extra[1:] + ".")
     left = lhs.strip()
-    line(doc, f"{left} = {rhs.strip()}")
     sub_ = st.get("zamestvane")
-    line(doc, f"{left} = " + (sub_ + tail if sub_ else tail.lstrip(" =")))
+    # one line, as on the approved calculations: the formula, the numbers put in, the result
+    line(doc, f"{left} = {rhs.strip()}" + (f" = {sub_}" if sub_ else "") + tail)
 
 
-def write(doc, d, pomeshtenie=None, belezhki=()):
+def write(doc, d, pomeshtenie=None, belezhki=(), zashtita=None):
     """The body of the calculation into doc (its own .docx, or a section of the plan – plan-pozharogasene), as the
     approved calculations are written. Returns the warnings."""
     warnings = []
@@ -269,13 +270,24 @@ def write(doc, d, pomeshtenie=None, belezhki=()):
         if i == 6 and used.get("q_pa"):
             line(doc, [("Q", "па", "")], f" = {value_of(used['q_pa'])} (л/с) – разход на помпата.")
         for st in groups.get(i, []):
+            if st.get("formula") == "(16)" and res.get("struinitsi_za_zashtita"):   # the protection (5. in the Методика)
+                nz = res["struinitsi_za_zashtita"]
+                qz = (res.get("razhod_obshto_l_s") or 0) - (res.get("razhod_za_gasene_l_s") or 0)
+                m = re.search(r"([\d.,]+) l/s", str(used.get("struinik") or ""))
+                qs = m.group(1).replace(".", ",") if m else num(qz / nz)
+                line(doc, "Необходим разход на вода за защита" + (f" – {zashtita}" if zashtita else "") + ":")
+                line(doc, [("Q", "н", "з")], " = ", [("N", "стр", "з")], " * ", [("q", "стр", "")],
+                     f" = {nz} * {qs} = {num(qz)} (л/с)")
             step_lines(doc, st, res)
         if i == 1 and res.get("plosht_na_pozhara_m2") is not None:
             line(doc, "Площ на пожара ", [("F", "п", "")], f": {num(res['plosht_na_pozhara_m2'])} м²")
         if i == 2 and res.get("plosht_na_gasene_m2") is not None:
             line(doc, "Площ на гасене ", [("F", "г", "")], f": {num(res['plosht_na_gasene_m2'])} м²")
         if i == 3 and res.get("razhod_obshto_l_s") is not None:
-            line(doc, "Разход за гасене ", [("Q", "н", "")], f": {num(res['razhod_obshto_l_s'])} л/с")
+            if res.get("razhod_obshto_l_s") != res.get("razhod_za_gasene_l_s"):
+                line(doc, "Разход за гасене и защита ", [("Q", "об", "")], f": {num(res['razhod_obshto_l_s'])} л/с")
+            else:
+                line(doc, "Разход за гасене ", [("Q", "н", "")], f": {num(res['razhod_obshto_l_s'])} л/с")
         if i == 5 and res.get("ekipi_obshto"):
             k = res["ekipi_obshto"]
             line(doc, f"Личен състав = 4 * {k} = {4 * k} пожарникари")
@@ -291,6 +303,8 @@ def write(doc, d, pomeshtenie=None, belezhki=()):
             line(doc, f"{label}: {v}" + (f" „{res['struinik']}“" if label.startswith("Брой струйници") and res.get("struinik") else ""))
     if not res:
         warnings.append("разчетът няма резултат")
+    if SHORT[0]:                                       # under the table of № 3б: no notes, no source – room is short
+        return warnings
     notes = list(d.get("belezhki") or []) + list(belezhki or [])
     for x in notes:
         line(doc, "Бележка: " + re.sub(r"(?<!ред )(?<![\d.])(\d+)\.(\d+)(?![.\d])", r"\1,\2", B.typo(x)))
@@ -303,8 +317,13 @@ def write(doc, d, pomeshtenie=None, belezhki=()):
     return warnings
 
 
-def title(doc, naslov=None, obekt=None, pomeshtenie=None):
-    """„Разчет на силите и средствата за гасене на пожар в <обекта>, <помещението>“ – as on the approved ones."""
+def title(doc, naslov=None, obekt=None, pomeshtenie=None, short=False):
+    """„Разчет на силите и средствата за гасене на пожар в <обекта>, <помещението>“ – as on the approved ones;
+    short – under the table of the same sheet, where the scheme and the object are already named."""
+    if short:
+        B.para(doc, "Разчет на силите и средствата за гасене на пожара (Приложение № 5)", align=B.LEFT, indent=False,
+               size=SIZE[0] + 1, line=None)
+        return
     room = str(pomeshtenie or "").split(" – ")[0].strip()
     room = room[0].lower() + room[1:] if room else ""
     where = ", ".join(x for x in (obekt, room) if x)
@@ -342,37 +361,58 @@ def set_columns(sec, n):
     pr.append(cols)
 
 
-def lines_needed(d, naslov, obekt, pomeshtenie, size):
+COLS = [2]           # the text columns of the calculation – fit() may take 3 under the table of Приложение № 3б
+
+
+def lines_needed(d, naslov, obekt, pomeshtenie, size, cols, short=False):
     """How many lines the calculation takes at this size – written into a scratch document and counted, each
     paragraph wrapped at the width of a column."""
-    SIZE[0] = size
+    SIZE[0], SHORT[0] = size, short
     tmp = B.new_document()
-    title(tmp, naslov, obekt, pomeshtenie)
+    title(tmp, naslov, obekt, pomeshtenie, short=short)
     write(tmp, d, pomeshtenie)
-    per_line = (29.7 - 3.0 - 1.0) / 2 / (0.0185 * size)          # characters in a column
-    n = 0
-    for p in tmp.paragraphs:
-        n += max(1, math.ceil(len(p.text) / per_line))
-    return n
+    col_cm = (29.7 - 3.0 - 1.0 * (cols - 1)) / cols
+    per_line = col_cm / (0.0185 * size)                           # characters in a column
+    return sum(max(1, math.ceil(len(p.text) / per_line)) for p in tmp.paragraphs)
 
 
-def fit(d, naslov, obekt, pomeshtenie):
-    """The largest size (11 → 8 pt) at which the calculation goes on one page in two columns."""
-    for size in (11, 10.5, 10, 9.5, 9, 8.5, 8):
-        per_col = (21.0 - 2.4) * 28.35 / (size * 1.16 + (1 if size < 11 else 2) + 0.6)
-        if lines_needed(d, naslov, obekt, pomeshtenie, size) <= 2 * per_col - 4:
-            return size
-    return 8
+def fit(d, naslov, obekt, pomeshtenie, height_cm=21.0 - 2.4, sizes=(11, 10.5, 10, 9.5, 9, 8.5, 8), short=False):
+    """The largest size – in 2 columns, else in 3 – at which the calculation goes in height_cm of a landscape A4
+    page. Returns (size, columns, fits)."""
+    for cols in (2, 3):
+        for size in sizes:
+            per_col = height_cm * 28.35 / (size * 1.16 + (1 if size < 11 else 2) + 0.6)
+            if lines_needed(d, naslov, obekt, pomeshtenie, size, cols, short) <= cols * per_col - 3:
+                SHORT[0] = False
+                return size, cols, True
+    SHORT[0] = False
+    return sizes[-1], 3, False
 
 
-def page(doc, d, naslov=None, obekt=None, pomeshtenie=None, belezhki=(), new_section=True):
-    """The calculation on one page – the back of the sheet of its specific scheme (also a section of the plan)."""
+def page(doc, d, naslov=None, obekt=None, pomeshtenie=None, belezhki=(), new_section=True, under_cm=None,
+         zashtita=None):
+    """The calculation on one page – the back of the sheet of its specific scheme (also a section of the plan).
+    under_cm – it goes under the table of Приложение № 3б on the same back page, in the height left there
+    (under_cm – how much of the page the table and its titles take): a continuous section, 9 pt at the least."""
     from docx.enum.section import WD_SECTION
-    SIZE[0] = fit(d, naslov, obekt, pomeshtenie)
-    back_page(doc.add_section(WD_SECTION.NEW_PAGE) if new_section else doc.sections[-1])
-    title(doc, naslov, obekt, pomeshtenie)
-    warnings = write(doc, d, pomeshtenie, belezhki)
-    SIZE[0] = 11
+    warnings = []
+    if under_cm is not None:
+        size, cols, ok = fit(d, naslov, obekt, pomeshtenie, height_cm=21.0 - 2.0 - under_cm,
+                             sizes=(11, 10.5, 10, 9.5, 9), short=True)
+        if not ok:
+            warnings.append("разчетът не се събира под таблицата № 3б дори на 9 pt – провери гърба на листа")
+        SIZE[0], SHORT[0] = size, True
+        sec = doc.add_section(WD_SECTION.CONTINUOUS)
+        set_columns(sec, cols)
+        title(doc, naslov, obekt, pomeshtenie, short=True)
+    else:
+        size, cols, ok = fit(d, naslov, obekt, pomeshtenie)
+        SIZE[0], SHORT[0] = size, False
+        sec = doc.add_section(WD_SECTION.NEW_PAGE) if new_section else doc.sections[-1]
+        back_page(sec, cols)
+        title(doc, naslov, obekt, pomeshtenie)
+    warnings += write(doc, d, pomeshtenie, belezhki, zashtita)
+    SIZE[0], SHORT[0] = 11, False
     return warnings
 
 
@@ -380,7 +420,7 @@ def build(d, a, out):
     if not valid(d):
         bad("очаква се JSON-ът на sili.py (с \"ok\": true и \"stapki\")")
     doc = B.new_document()
-    warnings = page(doc, d, a.naslov, a.obekt, a.pomeshtenie, a.belezhka, new_section=False)
+    warnings = page(doc, d, a.naslov, a.obekt, a.pomeshtenie, a.belezhka, new_section=False, zashtita=a.zashtita)
     doc.save(out)
     B.report(out, letterhead=False)
     return {"output": out, "preduprezhdeniya": warnings}
@@ -395,6 +435,7 @@ def main():
     ap.add_argument("--obekt", help="обектът и адресът")
     ap.add_argument("--pomeshtenie", help="помещението, в което е пожарът")
     ap.add_argument("--belezhka", action="append", help="още бележка (може няколко пъти)")
+    ap.add_argument("--zashtita", help="какво се защитава (напр. „стълбищната клетка“) – в реда за разхода за защита")
     a = ap.parse_args()
     try:
         d = json.load(open(a.vhod, encoding="utf-8"))

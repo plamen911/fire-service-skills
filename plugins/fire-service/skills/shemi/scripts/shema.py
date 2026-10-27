@@ -48,6 +48,8 @@ shema.py — чертае СХЕМА за разполагане на силит
   "obekti": [{"x": 3, "y": 58, "w": 4, "h": 3, "etiket": "Ел."}],   // малки обекти в рамка; „Ел.“ влиза в
                                                 //   легендата като „Електрическо табло“; "legenda": "…" – друг текст
   "pozhar": [{"x": 34, "y": 60, "w": 12, "h": 12, "etiket": "≈ 140 m²", "na_otkrito": false}],
+                                                //   "zashtita": true – площ, която се защитава (чл. 7, ал. 4, т. 1,
+                                                //   б. „л“): рядка единична щриховка и прекъснат контур, не кръстосана
   "zadimyavane": [{"x": 10, "y": 55, "w": 24, "h": 22}],            // зона на задимяване
   "ognishte": [{"x": 40, "y": 66}],                                 // огнище на пожара (флагче)
   "posoka": [{"ot": [34, 66], "do": [26, 66]}],                     // посока на разпространение
@@ -662,7 +664,8 @@ def load(d):
                               "legenda": str(b.get("legenda") or "")})
     for i, f in enumerate(items(d, "pozhar")):
         out["pozhar"].append({**rect(f, f"pozhar[{i}]"), "etiket": str(f.get("etiket") or ""),
-                              "na_otkrito": bool(f.get("na_otkrito", False))})
+                              "na_otkrito": bool(f.get("na_otkrito", False)),
+                              "zashtita": bool(f.get("zashtita", False))})
     for i, z in enumerate(items(d, "zadimyavane")):
         out["zadimyavane"].append(rect(z, f"zadimyavane[{i}]"))
     for i, o in enumerate(items(d, "ognishte")):

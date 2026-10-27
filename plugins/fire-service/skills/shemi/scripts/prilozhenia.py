@@ -247,6 +247,37 @@ def table(doc, columns, widths, rows, total, numbered=False, row_cm=1.0, size=TA
     return t
 
 
+def _lines(text, width_cm, size=TABLE_PT):
+    """Lines a cell's text wraps into (Times New Roman, the soft hyphens counted as possible breaks)."""
+    per = max(3, int((width_cm - 0.25) / (0.0175 * size)))        # the mean letter, not the widest (CHAR_CM)
+    n, cur = 1, 0
+    for w in str(text or "").split():
+        k = len(w)
+        if cur and cur + 1 + k > per:
+            n, cur = n + 1, 0
+        while k > per:                                  # a word longer than the column – broken (by syllables)
+            n, k = n + 1, k - per
+        cur = cur + (1 if cur else 0) + k
+    return n
+
+
+def table_height_cm(columns, widths, rows, total, row_cm=1.0, size=TABLE_PT):
+    """About how tall table() makes the form – to know what is left of the page under it."""
+    line = size * 1.15 / 28.35
+    groups = {}
+    for (key, top, sub), w in zip(columns, widths):
+        groups.setdefault(top, []).append((sub, w))
+    top_h = max(_lines(t, sum(w for _, w in g)) for t, g in groups.items()) * line + 0.1
+    sub_h = max([_lines(sub, w) for (_, _, sub), w in zip(columns, widths) if sub] or [0]) * line + 0.1
+    alone = max([_lines(t, w) for (_, t, sub), w in zip(columns, widths) if not sub] or [0]) * line + 0.1
+    head = max(top_h + max(sub_h, 0.8), alone, 1.3 + 0.8)
+    body = 0.0
+    for r in list(rows) + [{}] * max(0, total - len(rows)):
+        h = max([_lines(fmt(r.get(key)), w) for (key, _, _), w in zip(columns, widths)] or [1]) * line + 0.1
+        body += max(row_cm, h)
+    return head + body
+
+
 def table_2b(doc, tab):
     """Приложение № 2б – the distance and the time go on the first row."""
     rows = list(tab.get("redove") or [])

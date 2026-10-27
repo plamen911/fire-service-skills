@@ -82,6 +82,8 @@ def main():
                                                  "от сградата; за ориентиране – откъде идват колите), "
                                              "със запетая; заедно с тях – и тревните площи от КАИС/OpenStreetMap")
     ap.add_argument("--bez-evakuatsiya", action="store_true", help="без стрелките за евакуация (б. „с“)")
+    ap.add_argument("--zashtita", help="помещението, което се защитава (напр. стълбищната клетка – Фоайе) – с рядка "
+                                       "щриховка (б. „л“); струйниците за защита по разчета са насочени в него")
     ap.add_argument("-o", "--out", required=True)
     a = ap.parse_args()
 
@@ -200,8 +202,28 @@ def main():
         lines[2]["etiket_pri"] = "nachalo"
     lines[1]["etiket_pri"] = "sreda"
     n_z = int(R.get("struinitsi_za_zashtita") or 0)
-    for i in range(n_z):                                # protection – beside, along the corridor
+    prot = None
+    if a.zashtita:                                       # the protected area (б. „л“) – the whole room, sparse hatching
+        if a.zashtita not in rooms:
+            bad(f"помещението за защита „{a.zashtita}“ го няма в чертежа")
+        prot = rooms[a.zashtita]
+        pk = [rot(p) for p in prot["kontur"]]
+        pw = max(p[0] for p in pk) - min(p[0] for p in pk)
+        ph = max(p[1] for p in pk) - min(p[1] for p in pk)
+        pcx, pcy = prot["tsentar"]
+        pozhar.append({"x": pcx - pw / 2, "y": pcy - ph / 2, "w": round(pw, 2), "h": round(ph, 2), "etiket": "",
+                       "zashtita": True})
+        if not n_z:
+            n_z = 0
+    for i in range(n_z):                                # protection – beside, along the corridor (or into the room)
         pts = [add(pa1, face, -1.0), entrance, foot, vc] + path
+        if prot is not None:                             # at the protected room, aimed at the door of the fire
+            sgn = 1 if i % 2 == 0 else -1
+            front = add(prot["tsentar"], side, 0.8 * sgn * (i // 2 + (0.5 if n_z > 1 else 0)))
+            aim = unit((dpt[0] - front[0], dpt[1] - front[1]))
+            lines.append({"tochki": [list(add(p, side, -0.6 * (i + 1))) for p in pts] + [list(front), list(add(front, aim, 1.0))],
+                          "vid": "malka", "struinik": "malak"})
+            continue
         front = add(add(dpt, side, 3.0 * (1 if i % 2 == 0 else -1)), out_v, 1.8)
         lines.append({"tochki": [list(p) for p in pts] + [list(front), list(add(front, side, 1.0 * (1 if i % 2 == 0 else -1)))],
                       "vid": "malka", "struinik": "malak"})

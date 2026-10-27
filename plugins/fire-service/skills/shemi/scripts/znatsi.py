@@ -284,8 +284,13 @@ def draw_dimension(ax, a, b, text, off, fs):
             bbox=dict(fc="white", ec="none", pad=0.6))
 
 def draw_fire(ax, f, pal):
-    """Fire in a building – crossed hatching; on an open area – a denser hatching in a frame."""
-    if f["na_otkrito"]:
+    """Fire in a building – crossed hatching; on an open area – a denser hatching in a frame; an area that is
+    protected (not put out) – a sparse single hatching in a dashed frame, so that one sees which is which (б. „л“)."""
+    if f.get("zashtita"):
+        ax.add_patch(Rectangle((f["x"], f["y"]), f["w"], f["h"], fill=False, hatch="///", ec=pal.fire, lw=0, zorder=3))
+        ax.add_patch(Rectangle((f["x"], f["y"]), f["w"], f["h"], fill=False, ec=pal.fire, lw=0.8, ls=(0, (4, 2)),
+                               zorder=3.1))
+    elif f["na_otkrito"]:
         ax.add_patch(Rectangle((f["x"], f["y"]), f["w"], f["h"], fill=False, hatch="xxxxxx", ec=pal.fire, lw=0, zorder=3))
         ax.add_patch(Rectangle((f["x"], f["y"]), f["w"], f["h"], fill=False, ec=INK, lw=0.9, zorder=3.1))
     else:
