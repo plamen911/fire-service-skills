@@ -128,6 +128,18 @@ SHAPES = {"krag": ("кръг", 1.0), "polukrag": ("полукръг", 0.5), "sek
           "pravoagalnik": ("правоъгълник", None)}
 
 
+def room_sides(text):
+    """„10,5x7,1“ (or „10.5×7.1“) → (10.5, 7.1)."""
+    parts = [p.strip() for p in str(text).lower().replace("×", "x").replace("х", "x").split("x")]
+    try:
+        ra, rb = (float(p.replace(",", ".")) for p in parts)
+    except ValueError:
+        raise Problem("--pomeshtenie е AxB в метри, напр. 10,5x7,1")
+    if ra <= 0 or rb <= 0:
+        raise Problem("--pomeshtenie: страните трябва да са положителни")
+    return ra, rb
+
+
 def cmd_tvardi(a):
     c = Calc("твърди горими вещества (раздел I)")
     if a.forma not in SHAPES:
@@ -153,6 +165,12 @@ def cmd_tvardi(a):
     if a.fp is not None:                      # площта е известна – не се извежда от времето
         fp = positive(a.fp, "--fp")
         c.used["fp"] = f"{num(fp)} m2 (зададена)"
+        if a.vl is not None:                  # not used here – kept for the table of the plan (Приложение № 3б)
+            c.used["vl"] = f"{num(positive(a.vl, '--vl'), 3)} m/min (зададена; за сведение)"
+        elif a.vl_red:
+            r = row("tablitsa_1", a.vl_red)
+            c.used["vl"] = (f"{num(from_range(c, 'Линейна скорост', r, 'vl', a.dolna), 3)} m/min – таблица 1, "
+                            f"ред {r['no']}: {r['obekt']} (за сведение)")
         if rect:
             width = positive(a.a, "--a (ширина на фронта, m)")
             side_b = a.b if a.b is not None else fp / width
@@ -198,6 +216,15 @@ def cmd_tvardi(a):
             fp = c.step(f_rect, "Площ на пожара", f"Fп = n.a.({expr})", n * width * path, "m2")
             side_b = a.b if a.b is not None else n * path
             c.used["b"] = f"{num(side_b)} m" + ("" if a.b is not None else " (изминатият от горенето път)")
+            if a.pomeshtenie:                     # the fire cannot be larger than its room: then it is the whole room
+                ra, rb = room_sides(a.pomeshtenie)
+                if fp > ra * rb:
+                    fp = c.step("–", "Площ на пожара – цялото помещение (по-голяма е от него)", "Fп = a.b",
+                                ra * rb, "m2")
+                    side_b = ra * rb / width
+                    c.used["b"] = f"{num(side_b)} m (помещението {num(ra)} × {num(rb)} m)"
+                    c.notes.append(f"Изчислената площ е по-голяма от помещението ({num(ra)} × {num(rb)} m) – "
+                                   "пожарът е обхванал цялото помещение.")
         else:
             radius = path
             c.step(f_round, "Радиус на пожара", f"R = {expr}", radius, "m")
@@ -455,6 +482,8 @@ def main():
     p.add_argument("--a", type=f, help="ширина на фронта, m (правоъгълник)")
     p.add_argument("--b", type=f, help="другата страна на пожара, m (правоъгълник; иначе изминатият път)")
     p.add_argument("--n", type=int, default=1, help="посоки на разпространение (1 или 2)")
+    p.add_argument("--pomeshtenie", help="размерите на помещението, AxB m (напр. 10,5x7,1) – по-голяма площ на "
+                                         "пожара се свежда до него (правоъгълник)")
     p.add_argument("--ataka", help="perimetar (по подразбиране), front1 или front2 – при правоъгълник")
     p.add_argument("--hg", type=f, default=5, help="дълбочина на гасене, m: 5 ръчни, 10 лафетни")
     p.add_argument("--struinik", help="С, В, тип от таблица 11 или разход в l/s")

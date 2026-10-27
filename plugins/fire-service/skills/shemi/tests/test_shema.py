@@ -161,7 +161,7 @@ def test_situacionna_docx():
     check(len(doc.sections) == 2 and all(s.page_width > s.page_height for s in doc.sections),
           "two landscape pages – the graphic and the table part")
     t = doc.tables[-1]
-    head = " ".join(c.text for c in t.rows[0].cells)
+    head = " ".join(c.text for c in t.rows[0].cells).replace("\u00ad", "")   # soft hyphens – invisible
     for name in ("Разстояние до обекта", "ГОРИМО НАТОВАРВАНЕ", "РИСКОВИ ВЕЩЕСТВА И МАТЕРИАЛИ", "Вид защита на служителите"):
         check(name in head, f"the table has „{name}“ (Приложение № 2б)")
     check(len(t.columns) == 13 and len(t.rows) >= 8, f"13 columns and room to write by hand ({len(t.rows)} rows)")

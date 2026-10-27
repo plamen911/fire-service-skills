@@ -77,168 +77,19 @@ except ImportError:  # pragma: no cover – the skill without _shared (developme
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(HERE))), "shared", "scripts"))
     from docx_common import report, typo, typo_all  # noqa: E402
 
-FONT = "Times New Roman"
-# Приложение № 2б: the columns – (key, the caption of the group, the caption under it); the group spans its columns
-COLUMNS = [
-    ("razstoyanie_km", "Разстояние до обекта", "km"),
-    ("vreme_min", "Време за реагиране", "min"),
-    ("natovarvane_vid", "ГОРИМО НАТОВАРВАНЕ", "вид"),
-    ("natovarvane_kg_m2", "ГОРИМО НАТОВАРВАНЕ", "к-во в kg/m²"),
-    ("pgi_vid", "ПОЖАРОГАСИТЕЛНИ ИНСТАЛАЦИИ", "вид гас. в-во"),
-    ("pgi_kolichestvo", "ПОЖАРОГАСИТЕЛНИ ИНСТАЛАЦИИ", "к-во гас. в-во"),
-    ("gasitelni_neobhodimi", "ГАСИТЕЛНИ ВЕЩЕСТВА", "необходими"),
-    ("gasitelni_zabraneni", "ГАСИТЕЛНИ ВЕЩЕСТВА", "забранени"),
-    ("rvm_vid", "РИСКОВИ ВЕЩЕСТВА И МАТЕРИАЛИ", "вид"),
-    ("rvm_kolichestvo", "РИСКОВИ ВЕЩЕСТВА И МАТЕРИАЛИ", "количество"),
-    ("gazove_vid", "ГОРИМИ ГАЗОВЕ", "вид"),
-    ("gazove_kolichestvo", "ГОРИМИ ГАЗОВЕ", "количество"),
-    ("zashtita", "Вид защита на служителите", ""),
-]
-WIDTHS_CM = [2.1, 1.9, 2.3, 1.7, 2.0, 1.8, 2.1, 2.1, 2.1, 1.9, 2.1, 1.9, 2.7]   # 26.7 cm – the frame's width
-# the page: A4 landscape; the margins are where the frame of Приложение № 2а is (left 2 cm for binding)
-MARGINS = dict(left=2.0, right=1.0, top=1.0, bottom=1.0)
-
+from prilozhenia import (FONT, MARGINS, borders, cell_text, fixed_width, fmt, number_box, page,  # noqa: E402,F401
+                         para, row_height, table_2b as _table_2b)
 
 def bad(msg):
     sys.stderr.write("BAD_INPUT: " + msg + "\n")
     sys.exit(2)
 
 
-def fmt(v):
-    if v is None:
-        return ""
-    if isinstance(v, float):
-        return f"{v:g}".replace(".", ",")
-    return str(v)
-
-
-def page(sec):
-    sec.orientation = WD_ORIENT.LANDSCAPE
-    sec.page_width, sec.page_height = Cm(29.7), Cm(21.0)
-    sec.left_margin, sec.right_margin = Cm(MARGINS["left"]), Cm(MARGINS["right"])
-    sec.top_margin, sec.bottom_margin = Cm(MARGINS["top"]), Cm(MARGINS["bottom"])
-    sec.header_distance = sec.footer_distance = Cm(0.5)
-
-
-def para(doc_or_cell, text="", size=10, align=None, after=0):
-    p = doc_or_cell.add_paragraph()
-    pf = p.paragraph_format
-    pf.space_before, pf.space_after, pf.line_spacing = Pt(0), Pt(after), 1.0
-    if align is not None:
-        p.alignment = align
-    if text:
-        r = p.add_run(typo(text))
-        r.font.name, r.font.size = FONT, Pt(size)
-        r._element.rPr.rFonts.set(qn("w:eastAsia"), FONT)
-    return p
-
-
-def cell_text(cell, text, size=9, align=WD_ALIGN_PARAGRAPH.CENTER):
-    cell.text = ""
-    p = cell.paragraphs[0]
-    p.alignment = align
-    p.paragraph_format.space_before = p.paragraph_format.space_after = Pt(0)
-    if text:
-        r = p.add_run(typo(text))
-        r.font.name, r.font.size = FONT, Pt(size)
-    cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-
-
-def borders(table):
-    tbl = table._tbl
-    pr = tbl.tblPr
-    b = OxmlElement("w:tblBorders")
-    for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
-        e = OxmlElement(f"w:{edge}")
-        e.set(qn("w:val"), "single")
-        e.set(qn("w:sz"), "6")
-        e.set(qn("w:color"), "000000")
-        b.append(e)
-    pr.append(b)
-
-
-def fixed_width(table, widths_cm):
-    """A fixed layout with the given column widths – Word and LibreOffice both keep them."""
-    pr = table._tbl.tblPr
-    w = OxmlElement("w:tblW")
-    w.set(qn("w:w"), str(int(sum(widths_cm) * 567)))
-    w.set(qn("w:type"), "dxa")
-    pr.append(w)
-    lay = OxmlElement("w:tblLayout")
-    lay.set(qn("w:type"), "fixed")
-    pr.append(lay)
-    grid = table._tbl.tblGrid
-    for col, cm in zip(grid.findall(qn("w:gridCol")), widths_cm):
-        col.set(qn("w:w"), str(int(cm * 567)))
-    for row in table.rows:
-        for cell, cm in zip(row.cells, widths_cm):
-            cell.width = Cm(cm)
-
-
-def row_height(row, cm, exact=False):
-    trPr = row._tr.get_or_add_trPr()
-    h = OxmlElement("w:trHeight")
-    h.set(qn("w:val"), str(int(cm * 567)))
-    h.set(qn("w:hRule"), "exact" if exact else "atLeast")
-    trPr.append(h)
-
-
-def number_box(doc, nomer):
-    """The field for the plan's number – 20 × 15 mm in the upper right corner (чл. 9, ал. 3)."""
-    t = doc.add_table(rows=1, cols=1)
-    t.alignment = WD_TABLE_ALIGNMENT.RIGHT
-    borders(t)
-    fixed_width(t, [2.0])
-    c = t.cell(0, 0)
-    row_height(t.rows[0], 1.5, exact=True)
-    c.text = ""
-    p = c.paragraphs[0]
-    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r = p.add_run("№ на плана")
-    r.font.name, r.font.size = FONT, Pt(6)
-    p2 = c.add_paragraph()
-    p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    if nomer:
-        r = p2.add_run(str(nomer))
-        r.font.name, r.font.size = FONT, Pt(12)
-
-
 def table_2b(doc, tab):
-    rows = list(tab.get("redove") or [])
-    if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
-        bad("tablitsa.redove: очаква се списък от обекти")
-    if rows:                                           # the distance and the time go on the first row
-        rows[0] = {"razstoyanie_km": tab.get("razstoyanie_km"), "vreme_min": tab.get("vreme_min"), **rows[0]}
-    elif tab.get("razstoyanie_km") is not None or tab.get("vreme_min") is not None:
-        rows = [{"razstoyanie_km": tab.get("razstoyanie_km"), "vreme_min": tab.get("vreme_min")}]
-    total = max(len(rows), int(tab.get("prazni_redove", 6) or 0))
-    t = doc.add_table(rows=2 + total, cols=len(COLUMNS))
-    t.alignment = WD_TABLE_ALIGNMENT.CENTER
-    t.autofit = False
-    borders(t)
-    fixed_width(t, WIDTHS_CM)
-    # the two header rows: a group over its columns; a column without a caption under it spans both rows
-    i = 0
-    while i < len(COLUMNS):
-        j = i
-        while j + 1 < len(COLUMNS) and COLUMNS[j + 1][1] == COLUMNS[i][1]:
-            j += 1
-        top = t.cell(0, i).merge(t.cell(0, j)) if j > i else t.cell(0, i)
-        cell_text(top, COLUMNS[i][1])
-        for k in range(i, j + 1):
-            cell_text(t.cell(1, k), COLUMNS[k][2])
-        if j == i and not COLUMNS[i][2]:
-            t.cell(0, i).merge(t.cell(1, i))
-            cell_text(t.cell(0, i), COLUMNS[i][1])
-        i = j + 1
-    row_height(t.rows[0], 1.3)
-    row_height(t.rows[1], 0.8)
-    for r, data in enumerate(rows + [{}] * (total - len(rows))):
-        row = t.rows[2 + r]
-        row_height(row, 1.0)
-        for c, (key, _, _) in enumerate(COLUMNS):
-            cell_text(row.cells[c], fmt(data.get(key)), 9)
-    return len(rows)
+    try:
+        return _table_2b(doc, tab)
+    except ValueError as e:
+        bad(str(e))
 
 
 def table_gaps(tab):
@@ -343,7 +194,7 @@ def build(d, out):
     number_box(doc, lst.get("nomer"))
     para(doc, "Ситуационна схема – таблична част", 12, WD_ALIGN_PARAGRAPH.CENTER)
     if lst.get("obekt"):
-        para(doc, str(lst["obekt"]), 10, WD_ALIGN_PARAGRAPH.CENTER, after=6)
+        para(doc, str(lst["obekt"]), 12, WD_ALIGN_PARAGRAPH.CENTER, after=6)
     n = table_2b(doc, tab)
     if d.get("legenda", True):
         leg = base + "_legenda.png"
