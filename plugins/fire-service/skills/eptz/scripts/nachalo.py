@@ -74,7 +74,8 @@ def ops(r):
 
 
 def vreme_za(r):
-    """METAR from an hour before the signal to the signal, at the nearest airport."""
+    """The weather from an hour before the signal to the signal, at the nearest station with reports
+    (НИМХ SYNOP or airport METAR – vreme.izberi)."""
     try:
         import vreme
         m = re.search(r"GPS\s*(\d{2})[,.](\d+)\s*;\s*(\d{2})[,.](\d+)", r.get("address", ""))
@@ -82,15 +83,16 @@ def vreme_za(r):
             lat, lon = float(f"{m.group(1)}.{m.group(2)}"), float(f"{m.group(3)}.{m.group(4)}")
         else:
             lat, lon = map(float, vreme.koordinati(r.get("location", "")).split(","))
-        icao, km = vreme.nay_blizka(lat, lon)
         t = datetime.datetime.strptime(r["dat"], "%Y-%m-%d %H:%M:%S")
         ot, do = (t - datetime.timedelta(hours=1)).strftime("%H:%M"), t.strftime("%H:%M")
         if (t - datetime.timedelta(hours=1)).date() != t.date():
             ot = "00:00"
-        obs, _ = vreme.svali(icao, t.date())
-        return {"letishte": f"{vreme.STANTSII[icao][0]} ({icao})", "razstoyanie_km": km,
-                "obobshtenie": vreme.obobshtenie(vreme.prozorets(obs, ot, do)),
-                "marker": vreme.marker(icao, t.date(), ot, do)}
+        st, km, _, win, _, propusnati = vreme.izberi(lat, lon, t.date(), ot, do)
+        out = {"stantsiya": vreme.opisanie(st), "razstoyanie_km": km,
+               "obobshtenie": vreme.obobshtenie(win), "marker": vreme.marker(st, t.date(), ot, do)}
+        if propusnati:
+            out["propusnati"] = [f"{p['stantsiya']} – {p['prichina'][:80]}" for p in propusnati]
+        return out
     except Exception as e:  # noqa: BLE001 – the weather is optional here; vreme.py gives it in full
         return f"няма ({str(e)[:160]}) – пусни _shared/scripts/vreme.py"
 
