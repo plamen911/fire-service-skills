@@ -75,7 +75,7 @@ def ops(r):
 
 def vreme_za(r):
     """The weather from an hour before the signal to the signal, at the nearest station with reports
-    (НИМХ SYNOP or airport METAR – vreme.izberi)."""
+    (НИМХ SYNOP or airport METAR – vreme.vzemi, on the server when the archives are out of reach)."""
     try:
         import vreme
         m = re.search(r"GPS\s*(\d{2})[,.](\d+)\s*;\s*(\d{2})[,.](\d+)", r.get("address", ""))
@@ -87,11 +87,10 @@ def vreme_za(r):
         ot, do = (t - datetime.timedelta(hours=1)).strftime("%H:%M"), t.strftime("%H:%M")
         if (t - datetime.timedelta(hours=1)).date() != t.date():
             ot = "00:00"
-        st, km, _, win, _, propusnati = vreme.izberi(lat, lon, t.date(), ot, do)
-        out = {"stantsiya": vreme.opisanie(st), "razstoyanie_km": km,
-               "obobshtenie": vreme.obobshtenie(win), "marker": vreme.marker(st, t.date(), ot, do)}
-        if propusnati:
-            out["propusnati"] = [f"{p['stantsiya']} – {p['prichina'][:80]}" for p in propusnati]
+        v = vreme.vzemi({"lat": lat, "lon": lon, "data": t.date().isoformat(), "ot": ot, "do": do})
+        out = {k: v[k] for k in ("stantsiya", "razstoyanie_km", "obobshtenie", "marker") if k in v}
+        if v.get("propusnati"):
+            out["propusnati"] = [f"{p['stantsiya']} – {p['prichina'][:80]}" for p in v["propusnati"]]
         return out
     except Exception as e:  # noqa: BLE001 – the weather is optional here; vreme.py gives it in full
         return f"няма ({str(e)[:160]}) – пусни _shared/scripts/vreme.py"

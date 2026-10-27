@@ -24,7 +24,9 @@ vreme.py — времето по часове за деня на пожара о
 С две дати добавя и месечната справка от бюлетина на НИМХ (Таблица 1 – средна и максимална температура,
 валеж и % от нормата, дни със силен вятър и с гръмотевици) за най-близката станция в бюлетина:
 маркер [[nimh-buletin: 07.2025, Плевен]] („(Бюлетин на НИМХ, 07.2025)“).
-Ако мрежата е спряна, адресът за --fail е в грешката: свали го с WebFetch и подай файла.
+Ако средата не стига до архивите (или няма pdftotext) и има личен ключ, същата заявка се пуска на сървъра
+до n8n (адрес vreme_url) и отговорът е неговият („prez_sarvara“: true). Без ключ – инструментът `vreme` на
+конектора. Крайна мярка: адресът за --fail е в грешката – свали го с WebFetch и подай файла.
 
 Грешки (на stderr, код ≠ 0): NO_NETWORK, NO_DATA, BAD_INPUT.
 """
@@ -86,6 +88,14 @@ KT = 0.514444
 
 class Problem(Exception):
     pass
+
+
+MREZHA = [False]  # a source could not be reached from this environment – the server (n8n) may reach it
+
+
+def _bez_mrezha(msg):
+    MREZHA[0] = True
+    return Problem(msg)
 
 
 def km(a, b):
@@ -202,7 +212,7 @@ def svali_metar(icao, den, fail=None):
                 req = urllib.request.Request(url, headers={"User-Agent": "fire-service-skills"})
                 text = urllib.request.urlopen(req, timeout=60).read().decode("utf-8", "replace")
             except Exception as e:  # noqa: BLE001
-                raise Problem(f"NO_NETWORK: архивът не отговаря ({e}). Свали {url} с WebFetch, запиши го във файл "
+                raise _bez_mrezha(f"NO_NETWORK: архивът не отговаря ({e}). Свали {url} с WebFetch, запиши го във файл "
                               f"и пусни отново с --fail ФАЙЛ")
             if den < datetime.date.today() - datetime.timedelta(days=1):
                 open(cache, "w", encoding="utf-8").write(text)
@@ -342,7 +352,7 @@ def svali_synop(wmo, den, fail=None):
                 req = urllib.request.Request(url, headers={"User-Agent": "fire-service-skills"})
                 text = urllib.request.urlopen(req, timeout=60).read().decode("utf-8", "replace")
             except Exception as e:  # noqa: BLE001
-                raise Problem(f"NO_NETWORK: OGIMET не отговаря ({e}). Свали {url} с WebFetch, запиши го във файл "
+                raise _bez_mrezha(f"NO_NETWORK: OGIMET не отговаря ({e}). Свали {url} с WebFetch, запиши го във файл "
                               f"и пусни отново с --fail ФАЙЛ")
             if re.search(r"(?i)sorry|quota|limit exceeded", text) and wmo not in text:
                 raise Problem("NO_NETWORK: OGIMET отказа заявката (лимит на заявките) – опитай след минута")
@@ -389,7 +399,7 @@ def _chislo(x):
 def buletin(st_ime, godina, mesets, papka=None):
     """Row of Таблица 1 („Метеорологична справка“) of the monthly NIMH bulletin for a station."""
     if not shutil.which("pdftotext"):
-        raise Problem("NO_TOOL: няма pdftotext (poppler-utils) – бюлетинът не може да се прочете")
+        raise _bez_mrezha("NO_TOOL: няма pdftotext (poppler-utils) – бюлетинът не може да се прочете")
     url = URL_BULETIN.format(g=godina, m=mesets)
     papka = papka or tempfile.gettempdir()
     pdf = os.path.join(papka, f"fire-service-nimh-{godina:04d}{mesets:02d}.pdf")
@@ -398,7 +408,7 @@ def buletin(st_ime, godina, mesets, papka=None):
             req = urllib.request.Request(url, headers={"User-Agent": "fire-service-skills"})
             data = urllib.request.urlopen(req, timeout=90).read()
         except Exception as e:  # noqa: BLE001
-            raise Problem(f"NO_NETWORK: бюлетинът {url} не се сваля ({str(e)[:80]}) – може още да не е издаден")
+            raise _bez_mrezha(f"NO_NETWORK: бюлетинът {url} не се сваля ({str(e)[:80]}) – може още да не е издаден")
         if not data.startswith(b"%PDF"):
             raise Problem(f"NO_DATA: бюлетинът за {mesets:02d}.{godina} още не е издаден ({url})")
         open(pdf, "wb").write(data)
@@ -520,6 +530,131 @@ def _vse():
     return out
 
 
+def izchisli(b):
+    """The weather for a request {data, do_data?, stantsiya? | mesto? | lat/lon?, ot?, do?, fail?} → the JSON
+    the script prints. Here, in this environment – see vzemi() for the server fallback."""
+    lat = lon = None
+    st = str(b.get("stantsiya") or "").strip().upper() or None
+    if st and st not in STANTSII and st not in SINOPTICHNI:
+        raise Problem(f"BAD_INPUT: няма станция {st} (--stantsii)")
+    if b.get("lat") is not None and b.get("lon") is not None:
+        lat, lon = float(b["lat"]), float(b["lon"])
+    elif b.get("mesto"):
+        lat, lon = (float(x) for x in koordinati(b["mesto"]).split(","))
+    elif not st:
+        raise Problem("BAD_INPUT: дай станция (ICAO, напр. LBPL, или WMO, напр. 15528), --mesto или --blizo ШИРИНА,ДЪЛЖИНА")
+    if not b.get("data"):
+        raise Problem("BAD_INPUT: липсва датата")
+    den = _den(b["data"])
+    ot, do = b.get("ot"), b.get("do")
+    if b.get("do_data"):
+        krai = _den(b["do_data"])
+        dni, izbrani = [], set()
+        for i in range((krai - den).days + 1):
+            d = den + datetime.timedelta(days=i)
+            if st:
+                obs, _ = svali(st, d)
+                s_den = st
+            else:
+                try:
+                    s_den, _, obs, _, _, _ = izberi(lat, lon, d)
+                except Problem:
+                    dni.append({"data": d.strftime("%d.%m.%Y"), "nyama": f"няма съобщения до {MAX_KM} km"})
+                    continue
+            izbrani.add(s_den)
+            dni.append({"data": d.strftime("%d.%m.%Y"), "stantsiya": opisanie(s_den), **obobshtenie(obs)})
+        out = {"dni": dni, "markeri": [marker(s, den, krai=krai) for s in sorted(izbrani)]}
+        if lat is None:
+            lat, lon = (SINOPTICHNI if vid(st) == "SYNOP" else STANTSII)[st][1:]
+        b_st = buletin_stantsiya(lat, lon)
+        mesetsi, d = [], den.replace(day=1)
+        while d <= krai:
+            mesetsi.append((d.year, d.month))
+            d = (d + datetime.timedelta(days=32)).replace(day=1)
+        out["buletin_nimh"] = []
+        for g, m in mesetsi:
+            try:
+                out["buletin_nimh"].append(buletin(b_st, g, m))
+            except Problem as e:
+                out["buletin_nimh"].append({"mesets": f"{m:02d}.{g}", "stantsiya": b_st, "nyama": str(e)[:200]})
+        return out
+    if st:
+        obs, url = svali(st, den, b.get("fail"))
+        if not obs:
+            raise Problem(f"NO_DATA: няма съобщения от {opisanie(st)} за {den:%d.%m.%Y} – пусни с --mesto, "
+                          "за да се вземе следващата станция")
+        win = prozorets(obs, ot, do, SHIRINA[vid(st)])
+        razst = (round(km((lat, lon), (SINOPTICHNI if vid(st) == "SYNOP" else STANTSII)[st][1:]))
+                 if lat is not None else None)
+        propusnati = []
+    else:
+        st, razst, obs, win, url, propusnati = izberi(lat, lon, den, ot, do, b.get("fail"))
+    return {"stantsiya": opisanie(st), "vid": vid(st), "razstoyanie_km": razst,
+            "data": den.strftime("%d.%m.%Y"), "prozorets": [ot, do] if (ot or do) else None,
+            "obobshtenie": obobshtenie(win), "marker": marker(st, den, ot, do),
+            "propusnati": propusnati or None,
+            "nablyudeniya": win if (ot or do) else obs, "url": url}
+
+
+def mozhe_sarvar():
+    """True when the request can go to the server: a personal key, and we are not the server itself."""
+    if os.environ.get("FIRE_SERVICE_NA_SARVARA") or os.environ.get("FIRE_SERVICE_NO_KEY") \
+            or os.environ.get("FIRE_SERVICE_OFFLINE"):
+        return False
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import api_config
+        return api_config.has_key() and bool(api_config.load().get("vreme_url"))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def prez_sarvar(b):
+    """The same request, run on the server next to n8n (fire-render), where the archives are reachable."""
+    import urllib.error
+    import api_config
+    body = {k: v for k, v in b.items() if k != "fail" and v not in (None, "")}
+    try:
+        res = api_config.post("vreme_url", body, timeout=240)
+    except urllib.error.HTTPError as e:
+        try:
+            err = json.loads(e.read()).get("error", "")
+        except Exception:  # noqa: BLE001
+            err = f"HTTP {e.code}"
+        raise Problem(err if re.match(r"[A-Z_]+:", err) else f"N8N_ERROR: {err}")
+    except (OSError, ValueError) as e:
+        raise Problem(f"N8N_UNAVAILABLE: {type(e).__name__}: {e}"[:300])
+    if isinstance(res, dict) and res.get("error"):
+        raise Problem(res["error"])
+    res["prez_sarvara"] = True
+    return res
+
+
+def vzemi(b):
+    """izchisli() here; when a source was out of reach from this environment (no network, no pdftotext),
+    the same request goes to the server through n8n – with a personal key. Without a key the connector tool
+    `vreme` does the same (see _shared/connector.md)."""
+    MREZHA[0] = False
+    try:
+        out = izchisli(b)
+    except Problem:
+        if MREZHA[0] and mozhe_sarvar():
+            return prez_sarvar(b)
+        raise
+    if MREZHA[0] and mozhe_sarvar():
+        try:
+            return prez_sarvar(b)
+        except Problem as e:
+            out["sarvar"] = f"сървърът не помогна: {str(e)[:160]}"
+    return out
+
+
+def _vse():
+    out = {k: {"vid": "SYNOP", "ime": v[0], "lat": v[1], "lon": v[2]} for k, v in SINOPTICHNI.items()}
+    out.update({k: {"vid": "METAR", "ime": v[0], "lat": v[1], "lon": v[2]} for k, v in STANTSII.items()})
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("args", nargs="*", help="[СТАНЦИЯ – ICAO или WMO] ДАТА [ДО_ДАТА] (ГГГГ-ММ-ДД или ДД.ММ.ГГГГ); "
@@ -536,68 +671,19 @@ def main():
             print(json.dumps(_vse(), ensure_ascii=False, indent=1))
             return
         args = list(a.args)
-        lat = lon = st = None
-        if a.mesto:
-            a.blizo = koordinati(a.mesto)
+        b = {"ot": a.ot, "do": a.do, "fail": a.fail}
         if args and (args[0].upper() in STANTSII or args[0] in SINOPTICHNI):
-            st = args.pop(0).upper()
-        elif a.blizo:
-            lat, lon = (float(x) for x in a.blizo.split(","))
-        else:
-            raise Problem("BAD_INPUT: дай станция (ICAO, напр. LBPL, или WMO, напр. 15528), --mesto или --blizo ШИРИНА,ДЪЛЖИНА")
+            b["stantsiya"] = args.pop(0).upper()
+        if a.blizo:
+            b["lat"], b["lon"] = (float(x) for x in a.blizo.split(","))
+        elif a.mesto:
+            b["mesto"] = a.mesto
         if not args:
             raise Problem("BAD_INPUT: липсва датата")
-        if st and a.blizo:
-            lat, lon = (float(x) for x in a.blizo.split(","))
-        den = _den(args[0])
+        b["data"] = _den(args[0]).isoformat()
         if len(args) > 1:
-            krai = _den(args[1])
-            dni, izbrani = [], set()
-            for i in range((krai - den).days + 1):
-                d = den + datetime.timedelta(days=i)
-                if st:
-                    obs, _ = svali(st, d)
-                    s_den = st
-                else:
-                    try:
-                        s_den, _, obs, _, _, _ = izberi(lat, lon, d)
-                    except Problem:
-                        dni.append({"data": d.strftime("%d.%m.%Y"), "nyama": "няма съобщения до " f"{MAX_KM} km"})
-                        continue
-                izbrani.add(s_den)
-                dni.append({"data": d.strftime("%d.%m.%Y"), "stantsiya": opisanie(s_den), **obobshtenie(obs)})
-            out = {"dni": dni, "markeri": [marker(s, den, krai=krai) for s in sorted(izbrani)]}
-            if lat is None and st:
-                lat, lon = (SINOPTICHNI if vid(st) == "SYNOP" else STANTSII)[st][1:]
-            b_st = buletin_stantsiya(lat, lon)
-            mesetsi, d = [], den.replace(day=1)
-            while d <= krai:
-                mesetsi.append((d.year, d.month))
-                d = (d + datetime.timedelta(days=32)).replace(day=1)
-            out["buletin_nimh"] = []
-            for g, m in mesetsi:
-                try:
-                    out["buletin_nimh"].append(buletin(b_st, g, m))
-                except Problem as e:
-                    out["buletin_nimh"].append({"mesets": f"{m:02d}.{g}", "stantsiya": b_st, "nyama": str(e)[:200]})
-            print(json.dumps(out, ensure_ascii=False, indent=1))
-            return
-        if st:
-            obs, url = svali(st, den, a.fail)
-            if not obs:
-                raise Problem(f"NO_DATA: няма съобщения от {opisanie(st)} за {den:%d.%m.%Y} – пусни с --mesto, "
-                              "за да се вземе следващата станция")
-            win = prozorets(obs, a.ot, a.do, SHIRINA[vid(st)])
-            razst, propusnati = (round(km((lat, lon), (SINOPTICHNI if vid(st) == "SYNOP" else STANTSII)[st][1:]))
-                                 if lat is not None else None), []
-        else:
-            st, razst, obs, win, url, propusnati = izberi(lat, lon, den, a.ot, a.do, a.fail)
-        print(json.dumps({"stantsiya": opisanie(st), "vid": vid(st), "razstoyanie_km": razst,
-                          "data": den.strftime("%d.%m.%Y"), "prozorets": [a.ot, a.do] if (a.ot or a.do) else None,
-                          "obobshtenie": obobshtenie(win), "marker": marker(st, den, a.ot, a.do),
-                          "propusnati": propusnati or None,
-                          "nablyudeniya": win if (a.ot or a.do) else obs, "url": url},
-                         ensure_ascii=False, indent=1))
+            b["do_data"] = _den(args[1]).isoformat()
+        print(json.dumps(vzemi(b), ensure_ascii=False, indent=1))
     except Problem as e:
         print(str(e), file=sys.stderr)
         sys.exit(1)

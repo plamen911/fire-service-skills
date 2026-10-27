@@ -6,7 +6,7 @@
 скрипт. Скриптовете, които питат n8n, без ключ спират с `NO_KEY`.
 
 **Как познаваш режима.** Ако в разговора има инструментите `incidents`, `staff`, `whoami`,
-`regs_list`, `regs_read`, `duty`, `duty_save`, `samples`, `raioni`, `voda`, `voda_save`, `kais`, `shema`, `obekti`, `obekti_save` и `dnevnik` (конектор Fire Service),
+`regs_list`, `regs_read`, `duty`, `duty_save`, `samples`, `raioni`, `voda`, `voda_save`, `kais`, `shema`, `obekti`, `obekti_save`, `dnevnik` и `vreme` (конектор Fire Service),
 ползвай **тях** за всичко, което иначе скриптовете взимат от n8n. Ако ги няма, работи със
 скриптовете, както е описано в скила (те намират ключа сами – `_shared/scripts/api_config.py`).
 Ако няма нито инструменти, нито ключ (`NO_KEY`) – кажи, че данните не са достъпни, защото
@@ -40,6 +40,7 @@
 | `voda.py dobavi` / `potvardi` / `promeni` / `premahni` | `voda_save` с `action` и същите полета (`promeni` – `id` и `set`; `premahni` – `id` и `prichina`) | всеки може да записва; премахва администраторът или който е въвел точката; първо с `dry_run: true`; координатите са само от потребителя |
 | `obekti.py tarsi` / `pokazhi` / `istoriya` (регистърът на обектите) | `obekti` с `action: "get"`, `folder: "root"`, `name: "obekti.csv"` → запиши го в `ПАПКА/root/obekti.csv` (декодирай base64) → `obekti.py --store ПАПКА tarsi …`; за `pokazhi` – `obekti` `list` с `folder` = `papka_id` – всеки файл идва с `download` | на потребителя давай линковете `download` (отварят файла без Google акаунт, 24 часа); не тегли файловете с `get` и не ги декодирай от base64, за да ги предадеш – `get` е само за `obekti.csv`, `history.md` и входния `.json` при промяна |
 | `obekti.py nov` / `zapishi` / `snimka` / `preimenuvai` / `promeni` | `obekti.py --store ПАПКА --avtor "<ime от whoami>" …` (с обекти.csv и `history.md` на обекта в ПАПКА) → изпълни `kachi` по ред с `obekti_save` (`put` с base64 на файла и `if_md5`, `rename`) | при `nov` скриптът първо иска папката: `obekti_save` `mkdir` с `folder: "root"` и името от `NEED_MKDIR` → пусни `nov` отново с `--papka-id`; `CONFLICT` = друг е записал междувременно – прочети отново и повтори |
+| `vreme.py` (времето за ЕПТЗ и справка) | `vreme` с `data` и `mesto` (или `lat`/`lon`, или `stantsiya` – WMO 15528 / ICAO LBPL), `ot`, `do`; за засушаване – и `do_data` | същият скрипт, пуснат на сървъра: отговорът е като неговия JSON – станцията, разстоянието, `obobshtenie`, `marker`, а с `do_data` – дните и `buletin_nimh`. Пренеси маркера както е |
 | `obraztsi.py index` / `get` | `samples` с `kind: "spravka"` или `"eptz"` и `name` | започни с `name: "INDEX.md"`, после избрания файл |
 | `dnevnik.py eptz …` (дневник на ползването) | `dnevnik` със същите полета (`ekspert`, `zm`, `dp`, `obekt`, `prichina`, `stranitsi`, `suma_eur`, `snimki`, `pdf`, `pdf_stranitsi`, `skanirani`, `drugi`, `tekst_v_chata`, `model`, `ustroystvo`, `nahodki`) – броевете ги изчисли сам от качените файлове; часът и средата се записват в n8n | всеки може да записва; без текста на заключението; при грешка – продължи |
 | `regs.py index` | `regs_list` с `name: "_INDEX_"`, после `regs_read` | индексът е голям – чети го с `match`, не целия |
