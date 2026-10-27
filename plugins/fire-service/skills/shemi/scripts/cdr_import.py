@@ -242,10 +242,22 @@ def main():
                     if math.hypot(x2 - x1, y2 - y1) > 0.2]
             return bool(angs) and all(4 < v < 86 for v in angs)
         keep = [e for e in keep if not slanted_outside(e)]
+    from shapely.geometry import Point as _Pt, Polygon as _Pg0
+    bld_ = _Pg0(b["kontur"]).buffer(0) if b is not None else None
+    vanshni = 0
     for e in keep:
         e = dict(e)
         e["tochki"] = [[round(q[0], 3), round(q[1], 3)] for q in map(tr, e["tochki"])]
+        if bld_ is not None and not e.get("plaska") and e.get("lw_mm", 0) > 0.6:
+            # КАИС has the priority: a wall of the old drawing that lies outside the building in КАИС (an annex or a
+            #   neighbour drawn by hand, out of place) is left out – the buildings round it come from КАИС
+            far = sum(1 for q in e["tochki"] if bld_.exterior.distance(_Pt(q)) > 1.0 and not bld_.contains(_Pt(q)))
+            if far > 0.5 * len(e["tochki"]):
+                vanshni += 1
+                continue
         out["podlozhka"].append(e)
+    if vanshni:
+        notes.append(f"{vanshni} стени от чертежа са извън сградата в КАИС и отпадат (съседните сгради са от КАИС).")
 
     # the rooms – the spaces closed by the walls; their names – the texts inside them
     from shapely.geometry import LineString, Point, Polygon
