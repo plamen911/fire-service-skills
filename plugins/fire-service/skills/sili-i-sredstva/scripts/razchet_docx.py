@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-razchet_docx.py — РАЗЧЕТЪТ НА СИЛИТЕ И СРЕДСТВАТА като .docx на бланката на РДПБЗН – Плевен: изходните
-данни, стъпките по Методиката (Приложение № 5 към Указанията Iз-2749/2010) с номера на формулата, резултатът,
-бележките и подписът. Към всяка конкретна схема (чл. 7, ал. 4) – свой разчет, по чл. 7, ал. 6 приложен към плана.
+razchet_docx.py — РАЗЧЕТЪТ НА СИЛИТЕ И СРЕДСТВАТА (Приложение № 5 към Указанията Iз-2749/2010) като .docx: само
+изчисленията – без бланка, дата и подпис, на една страница (A4 легнало, в две колони; шрифтът се смалява от 11 до
+8 pt, докато се събере), защото се печата на гърба на листа на своята конкретна схема (чл. 7, ал. 4).
 
     python3 scripts/sili.py tvardi … > sili.json
     python3 scripts/razchet_docx.py sili.json --kam "/mnt/user-data/outputs/Konkretna_shema_Garderob_2et.docx" \
         --naslov "Конкретна схема № 2 – пожар в гардероба, 2 етаж" --obekt "ЦПЛР – …, гр. Плевен, ул. … № …" \
-        --izgotvil "Инспектор в РСПБЗН – Плевен" --ime "Име Фамилия" --data 27.10.2026
+        --pomeshtenie "Гардероб, 2 етаж – 10,5 × 7,1 m"
 
 --kam дава името на файла: Razchet_<името на конкретната схема>.docx в същата папка (иначе -o).
 Отпечатва JSON {"output", "preduprezhdeniya"}.
@@ -131,24 +131,28 @@ def tokens(expr):
     return [(re.sub(r"\s+\*\s+", " * ", t) if s is None else t, s, u) for t, s, u in out]
 
 
+SIZE = [11]          # pt – the size of the calculation; chosen by fit() so that it goes on one page
+
+
 def write_tokens(p, parts):
+    size = SIZE[0]
     for text, sub, sup in parts:
         if sub is None:
             text = re.sub(r"(?<=\d)\.(?=\d)", ",", text)
             text = re.sub(r"(?<=\d) min\b", " мин.", re.sub(r"(?<=\d) m\b", " м", text)).replace("∙", "·")
-            B.run(p, text, italic=True)
+            B.run(p, text, italic=True, size=size)
             continue
-        B.run(p, text, italic=True)
+        B.run(p, text, italic=True, size=size)
         if sub:
-            B.run(p, sub, italic=True).font.subscript = True
+            B.run(p, sub, italic=True, size=size).font.subscript = True
         if sup:
-            B.run(p, sup, italic=True).font.superscript = True
+            B.run(p, sup, italic=True, size=size).font.superscript = True
 
 
 def line(doc, *chunks):
     """One line of the calculation; a chunk is a string (its symbols are found) or a list of tokens."""
     p = B.fmt(doc.add_paragraph(), B.LEFT, line=None)
-    p.paragraph_format.space_after = B.Pt(3)
+    p.paragraph_format.space_after = B.Pt(1 if SIZE[0] < 11 else 2)
     for ch in chunks:
         write_tokens(p, tokens(ch) if isinstance(ch, str) else ch)
     return p
@@ -169,9 +173,9 @@ def hr(p):
 
 def heading(doc, n, text, sym):
     p = B.fmt(doc.add_paragraph(), B.LEFT, line=None, keep=True)
-    p.paragraph_format.space_before, p.paragraph_format.space_after = B.Pt(9), B.Pt(4)
-    B.run(p, f"{n}. {text}, {sym[0]}")
-    B.run(p, sym[1]).font.subscript = True
+    p.paragraph_format.space_before, p.paragraph_format.space_after = B.Pt(SIZE[0] * 0.5), B.Pt(2)
+    B.run(p, f"{n}. {text}, {sym[0]}", size=SIZE[0] + 1)
+    B.run(p, sym[1], size=SIZE[0] + 1).font.subscript = True
 
 
 def value_of(text):
@@ -291,11 +295,11 @@ def write(doc, d, pomeshtenie=None, belezhki=()):
     for x in notes:
         line(doc, "Бележка: " + re.sub(r"(?<!ред )(?<![\d.])(\d+)\.(\d+)(?![.\d])", r"\1,\2", B.typo(x)))
     src = d.get("iztochnik")
-    B.blank(doc)
-    B.para(doc, B.typo(src if isinstance(src, str) else
-                       "Методика – Приложение № 5 към чл. 7, ал. 6 от Указанията за разработване на "
-                       "планове за пожарогасене, рег. № Iз-2749/18.11.2010 г."),
-           align=B.LEFT, indent=False, size=11)
+    p = B.para(doc, B.typo(src if isinstance(src, str) else
+                           "Методика – Приложение № 5 към чл. 7, ал. 6 от Указанията за разработване на "
+                           "планове за пожарогасене, рег. № Iз-2749/18.11.2010 г."),
+               align=B.LEFT, indent=False, size=max(8, SIZE[0] - 2), line=None)
+    p.paragraph_format.space_before = B.Pt(4)
     return warnings
 
 
@@ -307,25 +311,70 @@ def title(doc, naslov=None, obekt=None, pomeshtenie=None):
     if not where and naslov and re.match(r"^Конкретна схема за гасене на пожар в\s", naslov):
         where = re.sub(r"^Конкретна схема за гасене на пожар в\s*", "", naslov)
     B.para(doc, "Разчет на силите и средствата за гасене на пожар" + (f" в {where}" if where else ""),
-           align=B.CENTER, indent=False, size=13)
+           align=B.LEFT, indent=False, size=SIZE[0] + 1, line=None)
     if naslov:
-        B.para(doc, f"(към {naslov[0].lower() + naslov[1:]})", align=B.CENTER, indent=False, size=11)
-    B.blank(doc)
+        B.para(doc, f"(към {naslov[0].lower() + naslov[1:]})", align=B.LEFT, indent=False, size=SIZE[0] - 1, line=None)
+
+
+def back_page(sec, columns=2):
+    """The back of the sheet of the specific scheme: A4 landscape as the sheet, in two columns."""
+    from docx.enum.section import WD_ORIENT
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    sec.orientation = WD_ORIENT.LANDSCAPE
+    sec.page_width, sec.page_height = B.Cm(29.7), B.Cm(21.0)
+    sec.left_margin = sec.right_margin = B.Cm(1.5)       # the back – the binding margin is on the other side
+    sec.top_margin = sec.bottom_margin = B.Cm(1.2)
+    pr = sec._sectPr
+    for old in pr.findall(qn("w:cols")):
+        pr.remove(old)
+    cols = OxmlElement("w:cols")
+    cols.set(qn("w:num"), str(columns))
+    cols.set(qn("w:space"), str(int(1.0 * 567)))
+    pr.append(cols)
+
+
+def lines_needed(d, naslov, obekt, pomeshtenie, size):
+    """How many lines the calculation takes at this size – written into a scratch document and counted, each
+    paragraph wrapped at the width of a column."""
+    SIZE[0] = size
+    tmp = B.new_document()
+    title(tmp, naslov, obekt, pomeshtenie)
+    write(tmp, d, pomeshtenie)
+    per_line = (29.7 - 3.0 - 1.0) / 2 / (0.0185 * size)          # characters in a column
+    n = 0
+    for p in tmp.paragraphs:
+        n += max(1, math.ceil(len(p.text) / per_line))
+    return n
+
+
+def fit(d, naslov, obekt, pomeshtenie):
+    """The largest size (11 → 8 pt) at which the calculation goes on one page in two columns."""
+    for size in (11, 10.5, 10, 9.5, 9, 8.5, 8):
+        per_col = (21.0 - 2.4) * 28.35 / (size * 1.16 + (1 if size < 11 else 2) + 0.6)
+        if lines_needed(d, naslov, obekt, pomeshtenie, size) <= 2 * per_col - 4:
+            return size
+    return 8
+
+
+def page(doc, d, naslov=None, obekt=None, pomeshtenie=None, belezhki=(), new_section=True):
+    """The calculation on one page – the back of the sheet of its specific scheme (also a section of the plan)."""
+    from docx.enum.section import WD_SECTION
+    SIZE[0] = fit(d, naslov, obekt, pomeshtenie)
+    back_page(doc.add_section(WD_SECTION.NEW_PAGE) if new_section else doc.sections[-1])
+    title(doc, naslov, obekt, pomeshtenie)
+    warnings = write(doc, d, pomeshtenie, belezhki)
+    SIZE[0] = 11
+    return warnings
 
 
 def build(d, a, out):
     if not valid(d):
         bad("очаква се JSON-ът на sili.py (с \"ok\": true и \"stapki\")")
     doc = B.new_document()
-    B.letterhead(doc, a.zveno)
-    title(doc, a.naslov, a.obekt, a.pomeshtenie)
-    warnings = write(doc, d, a.pomeshtenie, a.belezhka)
-    B.blank(doc, 2)
-    B.signature(doc, a.data, a.izgotvil, a.ime)
-    if not a.ime:
-        warnings.append("няма име на изготвилия – оставено е място")
+    warnings = page(doc, d, a.naslov, a.obekt, a.pomeshtenie, a.belezhka, new_section=False)
     doc.save(out)
-    B.report(out)
+    B.report(out, letterhead=False)
     return {"output": out, "preduprezhdeniya": warnings}
 
 
@@ -337,10 +386,6 @@ def main():
     ap.add_argument("--naslov", help="заглавието на конкретната схема")
     ap.add_argument("--obekt", help="обектът и адресът")
     ap.add_argument("--pomeshtenie", help="помещението, в което е пожарът")
-    ap.add_argument("--zveno", help="ред под бланката, напр. РСПБЗН – Плевен")
-    ap.add_argument("--izgotvil", action="append", default=[], help="длъжността на изготвилия (по ред)")
-    ap.add_argument("--ime", help="името на изготвилия")
-    ap.add_argument("--data", help="дата, напр. 27.10.2026")
     ap.add_argument("--belezhka", action="append", help="още бележка (може няколко пъти)")
     a = ap.parse_args()
     try:

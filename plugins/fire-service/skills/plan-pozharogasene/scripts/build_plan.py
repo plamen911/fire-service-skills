@@ -200,15 +200,10 @@ def build(plan, base, out_dir):
         k_res = konkretna_docx.build(k, k_out)
         r_out = os.path.join(out_dir, "Razchet_" + fail + ".docx")
         naslov = (k.get("list") or {}).get("naslov") or f"Конкретна схема № {i}"
-        doc = B.new_document()
-        B.letterhead(doc)
-        razchet_docx.title(doc, naslov, obekt_line, v.get("pomeshtenie"))
-        razchet_docx.write(doc, s, v.get("pomeshtenie"))
-        iz = plan.get("izgotvil") or {}
-        B.blank(doc, 2)
-        B.signature(doc, iz.get("data"), iz.get("lines"), iz.get("name"))
+        doc = B.new_document()                         # only the calculation – the back of the scheme's sheet
+        razchet_docx.page(doc, s, naslov, obekt_line, v.get("pomeshtenie"), new_section=False)
         doc.save(r_out)
-        B.report(r_out)
+        B.report(r_out, letterhead=False)
         files += [k_out, k_res.get("dxf"), k_res["grafichna"], r_out]
         warnings += [f"вариант {i}: {w}" for w in k_res.get("preduprezhdeniya") or []]
         done.append((v, k, s, k_res, naslov))
@@ -271,9 +266,7 @@ def build(plan, base, out_dir):
         sheet(doc, k_res["grafichna"])
         back(doc, kl.get("nomer"), f"{naslov} – таблична част (Приложение № 3б)", kl.get("obekt"))
         table_3b(doc, k.get("tablitsa_3b") or {})
-        portrait(doc)
-        razchet_docx.title(doc, naslov, plan.get("obekt"), v.get("pomeshtenie"))
-        razchet_docx.write(doc, s, v.get("pomeshtenie"))
+        razchet_docx.page(doc, s, naslov, plan.get("obekt"), v.get("pomeshtenie"))
 
     landscape(doc)
     B.para(doc, f"{3 + len(done)}. БЛАНКА ЗА ОТЧИТАНЕ НА ПРОИЗШЕСТВИЯТА И ЗАНЯТИЯТА (Приложение № 4 към чл. 7, ал. 5)",
