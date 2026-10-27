@@ -163,10 +163,18 @@ def sili_sentence(R):
 
 
 def items(doc, prefix, rows):
+    """[заглавие, текст] or [заглавие, текст, {"zaglavki": [...], "redove": [[...]], "shirini": [cm, ...]}] – the
+    third, a table under the paragraph (the fires in the object and in similar ones – чл. 6, ал. 1, т. 9)."""
     for i, row in enumerate(rows, 1):
-        if not (isinstance(row, (list, tuple)) and len(row) == 2):
-            bad(f"{prefix}: всеки ред е [заглавие, текст]")
+        if not (isinstance(row, (list, tuple)) and len(row) in (2, 3)):
+            bad(f"{prefix}: всеки ред е [заглавие, текст] или [заглавие, текст, таблица]")
         B.para(doc, f"{prefix}{i}. *{row[0]}* {row[1]}")
+        if len(row) == 3 and isinstance(row[2], dict) and row[2].get("redove"):
+            t = row[2]
+            head = list(t.get("zaglavki") or [])
+            widths = list(t.get("shirini") or [16.5 / max(1, len(head))] * len(head))
+            B.grid(doc, head, [[str(c) for c in r] for r in t["redove"]], widths, align=B.LEFT)
+            B.blank(doc)
 
 
 def gaps_6_1(danni):
