@@ -80,6 +80,8 @@ r = out("zapishi", "OB-0004", "--vid", "operativna_kartichka", docs[0])
 ok(r["bez_promyana"] == ["situacionna_shema.docx"], "оперативна картичка = ситуационна схема")
 r = out("pokazhi", "OB-0004")
 ok(list(r["dokumenti"]) == ["situacionna_shema"] and len(r["dokumenti"]["situacionna_shema"]["failove"]) == 3, "one document")
+f0 = r["dokumenti"]["situacionna_shema"]["failove"][0]
+ok("link" in f0 and "drive_link" in f0 and f0["link"] is None, "local store: no download link (n8n signs it)")
 
 # photos: the same picture once
 os.makedirs(os.path.join(TMP, "F4", "snimki"))

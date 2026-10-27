@@ -379,8 +379,10 @@ def describe(store, row):
         for x in SUFFIXES:
             if stem.endswith(x) and stem not in VIDOVE and valid_vid(stem[: -len(x)]):
                 vid = stem[: -len(x)]
-        docs.setdefault(vid, []).append({"name": f["name"], "promenen": f.get("modified_at"),
-                                         "link": f"https://drive.google.com/file/d/{f['id']}/view" if f.get("id") else None})
+        # "link" opens the file for anyone with a key (signed by n8n, 24 h, no Google account); "drive_link" –
+        # only for whoever has access to the Drive folder (the administrator).
+        docs.setdefault(vid, []).append({"name": f["name"], "promenen": f.get("modified_at"), "link": f.get("download"),
+                                         "drive_link": f"https://drive.google.com/file/d/{f['id']}/view" if f.get("id") else None})
     hist = store.get(row["papka_id"], HISTORY)
     lines = [x for x in (hist.decode("utf-8").splitlines() if hist else []) if x.startswith("- ")]
     return {"obekt": row, "dokumenti": {v: {"vid": VIDOVE.get(v, v.replace("_", " ")), "failove": fs} for v, fs in sorted(docs.items())},
