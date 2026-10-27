@@ -202,7 +202,7 @@ def build(plan, base, out_dir):
         naslov = (k.get("list") or {}).get("naslov") or f"Конкретна схема № {i}"
         doc = B.new_document()
         B.letterhead(doc)
-        razchet_docx.title(doc, naslov, obekt_line)
+        razchet_docx.title(doc, naslov, obekt_line, v.get("pomeshtenie"))
         razchet_docx.write(doc, s, v.get("pomeshtenie"))
         iz = plan.get("izgotvil") or {}
         B.blank(doc, 2)
@@ -272,7 +272,7 @@ def build(plan, base, out_dir):
         back(doc, kl.get("nomer"), f"{naslov} – таблична част (Приложение № 3б)", kl.get("obekt"))
         table_3b(doc, k.get("tablitsa_3b") or {})
         portrait(doc)
-        razchet_docx.title(doc, naslov, None)
+        razchet_docx.title(doc, naslov, plan.get("obekt"), v.get("pomeshtenie"))
         razchet_docx.write(doc, s, v.get("pomeshtenie"))
 
     landscape(doc)

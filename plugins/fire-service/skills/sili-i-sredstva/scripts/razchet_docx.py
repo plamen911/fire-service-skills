@@ -15,6 +15,7 @@ razchet_docx.py — РАЗЧЕТЪТ НА СИЛИТЕ И СРЕДСТВАТА �
 """
 import argparse
 import json
+import math
 import os
 import re
 import sys
@@ -72,60 +73,244 @@ def valid(d):
     return isinstance(d, dict) and d.get("ok") and isinstance(d.get("stapki"), list)
 
 
+# ── the written calculation – as the approved calculations and the calculator JS_ppo print it: numbered sections, in
+#    each the table value („Vл = 1 (м/мин) – по Табл. № 1 от Указанията“), the formula, then the same formula with the
+#    numbers put in and the result, and a result line; italic, the indices as subscripts, „*“ for multiplication
+SYMBOLS = [  # (as sili.py writes it, base, subscript, superscript) – the longest first
+    ("nстр.екип", "n", "стр,екип", ""), ("Nг.екипи", "N", "екип", "г"), ("Nз.екипи", "N", "екип", "з"),
+    ("tд.с.", "τ", "дс", ""), ("tдв.", "τ", "дв", ""), ("tр.", "τ", "р", ""), ("tсв", "τ", "св", ""),
+    ("t1", "τ", "1", ""), ("t2", "τ", "2", ""), ("t3", "τ", "3", ""), ("vл", "V", "л", ""),
+    ("Fпом", "F", "пом", ""), ("Fп", "F", "п", ""), ("Fг", "F", "г", ""), ("Qоб", "Q", "об", ""),
+    ("Qпа", "Q", "па", ""), ("Qг", "Q", "н", "г"), ("Qз", "Q", "н", "з"), ("qекипи", "q", "екип", ""),
+    ("qстр", "q", "стр", ""), ("Iг", "I", "н", ""), ("hг", "h", "г", ""), ("lстр", "l", "стр", ""),
+    ("Nекипи", "N", "екип", ""), ("Nстр", "N", "стр", ""), ("Nпа", "N", "па", ""), ("Nг", "N", "стр", "г"),
+    ("Nз", "N", "стр", "з")]
+UNITS = {"m2": "м²", "m": "м", "l/s": "л/с", "min": "мин.", "l": "л", "kg": "кг", "бр.": ""}
+COUNTS = {"(17)": ("струйник", "струйника"), "(18)": ("струйник", "струйника"), "(20)": ("екип", "екипа"),
+          "(21)": ("екип", "екипа"), "(22)": ("екип", "екипа"), "(23)": ("пожарен автомобил", "пожарни автомобила")}
+LABEL_SKIP = {  # a step named as its section needs no line of its own
+    **{f: "Площ на пожара" for f in ("(2)", "(3)", "(4)", "(5)", "(6)", "(7)")},
+    **{f: "Площ на гасене" for f in ("(8)", "(9)", "(10)", "(11)", "(12)", "(13)")},
+    "(14)": "Необходим разход на вода за гасене", "(15)": "Необходим разход на вода за гасене",
+    "(17)": "Струйници за гасене", "(20)": "Екипи за гасене", "(21)": "Екипи за гасене",
+    "(23)": "Пожарни автомобили"}
+SECTIONS = [  # (the formulas of the section, heading, its symbol (base, sub))
+    (("(1)",), "Свободно време за развитие на пожара", ("τ", "св")),
+    (("(2)", "(3)", "(4)", "(5)", "(6)", "(7)", ""), "Определяне площта на пожара", ("F", "п")),
+    (("(8)", "(9)", "(10)", "(11)", "(12)", "(13)"), "Определяне площта на гасене", ("F", "г")),
+    (("(14)", "(15)", "(16)"), "Необходим разход на вода за гасене", ("Q", "н")),
+    (("(17)", "(18)", "(19)"), "Брой струйници за гасене", ("N", "стр")),
+    (("(20)", "(21)", "(22)"), "Брой екипи за гасене", ("N", "екип")),
+    (("(23)",), "Брой пожарни автомобили", ("N", "па"))]
+
+
+def tokens(expr):
+    """„Fп = n.a.(5.vл + vл.t2)“ → [(text, None, None) | (base, sub, sup)]; the dot or „·“ between factors is „ * “."""
+    out, k, plain = [], 0, ""
+    while k < len(expr):
+        for sym, base, sub, sup in SYMBOLS:
+            if expr.startswith(sym, k) and not (k and expr[k - 1].isalpha()):
+                if plain:
+                    out.append((plain, None, None))
+                    plain = ""
+                out.append((base, sub, sup))
+                k += len(sym)
+                break
+        else:
+            ch = expr[k]
+            prev, nxt = expr[k - 1:k], expr[k + 1:k + 2]
+            if ch == "·" or (ch == "." and prev and (prev.isalnum() or prev == ")") and nxt
+                             and (nxt.isalpha() or nxt == "(") and not (prev.isdigit() and nxt.isdigit())):
+                ch = " * "
+            elif ch == "π":
+                ch = "3,14" if any(c.isdigit() for c in expr[k + 1:]) and "=" not in expr[:k] else "π"
+            plain += ch
+            k += 1
+    if plain:
+        out.append((plain, None, None))
+    return [(re.sub(r"\s+\*\s+", " * ", t) if s is None else t, s, u) for t, s, u in out]
+
+
+def write_tokens(p, parts):
+    for text, sub, sup in parts:
+        if sub is None:
+            text = re.sub(r"(?<=\d)\.(?=\d)", ",", text)
+            text = re.sub(r"(?<=\d) min\b", " мин.", re.sub(r"(?<=\d) m\b", " м", text)).replace("∙", "·")
+            B.run(p, text, italic=True)
+            continue
+        B.run(p, text, italic=True)
+        if sub:
+            B.run(p, sub, italic=True).font.subscript = True
+        if sup:
+            B.run(p, sup, italic=True).font.superscript = True
+
+
+def line(doc, *chunks):
+    """One line of the calculation; a chunk is a string (its symbols are found) or a list of tokens."""
+    p = B.fmt(doc.add_paragraph(), B.LEFT, line=None)
+    p.paragraph_format.space_after = B.Pt(3)
+    for ch in chunks:
+        write_tokens(p, tokens(ch) if isinstance(ch, str) else ch)
+    return p
+
+
+def hr(p):
+    """A thin rule under the paragraph – the line before the summary."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    ppr = p._p.get_or_add_pPr()
+    bdr = OxmlElement("w:pBdr")
+    bot = OxmlElement("w:bottom")
+    for k, v in (("val", "single"), ("sz", "4"), ("space", "1"), ("color", "999999")):
+        bot.set(qn(f"w:{k}"), v)
+    bdr.append(bot)
+    ppr.append(bdr)
+
+
+def heading(doc, n, text, sym):
+    p = B.fmt(doc.add_paragraph(), B.LEFT, line=None, keep=True)
+    p.paragraph_format.space_before, p.paragraph_format.space_after = B.Pt(9), B.Pt(4)
+    B.run(p, f"{n}. {text}, {sym[0]}")
+    B.run(p, sym[1]).font.subscript = True
+
+
+def value_of(text):
+    m = re.match(r"\s*([\d.,]+)", str(text or ""))
+    return m.group(1).replace(".", ",") if m else ""
+
+
+def section_of(st):
+    f = st.get("formula") or ""
+    for i, (forms, _, _) in enumerate(SECTIONS):
+        if f in forms:
+            return i
+    return None
+
+
+def step_lines(doc, st, res):
+    name = str(st.get("ime") or "")
+    expr = str(st.get("izraz") or "")
+    if st.get("stoinost") is None:                     # a line of the reasoning – „Fп > Fпом – …“
+        line(doc, (name[0].upper() + name[1:] + ("." if not name.endswith(".") else "")) if name else "")
+        if expr:
+            line(doc, expr)
+        return
+    lhs, _, rhs = expr.partition("=")
+    extra = ""
+    m = re.search(r"\s*\(([^()]*на екип)\)\s*$", rhs)
+    if m:
+        extra, rhs = m.group(1), rhs[:m.start()]
+    form = st.get("formula") or ""
+    unit = UNITS.get(st.get("merna"), st.get("merna") or "")
+    val = num(st["stoinost"])
+    if form in COUNTS:
+        one, few = COUNTS[form]
+        whole = math.ceil(round(float(st["stoinost"]), 6)) or 1
+        tail = f" = {val}" + (f" → {whole}" if whole != st["stoinost"] else "") + f" {one if whole == 1 else few}"
+        if form in ("(17)", "(18)") and res.get("struinik"):
+            tail += f" „{res['struinik']}“"
+    else:
+        tail = f" = {val}" + (f" ({unit})" if unit else "")
+    prefix = LABEL_SKIP.get(form, "")
+    if name and form != "(1)" and not (prefix and (name == prefix or name.startswith(prefix + " ("))):
+        line(doc, name[0].upper() + name[1:] + ":")
+    if extra:
+        line(doc, extra[0].upper() + extra[1:] + ".")
+    left = lhs.strip()
+    line(doc, f"{left} = {rhs.strip()}")
+    sub_ = st.get("zamestvane")
+    line(doc, f"{left} = " + (sub_ + tail if sub_ else tail.lstrip(" =")))
+
+
 def write(doc, d, pomeshtenie=None, belezhki=()):
-    """The body of the calculation – the inputs, the steps, the result, the notes and the source – into doc
-    (its own .docx, or a section of the plan, plan-pozharogasene). Returns the warnings."""
+    """The body of the calculation into doc (its own .docx, or a section of the plan – plan-pozharogasene), as the
+    approved calculations are written. Returns the warnings."""
     warnings = []
-    B.para(doc, "1. Изходни данни", indent=False)
-    used = dict(d.get("vhodni") or {})
-    rows = []
-    for key, label in VHODNI:
-        if key in used:
-            rows.append([label, dec(used.pop(key))])
-    rows += [[k, dec(v)] for k, v in used.items()]      # anything sili.py adds later
-    if pomeshtenie:
-        rows.insert(0, ["Помещение", pomeshtenie])
-    rows.insert(0, ["Вид на горимите вещества", str(d.get("vid") or "")])
-    B.grid(doc, ["Величина", "Стойност"], rows, [6.5, 10.0], align=B.LEFT)
-    B.blank(doc)
-
-    B.para(doc, "2. Изчисление по Методиката", indent=False)
-    steps = [[str(i), s.get("ime", ""), s.get("formula", ""), B.typo(s.get("izraz", "")),
-              num(s.get("stoinost", "")), s.get("merna", "")] for i, s in enumerate(d["stapki"], 1)]
-    B.grid(doc, ["№", "Величина", "Формула", "Израз", "Стойност", "Мярка"], steps,
-           [0.8, 4.6, 2.2, 4.9, 2.1, 1.9], align=B.LEFT)
-    B.blank(doc)
-
-    B.para(doc, "3. Резултат", indent=False)
+    used = d.get("vhodni") or {}
     res = d.get("rezultat") or {}
-    rows = [[label, num(res[k]), unit] for k, label, unit in REZULTAT if res.get(k) not in (None, 0, "")]
-    if res.get("struinik"):
-        rows.insert(next((i for i, r in enumerate(rows) if r[0] == "Струйници общо"), len(rows)),
-                    ["Вид на струйниците", f"„{res['struinik']}“", ""])
-    B.grid(doc, ["Необходими сили и средства", "Стойност", "Мярка"], rows, [10.0, 3.5, 3.0], align=B.LEFT)
-    if not rows:
-        warnings.append("разчетът няма резултат")
-    B.blank(doc)
-
-    notes = list(d.get("belezhki") or []) + list(belezhki or [])
-    n = 4
-    if notes:
-        B.para(doc, f"{n}. Бележки", indent=False)
-        for x in notes:
-            B.para(doc, "– " + re.sub(r"(?<!ред )(?<![\d.])(\d+)\.(\d+)(?![.\d])", r"\1,\2", B.typo(x)))
-        B.blank(doc)
+    if pomeshtenie:
+        line(doc, f"Помещение: {pomeshtenie}.")
+    steps = d["stapki"]
+    groups, cur = {}, None
+    for st in steps:                                   # a reasoning line goes with the section before it
+        s = section_of(st)
+        cur = s if s is not None else (cur if cur is not None else 1)
+        groups.setdefault(cur, []).append(st)
+    n = 0
+    for i, (forms, title_, sym) in enumerate(SECTIONS):
+        if i not in groups and not (i == 1 and used.get("fp")):
+            continue
         n += 1
+        heading(doc, n, title_, sym)
+        if i == 1:
+            vl = str(used.get("vl") or "")
+            if vl:
+                src = " – по Табл. № 1 от Указанията" if "таблица" in vl else " (зададена)"
+                line(doc, [("V", "л", "")], f" = {value_of(vl)} (м/мин){src}.")
+            if used.get("fp") and i not in groups:
+                line(doc, [("F", "п", "")], f" = {value_of(used['fp'])} (м²) – площта на помещението (пожарът го "
+                     "обхваща цялото).")
+            elif used.get("fp"):
+                line(doc, [("F", "п", "")], f" = {value_of(used['fp'])} (м²) (зададена).")
+        if i == 2:
+            if used.get("ataka"):
+                line(doc, f"Гасене {used['ataka']}; ", [("h", "г", "")], f" = {value_of(used.get('hg'))} (м).")
+        if i == 3 and used.get("i"):
+            src = " – по Табл. № 2 от Указанията" if "таблица" in str(used["i"]) else " (зададена)"
+            line(doc, [("I", "н", "")], f" = {value_of(used['i'])} (л/с∙м²){src}.")
+        if i == 4 and used.get("struinik"):
+            m = re.search(r"([\d.,]+) l/s", str(used["struinik"]))
+            line(doc, f"Струйник „{res.get('struinik', '')}“, ", [("q", "стр", "")],
+                 f" = {m.group(1).replace('.', ',') if m else ''} (л/с).")
+        if i == 6 and used.get("q_pa"):
+            line(doc, [("Q", "па", "")], f" = {value_of(used['q_pa'])} (л/с) – разход на помпата.")
+        for st in groups.get(i, []):
+            step_lines(doc, st, res)
+        if i == 1 and res.get("plosht_na_pozhara_m2") is not None:
+            line(doc, "Площ на пожара ", [("F", "п", "")], f": {num(res['plosht_na_pozhara_m2'])} м²")
+        if i == 2 and res.get("plosht_na_gasene_m2") is not None:
+            line(doc, "Площ на гасене ", [("F", "г", "")], f": {num(res['plosht_na_gasene_m2'])} м²")
+        if i == 3 and res.get("razhod_obshto_l_s") is not None:
+            line(doc, "Разход за гасене ", [("Q", "н", "")], f": {num(res['razhod_obshto_l_s'])} л/с")
+        if i == 5 and res.get("ekipi_obshto"):
+            k = res["ekipi_obshto"]
+            line(doc, f"Личен състав = 4 * {k} = {4 * k} пожарникари")
+    # the summary, set off by a rule – as in JS_ppo
+    p = B.fmt(doc.add_paragraph(), B.LEFT, line=None)
+    p.paragraph_format.space_before = B.Pt(6)
+    hr(p)
+    summary = [("Брой струйници (общо)", res.get("struinitsi_obshto")), ("Брой екипи", res.get("ekipi_obshto")),
+               ("Личен състав", 4 * res["ekipi_obshto"] if res.get("ekipi_obshto") else None),
+               ("Брой пожарни автомобили", res.get("pozharni_avtomobili"))]
+    for label, v in summary:
+        if v not in (None, ""):
+            line(doc, f"{label}: {v}" + (f" „{res['struinik']}“" if label.startswith("Брой струйници") and res.get("struinik") else ""))
+    if not res:
+        warnings.append("разчетът няма резултат")
+    notes = list(d.get("belezhki") or []) + list(belezhki or [])
+    for x in notes:
+        line(doc, "Бележка: " + re.sub(r"(?<!ред )(?<![\d.])(\d+)\.(\d+)(?![.\d])", r"\1,\2", B.typo(x)))
     src = d.get("iztochnik")
-    B.para(doc, f"{n}. Източник", indent=False)
+    B.blank(doc)
     B.para(doc, B.typo(src if isinstance(src, str) else
-                       "Методика за изчисляване на необходимите сили и средства за гасене на пожари – Приложение № 5 "
-                       "към чл. 7, ал. 6 от Указанията за разработване на планове за пожарогасене, рег. № Iз-2749/18.11.2010 г."))
+                       "Методика – Приложение № 5 към чл. 7, ал. 6 от Указанията за разработване на "
+                       "планове за пожарогасене, рег. № Iз-2749/18.11.2010 г."),
+           align=B.LEFT, indent=False, size=11)
     return warnings
 
 
-def title(doc, naslov=None, obekt=None):
-    B.title(doc, "РАЗЧЕТ", ["на силите и средствата за гасене на пожар"] +
-            ([f"към {naslov[0].lower() + naslov[1:]}"] if naslov else []) + ([obekt] if obekt else []))
+def title(doc, naslov=None, obekt=None, pomeshtenie=None):
+    """„Разчет на силите и средствата за гасене на пожар в <обекта>, <помещението>“ – as on the approved ones."""
+    room = str(pomeshtenie or "").split(" – ")[0].strip()
+    room = room[0].lower() + room[1:] if room else ""
+    where = ", ".join(x for x in (obekt, room) if x)
+    if not where and naslov and re.match(r"^Конкретна схема за гасене на пожар в\s", naslov):
+        where = re.sub(r"^Конкретна схема за гасене на пожар в\s*", "", naslov)
+    B.para(doc, "Разчет на силите и средствата за гасене на пожар" + (f" в {where}" if where else ""),
+           align=B.CENTER, indent=False, size=13)
+    if naslov:
+        B.para(doc, f"(към {naslov[0].lower() + naslov[1:]})", align=B.CENTER, indent=False, size=11)
+    B.blank(doc)
 
 
 def build(d, a, out):
@@ -133,7 +318,7 @@ def build(d, a, out):
         bad("очаква се JSON-ът на sili.py (с \"ok\": true и \"stapki\")")
     doc = B.new_document()
     B.letterhead(doc, a.zveno)
-    title(doc, a.naslov, a.obekt)
+    title(doc, a.naslov, a.obekt, a.pomeshtenie)
     warnings = write(doc, d, a.pomeshtenie, a.belezhka)
     B.blank(doc, 2)
     B.signature(doc, a.data, a.izgotvil, a.ime)

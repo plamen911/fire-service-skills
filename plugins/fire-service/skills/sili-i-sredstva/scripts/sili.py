@@ -58,6 +58,11 @@ def num(x, digits=2):
     return int(x) if x == int(x) else x
 
 
+def bg(x, digits=2):
+    """A number as written in the calculation: decimal comma."""
+    return str(num(x, digits)).replace(".", ",")
+
+
 def up(x):
     """Whole pieces: 2.01 → 3; float noise (3.0000000001) does not add one."""
     return max(1, math.ceil(round(x, 6)))
@@ -67,9 +72,17 @@ class Calc:
     def __init__(self, kind):
         self.kind, self.steps, self.used, self.notes = kind, [], {}, []
 
-    def step(self, formula, name, expr, value, unit, digits=2):
-        self.steps.append({"formula": formula, "ime": name, "izraz": expr, "stoinost": num(value, digits), "merna": unit})
+    def step(self, formula, name, expr, value, unit, digits=2, sub=None):
+        """sub – the expression with the numbers put in („10 + 4 + 3“), for the written calculation."""
+        st = {"formula": formula, "ime": name, "izraz": expr, "stoinost": num(value, digits), "merna": unit}
+        if sub:
+            st["zamestvane"] = sub
+        self.steps.append(st)
         return value
+
+    def text(self, name, expr=""):
+        """A line of the reasoning with no value of its own („Fп > Fпом – пожарът е обхванал цялото помещение“)."""
+        self.steps.append({"formula": "", "ime": name, "izraz": expr, "stoinost": None, "merna": ""})
 
     def answer(self, result):
         return {"ok": True, "vid": self.kind, "vhodni": self.used, "stapki": self.steps, "rezultat": result,
@@ -194,43 +207,73 @@ def cmd_tvardi(a):
             c.notes.append(f"Времето за разгръщане по методиката е от 3 до 5 min; зададено е {num(t_r)} min.")
         c.used.update({"t_ds": f"{num(t_ds)} min" + (" (има ПИИ/ПГИ)" if a.pii else " (до съобщението)"),
                        "t_dv": f"{num(t_dv)} min", "t_r": f"{num(t_r)} min"})
-        t_sv = c.step("(1)", "Време за свободно развитие на пожара", "tсв = tд.с. + tдв. + tр.", t_ds + t_dv + t_r, "min")
+        t_sv = c.step("(1)", "Време за свободно развитие на пожара", "tсв = tд.с. + tдв. + tр.", t_ds + t_dv + t_r, "min",
+                      sub=f"{bg(t_ds)} + {bg(t_dv)} + {bg(t_r)}")
         t3 = positive(a.t3, "--t3", zero=True) if a.t3 is not None else None
         if t_sv <= 10:
             path, expr, f_round, f_rect = 0.5 * vl * t_sv, "0,5.vл.tсв", "(2)", "(5)"
+            psub = f"0,5·{bg(vl, 3)}·{bg(t_sv)}"
             if t3 is not None:
                 c.notes.append("--t3 не е приложено: формулите с t3 (4 и 7) са за tсв над 10 min.")
                 t3 = None
         else:
             t2 = t_sv - 10
             path, expr, f_round, f_rect = 5 * vl + vl * t2, "5.vл + vл.t2", "(3)", "(6)"
+            psub = f"5·{bg(vl, 3)} + {bg(vl, 3)}·{bg(t2)}"
             if t3 is not None:
                 path += 0.5 * vl * t3
                 expr, f_round, f_rect = "5.vл + vл.t2 + 0,5.vл.t3", "(4)", "(7)"
+                psub += f" + 0,5·{bg(vl, 3)}·{bg(t3)}"
                 c.used["t3"] = f"{num(t3)} min (от въвеждането на първите струи до локализирането)"
+        room = room_sides(a.pomeshtenie) if a.pomeshtenie else None
+        if rect and room and a.a is None:
+            # the fire starts in the room as a circle; once it reaches the walls of the narrow side it runs along the
+            #   room both ways – a rectangle as wide as the room (формули 2/3 до стените, после 5/6, n = 2)
+            narrow = min(room)
+            reach = narrow / 2
+            t_w = reach / (0.5 * vl) if reach <= 5 * vl else 10 + (reach - 5 * vl) / vl
+            if t_w < t_sv:
+                c.used["n"] = 2
+                if t_w <= 10:
+                    c.step("(2)", f"Площ на пожара при кръгово развитие – на {bg(t_w, 1)} min достига стените",
+                           "Fп = π.(0,5.vл.τ)²", math.pi * reach ** 2, "m2", sub=f"3,14·(0,5·{bg(vl, 3)}·{bg(t_w, 1)})²")
+                else:
+                    c.step("(3)", f"Площ на пожара при кръгово развитие – на {bg(t_w, 1)} min достига стените",
+                           "Fп = π.(5.vл + vл.t2)²", math.pi * reach ** 2, "m2",
+                           sub=f"3,14·(5·{bg(vl, 3)} + {bg(vl, 3)}·{bg(t_w - 10, 1)})²")
+                c.text(f"На {bg(t_w, 1)} min пожарът достига стените на помещението – по-нататък се разпространява "
+                       "по дължината му в двете посоки", f"R = {bg(reach)} m")
+                a.a, a.n = narrow, 2
+            else:
+                c.notes.append(f"За {bg(t_sv)} min пожарът не достига стените на помещението – кръгово развитие.")
+                rect, share, shape = False, 1.0, "кръг"
+                c.used["forma"] = "кръг (не достига стените на помещението)"
         if rect:
             width, n = positive(a.a, "--a (ширина на фронта, m)"), a.n
             if n not in (1, 2):
                 raise Problem("--n (посоки на разпространение) е 1 или 2")
             c.used["a"], c.used["n"] = f"{num(width)} m", n
-            fp = c.step(f_rect, "Площ на пожара", f"Fп = n.a.({expr})", n * width * path, "m2")
+            fp = c.step(f_rect, "Площ на пожара", f"Fп = n.a.({expr})", n * width * path, "m2",
+                        sub=f"{n}·{bg(width)}·({psub})")
             side_b = a.b if a.b is not None else n * path
             c.used["b"] = f"{num(side_b)} m" + ("" if a.b is not None else " (изминатият от горенето път)")
-            if a.pomeshtenie:                     # the fire cannot be larger than its room: then it is the whole room
-                ra, rb = room_sides(a.pomeshtenie)
-                if fp > ra * rb:
-                    fp = c.step("–", "Площ на пожара – цялото помещение (по-голяма е от него)", "Fп = a.b",
-                                ra * rb, "m2")
-                    side_b = ra * rb / width
+            if room:                              # the fire cannot be larger than its room: then it is the whole room
+                ra, rb = room
+                f_room = c.step("", "Площ на помещението", "Fпом = a.b", ra * rb, "m2", sub=f"{bg(ra)}·{bg(rb)}")
+                if fp > f_room:
+                    c.text(f"Fп > Fпом – на {bg(t_sv)} min пожарът е обхванал цялото помещение", "Fп = Fпом")
+                    fp = f_room
+                    side_b = f_room / width
                     c.used["b"] = f"{num(side_b)} m (помещението {num(ra)} × {num(rb)} m)"
                     c.notes.append(f"Изчислената площ е по-голяма от помещението ({num(ra)} × {num(rb)} m) – "
                                    "пожарът е обхванал цялото помещение.")
         else:
             radius = path
-            c.step(f_round, "Радиус на пожара", f"R = {expr}", radius, "m")
+            c.step(f_round, "Радиус на пожара", f"R = {expr}", radius, "m", sub=psub)
             name = "Площ на пожара" + ("" if share == 1 else f" ({shape}: по {num(share)} от кръга)")
             fp = c.step(f_round, name, "Fп = π.R²" if share == 1 else f"Fп = {str(share).replace('.', ',')}.π.R²",
-                        share * math.pi * radius ** 2, "m2")
+                        share * math.pi * radius ** 2, "m2",
+                        sub=("" if share == 1 else f"{bg(share)}·") + f"3,14·{bg(radius)}²")
 
     # площ на гасене
     if rect:
@@ -238,12 +281,14 @@ def cmd_tvardi(a):
         if ataka == "perimetar":
             whole = 2 * hg >= min(width, side_b)
             fg = None if whole else c.step("(8)", "Площ на гасене (по периметъра)", "Fг = 2.hг.(a + b − 2.hг)",
-                                           2 * hg * (width + side_b - 2 * hg), "m2")
+                                           2 * hg * (width + side_b - 2 * hg), "m2",
+                                           sub=f"2·{bg(hg)}·({bg(width)} + {bg(side_b)} − 2·{bg(hg)})")
         elif ataka in ("front1", "front2"):
             sides = int(ataka[-1])
             whole = sides * hg >= side_b
             fg = None if whole else c.step("(12)" if sides == 2 else "(13)", f"Площ на гасене (по фронта, от {sides} стран{'и' if sides == 2 else 'а'})",
-                                           "Fг = 2.a.hг" if sides == 2 else "Fг = a.hг", sides * width * hg, "m2")
+                                           "Fг = 2.a.hг" if sides == 2 else "Fг = a.hг", sides * width * hg, "m2",
+                                           sub=(f"2·{bg(width)}·{bg(hg)}" if sides == 2 else f"{bg(width)}·{bg(hg)}"))
         else:
             raise Problem("--ataka е perimetar, front1 или front2")
         c.used["ataka"] = {"perimetar": "по периметъра", "front1": "по фронта от едната страна", "front2": "по фронта от двете страни"}[ataka]
@@ -252,19 +297,22 @@ def cmd_tvardi(a):
         formula = {1.0: "(9)", 0.5: "(10)", 0.25: "(11)"}[share]
         fg = None if whole else c.step(formula, "Площ на гасене (по периметъра)",
                                        ("Fг = π.hг.(2R − hг)" if share == 1 else f"Fг = {str(share).replace('.', ',')}.π.hг.(2R − hг)"),
-                                       share * math.pi * hg * (2 * radius - hg), "m2")
+                                       share * math.pi * hg * (2 * radius - hg), "m2",
+                                       sub=("" if share == 1 else f"{bg(share)}·") + f"3,14·{bg(hg)}·(2·{bg(radius)} − {bg(hg)})")
     if fg is not None and fg >= fp:
         whole = True
     if whole:
         c.notes.append("Дълбочината на гасене покрива цялата площ на пожара – разходът е по площта на пожара (формула 14).")
-        q_g = c.step("(14)", "Необходим разход на вода за гасене", "Qг = Fп.Iг", fp * inten, "l/s")
+        q_g = c.step("(14)", "Необходим разход на вода за гасене", "Qг = Fп.Iг", fp * inten, "l/s",
+                     sub=f"{bg(fp)}·{bg(inten, 3)}")
         area = fp
     else:
-        q_g = c.step("(15)", "Необходим разход на вода за гасене", "Qг = Fг.Iг", fg * inten, "l/s")
+        q_g = c.step("(15)", "Необходим разход на вода за гасене", "Qг = Fг.Iг", fg * inten, "l/s",
+                     sub=f"{bg(fg)}·{bg(inten, 3)}")
         area = fg
 
     label, q_str, per_crew = nozzle(a, c)
-    n_g = up(c.step("(17)", "Струйници за гасене", "Nг = Qг / qстр", q_g / q_str, "бр."))
+    n_g = up(c.step("(17)", "Струйници за гасене", "Nг = Qг / qстр", q_g / q_str, "бр.", sub=f"{bg(q_g)} / {bg(q_str)}"))
     q_z, n_z = 0.0, 0
     if a.n_zashtita:
         n_z = a.n_zashtita
@@ -274,18 +322,22 @@ def cmd_tvardi(a):
         q_z = positive(a.q_zashtita, "--q-zashtita")
         n_z = up(q_z / q_str)
         c.used["zashtita"] = f"{num(q_z)} l/s"
-    q_all = c.step("(16)", "Общ необходим разход на вода", "Qоб = Qг + Qз", q_g + q_z, "l/s") if q_z else q_g
+    q_all = c.step("(16)", "Общ необходим разход на вода", "Qоб = Qг + Qз", q_g + q_z, "l/s",
+                   sub=f"{bg(q_g)} + {bg(q_z)}") if q_z else q_g
     if n_z:
-        c.step("(18)", "Струйници общо", "Nстр = Nг + Nз", n_g + n_z, "бр.")
-    spacing = c.step("(19)", "Разстояние между струйниците", "lстр = qстр / (Iг.hг)", q_str / (inten * hg), "m")
+        c.step("(18)", "Струйници общо", "Nстр = Nг + Nз", n_g + n_z, "бр.", sub=f"{n_g} + {n_z}")
+    spacing = c.step("(19)", "Разстояние между струйниците", "lстр = qстр / (Iг.hг)", q_str / (inten * hg), "m",
+                     sub=f"{bg(q_str)} / ({bg(inten, 3)}·{bg(hg)})")
     if per_crew:
-        crews_g = up(c.step("(21)", "Екипи за гасене", f"Nекипи = Nг / nстр.екип ({per_crew} бр. „{label}“ на екип)", n_g / per_crew, "бр."))
+        crews_g = up(c.step("(21)", "Екипи за гасене", f"Nекипи = Nг / nстр.екип ({per_crew} бр. „{label}“ на екип)", n_g / per_crew, "бр.",
+                            sub=f"{n_g} / {per_crew}"))
         crews_z = up(n_z / per_crew) if n_z else 0
     else:
-        crews_g = up(c.step("(20)", "Екипи за гасене", f"Nекипи = Qг / qекипи ({num(Q_EKIP)} l/s на екип)", q_g / Q_EKIP, "бр."))
+        crews_g = up(c.step("(20)", "Екипи за гасене", f"Nекипи = Qг / qекипи ({num(Q_EKIP)} l/s на екип)", q_g / Q_EKIP, "бр.",
+                            sub=f"{bg(q_g)} / {bg(Q_EKIP)}"))
         crews_z = up(q_z / Q_EKIP) if q_z else 0
     if crews_z:
-        c.step("(22)", "Екипи общо", "Nекипи = Nг.екипи + Nз.екипи", crews_g + crews_z, "бр.")
+        c.step("(22)", "Екипи общо", "Nекипи = Nг.екипи + Nз.екипи", crews_g + crews_z, "бр.", sub=f"{crews_g} + {crews_z}")
     result = {"plosht_na_pozhara_m2": num(fp), "plosht_na_gasene_m2": num(area), "razhod_za_gasene_l_s": num(q_g),
               "razhod_obshto_l_s": num(q_all), "struinitsi_za_gasene": n_g, "struinitsi_za_zashtita": n_z,
               "struinitsi_obshto": n_g + n_z, "struinik": label, "razstoyanie_mezhdu_struinitsite_m": num(spacing),
@@ -294,7 +346,7 @@ def cmd_tvardi(a):
         q_pa = positive(a.q_pa, "--q-pa")
         c.used["q_pa"] = f"{num(q_pa)} l/s (разход на помпата)"
         result["pozharni_avtomobili"] = up(c.step("(23)", "Пожарни автомобили", "Nпа = Qоб / (0,8.Qпа)" if q_z else "Nпа = Qг / (0,8.Qпа)",
-                                                  q_all / (0.8 * q_pa), "бр."))
+                                                  q_all / (0.8 * q_pa), "бр.", sub=f"{bg(q_all)} / (0,8·{bg(q_pa)})"))
         if q_z:
             c.notes.append("Формула 23 в методиката е за разхода за гасене; тук е приложена към общия разход (гасене и защита).")
     else:

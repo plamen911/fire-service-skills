@@ -186,7 +186,7 @@ from znatsi import (FENCES, INK, LEGEND_ORDER, LINE_KINDS, NETWORKS, NOZZLES, PL
                     LADDERS, WATER, Pal, chaikin, draw_building, draw_dimension, draw_fence, draw_fire, draw_hydrant,
                     draw_gas_line, draw_gas_valve, offset_polyline, draw_main, draw_no_parking, draw_parcel, draw_street, draw_streets, draw_grass, draw_tower, draw_valve_kran,
                     draw_kompas, draw_label_box, draw_river, draw_lake, draw_podstap, draw_most_voda, draw_ladder, draw_line, draw_nozzle, draw_reservoir, draw_ring,
-                    draw_seat, draw_smoke, draw_splitter, draw_staff, draw_truck, draw_wind, big_arrow, is_el,
+                    draw_seat, draw_smoke, draw_splitter, draw_staff, draw_truck, draw_wind, big_arrow, draw_evacuation, is_el,
                     is_kpp, legend_text, length, obrazets, plt, point_at)
 
 WIDTH_CM = 16.5            # the text width of an A4 document with the plugin's margins
@@ -432,7 +432,7 @@ def _zavarti(d, cyali_ulitsi=True):
                 o["ugal"] = num(o["ugal"], "tekst.ugal") + ang
     d["ognishte"] = [dict(o, **dict(zip(("x", "y"), R((num(o["x"], "x"), num(o["y"], "y")))))) if isinstance(o, dict)
                      else R(o) for o in (d.get("ognishte") or [])]
-    for key in ("linii", "vodoprovod", "gazoprovod", "podlozhka"):
+    for key in ("linii", "vodoprovod", "gazoprovod", "podlozhka", "evakuatsiya"):
         for ln in items(d, key):
             ln["tochki"] = RL(ln.get("tochki") or [])
     for key in ("ulitsi_skrij", "ulitsi_rab"):
@@ -483,7 +483,7 @@ def _zavarti(d, cyali_ulitsi=True):
     for key in ("razstoyaniya", "posoka", "napravlenie", "stalbi"):
         for o in items(d, key):
             core += [o["ot"], o["do"]]
-    for ln in items(d, "linii") + items(d, "podlozhka"):
+    for ln in items(d, "linii") + items(d, "podlozhka") + items(d, "evakuatsiya"):
         core += ln["tochki"]
     if d.get("ograda"):
         core += d["ograda"]
@@ -506,7 +506,7 @@ def _zavarti(d, cyali_ulitsi=True):
                 o["x"], o["y"] = S((o["x"], o["y"]))
         d["ognishte"] = [dict(o, **dict(zip(("x", "y"), S((o["x"], o["y"]))))) if isinstance(o, dict) else S(o)
                          for o in d["ognishte"]]
-        for key in ("linii", "vodoprovod", "gazoprovod", "podlozhka"):
+        for key in ("linii", "vodoprovod", "gazoprovod", "podlozhka", "evakuatsiya"):
             for ln in items(d, key):
                 ln["tochki"] = [S(p) for p in ln["tochki"]]
         for key in ("ulitsi_skrij", "ulitsi_rab"):
@@ -633,7 +633,7 @@ def load(d):
                            "avtomobili", "vodoiztochnitsi", "linii", "razklonitel", "stalbi", "shtab", "pbt",
                            "tekst", "vhodove", "ulitsi", "razstoyaniya", "vodoprovod", "gazoprovod",
                            "gaz_armatura", "bez_parkirane", "prohodi", "ulitsi_skrij", "ulitsi_rab", "trevni",
-                           "reki", "ezera", "podstapi", "mostove")}
+                           "reki", "ezera", "podstapi", "mostove", "evakuatsiya")}
     out["ograda"] = None
     out["vyatar"] = None
     out["ograda_vid"] = d.get("ograda_vid") or None
@@ -670,6 +670,11 @@ def load(d):
     for key in ("posoka", "napravlenie"):
         for i, a in enumerate(items(d, key)):
             out[key].append((pt(a.get("ot"), f"{key}[{i}].ot"), pt(a.get("do"), f"{key}[{i}].do")))
+    for i, e in enumerate(items(d, "evakuatsiya")):    # the way out – green arrows (б. „с“)
+        pts_ = [pt(p, f"evakuatsiya[{i}].tochki") for p in e.get("tochki") or []]
+        if len(pts_) < 2:
+            bad(f"evakuatsiya[{i}].tochki: поне две точки – от помещението към изхода")
+        out["evakuatsiya"].append(pts_)
     for i, t in enumerate(items(d, "avtomobili")):
         kind = t.get("vid") or "pa"
         if kind not in TRUCKS:
@@ -898,6 +903,9 @@ def load(d):
     for a, b in out["posoka"] + out["napravlenie"] + [(s["ot"], s["do"]) for s in out["stalbi"] + out["razstoyaniya"]]:
         xs += [a[0], b[0]]
         ys += [a[1], b[1]]
+    for e in out["evakuatsiya"]:
+        xs += [p[0] for p in e]
+        ys += [p[1] for p in e]
     if out["ograda"]:
         xs += [p[0] for p in out["ograda"]]
         ys += [p[1] for p in out["ograda"]]
@@ -1202,6 +1210,8 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
         big_arrow(ax, a, b, pal, hatched=False, scale=18)
     for a, b in data["napravlenie"]:
         big_arrow(ax, a, b, pal, hatched=True, scale=18)
+    for e in data["evakuatsiya"]:
+        draw_evacuation(ax, chaikin(e), s, pal)
     hoses = 0
     for ln in data["linii"]:
         pts = at_pump(ln["tochki"], data["avtomobili"], s)    # a hose line is coupled at the rear – the pump

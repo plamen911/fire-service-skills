@@ -47,10 +47,11 @@ def main():
         doc = Document(r["plan"])
         text = "\n".join(p.text for p in doc.paragraphs)
         cells = "\n".join(c.text for t in doc.tables for row in t.rows for c in row.cells)
+        assert "Брой струйници (общо)" in text and "Nстр" in text, "the written calculation"
         for want in ("П Л А Н", "1. ДАННИ ЗА ОБЕКТА", "ВАРИАНТ № 1", "По разчета (Приложение № 5)", "Приложение № 3б",
                      "Приложение № 4"):
             assert want in text, want
-        for want in ("Ф5.2", "(17)", "Произшествие или занятие"):
+        for want in ("Ф5.2", "Произшествие или занятие"):
             assert want in cells, (want, [l for l in cells.splitlines() if "Площ" in l or "(1" in l][:10])
         assert any("т. 7" in w for w in r["preduprezhdeniya"]), r["preduprezhdeniya"]    # „вероятни опасности“ missing
         assert len(doc.sections) >= 8, len(doc.sections)
