@@ -28,7 +28,7 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "_shared", "scripts"))
 
 import shema  # noqa: E402
-from prilozhenia import FONT, number_box, page, para, table_3b  # noqa: E402
+from prilozhenia import FONT, number_box, number_on_every_sheet, page, para, table_3b  # noqa: E402
 from situacionna import pad_to_page  # noqa: E402
 
 from docx import Document  # noqa: E402
@@ -62,6 +62,17 @@ def gaps_3b(tab):
         if not any(str(r.get(key) or "").strip() for r in rows):
             out.append(f"таблична част (Приложение № 3б): няма {what} (чл. 7, ал. 4, т. 2, б. „{letter}“)")
     return out
+
+
+def set_cols_1(sec):
+    """One text column – the section after the calculation (two columns) copies it otherwise."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    for old in sec._sectPr.findall(qn("w:cols")):
+        sec._sectPr.remove(old)
+    c = OxmlElement("w:cols")
+    c.set(qn("w:num"), "1")
+    sec._sectPr.append(c)
 
 
 def razchet_module():
@@ -104,21 +115,21 @@ def build(d, out, sili=None, zashtita=None):
     page(doc.sections[0])
     p = para(doc)                                      # 1. the graphic part – the whole framed sheet (Прил. № 3а)
     p.add_run().add_picture(png, width=Cm(26.6))
-    sec = doc.add_section(WD_SECTION.NEW_PAGE)        # 2. the table part – on the back of the sheet (Прил. № 3б)
+    calc_warnings = []
+    if sili:                                         # 2. the back of the sheet – the calculation (Приложение № 5)
+        calc_warnings = razchet_module().page(doc, sili, lst.get("naslov"), None, None, zashtita=zashtita)
+    sec = doc.add_section(WD_SECTION.NEW_PAGE)        # 3. the table part (Прил. № 3б) – a sheet of its own
     page(sec)
+    set_cols_1(sec)
     number_box(doc, lst.get("nomer"))
     para(doc, str(lst.get("naslov") or "Конкретна схема") + " – таблична част", 12, WD_ALIGN_PARAGRAPH.CENTER)
     if lst.get("obekt"):
         para(doc, str(lst["obekt"]), 12, WD_ALIGN_PARAGRAPH.CENTER, after=6)
-    calc_warnings = []
     try:
-        if sili:                                         # the calculation on the same back page, under the table
-            calc_warnings = back_with_calculation(doc, tab, sili, zashtita=zashtita, naslov=lst.get("naslov"))
-            n = len(tab.get("redove") or [])
-        else:
-            n = table_3b(doc, tab)
+        n = table_3b(doc, tab)
     except ValueError as e:
         bad(str(e))
+    number_on_every_sheet(doc, lst.get("nomer"))
     typo_all(doc)
     doc.save(out)
     report(out, letterhead=False)

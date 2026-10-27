@@ -308,3 +308,67 @@ def table_4(doc, redove=None, broi=14):
     rows = list(redove or [])
     table(doc, COLUMNS_4, WIDTHS_4, rows, max(len(rows), broi), numbered=True, row_cm=0.9)
     return len(rows)
+
+
+def number_on_every_sheet(doc, nomer):
+    """The field for the plan's number, 20 × 15 mm in the upper right corner of every sheet (чл. 9, ал. 3): in the
+    header of the text pages; a sheet of a scheme has it in its frame and its back in the page – those get none."""
+    from docx.enum.table import WD_TABLE_ALIGNMENT
+    from docx.shared import Pt
+    for sec in doc.sections:
+        has_own = _starts_with_box_or_picture(doc, sec)
+        hdr = sec.header
+        hdr.is_linked_to_previous = False
+        for p in list(hdr.paragraphs)[1:]:
+            p._p.getparent().remove(p._p)
+        for t in list(hdr.tables):
+            t._tbl.getparent().remove(t._tbl)
+        if has_own:
+            continue
+        t = hdr.add_table(rows=1, cols=1, width=Cm(2.0))
+        t.alignment = WD_TABLE_ALIGNMENT.RIGHT
+        borders(t)
+        fixed_width(t, [2.0])
+        row_height(t.rows[0], 1.5, exact=True)
+        c = t.cell(0, 0)
+        p = c.paragraphs[0]
+        p.alignment = 1
+        r = p.add_run("№ на плана")
+        r.font.name, r.font.size = FONT, Pt(8)
+        if nomer:
+            q = c.add_paragraph()
+            q.alignment = 1
+            r = q.add_run(str(nomer))
+            r.font.name, r.font.size = FONT, Pt(12)
+
+
+def _body_of(doc, sec):
+    """The body elements of a section (from the end of the one before to its sectPr)."""
+    body = doc.element.body
+    els, cur, secs = [], [], []
+    for el in body.iterchildren():
+        cur.append(el)
+        if el.xpath("./w:pPr/w:sectPr") or el.tag.endswith("}sectPr"):
+            secs.append(cur)
+            cur = []
+    if cur:
+        secs.append(cur)
+    i = 0
+    for k, s_ in enumerate(doc.sections):
+        if s_._sectPr is sec._sectPr:
+            i = k
+    return secs[i] if i < len(secs) else []
+
+
+def _starts_with_box_or_picture(doc, sec):
+    """A sheet of a scheme (its first paragraph is the picture) or a back page (it starts with the number box)."""
+    for el in _body_of(doc, sec):
+        if el.tag.endswith("}tbl"):
+            txt = "".join(el.itertext())
+            return txt.strip().startswith("№ на плана")
+        if el.tag.endswith("}p"):
+            if el.xpath(".//w:drawing"):
+                return True
+            if "".join(el.itertext()).strip():
+                return False
+    return False

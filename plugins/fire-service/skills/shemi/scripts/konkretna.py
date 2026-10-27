@@ -291,7 +291,7 @@ def main():
            (f"Qг = {num_bg(R['razhod_za_gasene_l_s'])} l/s", None)]
     q_z = R.get("razhod_obshto_l_s", 0) - R.get("razhod_za_gasene_l_s", 0)
     if q_z > 0:                                          # the protection, when the calculation has it (б. „н“)
-        lab.append((f"Qз = {num_bg(round(q_z, 2))} l/s", None))
+        lab.append((f"Qз = {num_bg(round(q_z, 1))} l/s", None))
     tekst = [t for t in pod["tekst"] if not _inside(room["kontur"], (t["x"], t["y"]))]
     tekst.append({"x": round(cx, 2), "y": round(cy, 2), "tekst": "\n".join(t_ for t_, _ in lab), "kray": "sreda",
                   "fon": True, "razmer": fs_room})
@@ -334,7 +334,9 @@ def main():
             out_ = unit((q[0] - bc[0], q[1] - bc[1]))
             teren_tochki += [q, add(q, out_, 22.0)]                 # both edges of the street
             u = dict(u)
-            u["ime_pos"] = list(add(q, out_, 6.0))                  # its name – in the street, where it is seen
+            if not u.get("ime_tochno"):                            # "ime_tochno": the place of the name is
+                                                                    #   given (a square's name by its fountain)
+                u["ime_pos"] = list(add(q, out_, 6.0))              # its name – in the street, where it is seen
             ulitsi[ulitsi.index(next(x for x in ulitsi if x is not u and x.get("kontur") == u.get("kontur")))] = u
     from shapely.geometry import Polygon as _Pg
     trevni = []
@@ -350,6 +352,22 @@ def main():
                                    "otvori": [[[round(x, 2), round(y, 2)] for x, y in h.coords][:-1]
                                               for h in part.interiors]})
 
+    def neighbour(b, reach=40.0, keep=10.0):
+        """A neighbouring building by name (a hotel …) – only its part near the object, so that the floor keeps its
+        scale; the name stays on that part."""
+        body_ = _Pg(outline)
+        g_ = _Pg(b["kontur"]).buffer(0)
+        if g_.distance(body_) >= reach:
+            return None
+        part = g_.intersection(body_.buffer(g_.distance(body_) + keep))
+        part = max(getattr(part, "geoms", [part]), key=lambda x: x.area) if not part.is_empty else None
+        if part is None or part.geom_type != "Polygon" or part.area < 10:
+            return None
+        teren_tochki.extend([[round(x, 2), round(y, 2)] for x, y in part.exterior.coords][:-1])   # inside the terrain
+        return {"kontur": [[round(x, 2), round(y, 2)] for x, y in part.exterior.coords][:-1],
+                "etiket": b.get("etiket", ""), "etazhnost": b.get("etazhnost", ""), "kratko": True,
+                "razmeri": False, "sasedna": True}
+
     flag = add((cx, cy), page_x, -w / 4)
     d = {"podlozhka": pod["podlozhka"], "tekst": tekst, "obekti": pod.get("obekti", []),
          "pozhar": pozhar, "ognishte": [{"x": round(flag[0], 2), "y": round(flag[1], 2)}],
@@ -358,7 +376,9 @@ def main():
          "ulitsi": ulitsi, "trevni": trevni, "teren_tochki": teren_tochki,
          "sgradi": [{"kontur": b["kontur"], "etiket": "", "etazhnost": b.get("etazhnost", ""), "kratko": True,
                      "razmeri": False} for b in kais["sgradi"][1:] if not b.get("sasedna")
-                    and _Pg(b["kontur"]).distance(_Pg(outline)) < 8.0] if names else [],      # the annexes built on
+                    and _Pg(b["kontur"]).distance(_Pg(outline)) < 8.0] + [                   # the annexes built on,
+                    nb for nb in (neighbour(b) for b in kais["sgradi"] if b.get("sasedna") and b.get("etiket"))
+                    if nb] if names else [],                                               #   and the neighbours
          "zavartane": ang, "pole_m": 2, "cvetna": True, "legenda": False, "shlang_m": 20,
          "list": {"nomer": "", "obekt": a.obekt, "sobstvenik": a.sobstvenik, "izgotvil": a.izgotvil, "data": a.data,
                   "fail": a.fail, "naslov": f"Конкретна схема за гасене на пожар в {ime.lower()} на {a.etazh} ет."},
