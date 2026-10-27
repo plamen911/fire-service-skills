@@ -157,6 +157,35 @@ def main():
             foot = (q.x, q.y)
     entrance = add(foot, face, 1.5)
     pa1 = add(foot, face, 6.5)
+    # the vehicles stand on the paving – a street, an alley, a plaza – never on the lawn (the grass of the scheme)
+    from shapely.geometry import Point as _Ptg, Polygon as _Pgg
+    from shapely.ops import unary_union as _uug
+    _gr = [_Pgg(t["kontur"], [h for h in (t.get("otvori") or []) if len(h) >= 3]).buffer(0)
+           for t in kais.get("trevni", []) if len(t.get("kontur") or []) >= 3]
+    grass = _uug(_gr) if _gr else None
+    bld_all = _uug([_Pgg(b["kontur"]).buffer(0.5) for b in kais["sgradi"] if len(b.get("kontur") or []) >= 3])
+
+    def on_paving(p, r=2.6, reach=35.0):
+        """The nearest point to p where a fire engine (a circle of r m) touches neither the lawn nor a building."""
+        if grass is None:
+            return p, False
+        def free(q):
+            c = _Ptg(q).buffer(r)
+            return not c.intersects(grass) and not c.intersects(bld_all)
+        if free(p):
+            return p, False
+        step = 0.5
+        d_ = step
+        while d_ <= reach:
+            n = max(12, int(2 * math.pi * d_ / step))
+            best = [add(p, (math.cos(2 * math.pi * i / n), math.sin(2 * math.pi * i / n)), d_) for i in range(n)]
+            ok = [q for q in best if free(q)]
+            if ok:
+                return min(ok, key=lambda q: math.dist(q, p)), True
+            d_ += step
+        return p, False
+
+    pa1, moved1 = on_paving(pa1)
     hp_true = (hyd["x"], hyd["y"])
     # a hydrant far from the building is drawn nearer, in its true direction, and its line carries its true length
     #   (б. „п“) – as on the approved schemes, so that the floor keeps a scale in which it can be read
@@ -170,13 +199,14 @@ def main():
         hp = hp_true
     to_b = unit((pa1[0] - hp[0], pa1[1] - hp[1]))
     pa2 = add(hp, to_b, 4.5)
+    pa2, moved2 = on_paving(pa2 if grass is None else hp)     # a hydrant in the lawn – the engine on the paving by it
     along = math.degrees(math.atan2(face[1], face[0]))                   # square to the front, as on the approved schemes
     trucks = [{"id": "I ПА", "x": pa1[0], "y": pa1[1], "ugal": round(along, 1), "vid": "pa"},     # shema.py turns
               {"id": "II ПА", "x": pa2[0], "y": pa2[1], "ugal": round(along, 1), "vid": "pa"}]    #   them with the sheet
 
     # the hose lines – smooth (shema.py rounds them); the nozzle in front of the fire, at the door, never in it
     mid = add(((pa2[0] + pa1[0]) / 2, (pa2[1] + pa1[1]) / 2), unit((-(pa1[1] - pa2[1]), pa1[0] - pa2[0])), 4.0)
-    lines = [{"tochki": [list(hp), list(add(hp, to_b, 2.5))], "vid": "glavna"},
+    lines = [{"tochki": [list(hp), list(pa2) if moved2 else list(add(hp, to_b, 2.5))], "vid": "glavna"},
              {"tochki": [list(add(pa2, to_b, 1.5)), list(mid), list(add(pa1, (-face[0], -face[1]), -1.5))], "vid": "glavna"}]
     n_g = int(R.get("struinitsi_za_gasene") or 1)
     side = unit((-out_v[1], out_v[0]))

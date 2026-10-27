@@ -477,11 +477,14 @@ def osm_grass(x0, y0, x1, y1):
     return out, ""
 
 
+# the paving round a building (m): no lawn is drawn closer to a wall – the sidewalk under the crowns is not seen
+TROTOAR_SGRADA_M = 2.0
+
 # the width an alley is drawn with (m) – OpenStreetMap seldom gives it
 PATH_WIDTH = {"footway": 2.5, "path": 2.0, "pedestrian": 4.0, "cycleway": 2.0, "service": 4.0, "living_street": 5.0}
 
 
-def orto_zeleno(png, x0, y0, x1, y1, inside=None, cell=0.5):
+def orto_zeleno(png, x0, y0, x1, y1, inside=None, cell=0.5, minus=None):
     """The green of the orthophoto (grass, trees) as rings in КС2005 – what is not green (the alleys, the paved areas
     round the buildings, the roofs) stays out, so that the paths people and the vehicles use show between them.
     `png` is the clean photo of the frame x0..x1, y0..y1 (orto_picture … _chisto.png); `inside` – a shapely geometry
@@ -497,15 +500,37 @@ def orto_zeleno(png, x0, y0, x1, y1, inside=None, cell=0.5):
     h_, w_ = H // k, W // k
     im = im[:h_ * k, :w_ * k].reshape(h_, k, w_, k, 3).mean(axis=(1, 3))
     r, g, b = im[..., 0], im[..., 1], im[..., 2]
-    green = (2 * g - r - b > 18) & (g > r)             # the excess green – grass and the crowns of trees
-    cells = [box(x0 + j * k * sx, y1 - (i + 1) * k * sy, x0 + (j + 1) * k * sx, y1 - i * k * sy)
-             for i, j in zip(*np.nonzero(green))]
-    g_ = unary_union(cells).buffer(0.3).buffer(-0.6).buffer(0.3).simplify(0.4)
+    green = (2 * g - r - b > 14) & (g > r)             # the excess green – grass and the crowns of trees
+    shade = (r + g + b) / 3 < 62                        # the shadow of a tree – on grass more often than not
+    # grey – paving, a plaza (measured on the photo: paving spread ≤ 10, lawn 20–30 – also the dry lawn)
+    paved = ((im.max(axis=2) - im.min(axis=2)) < 14) & ((r + g + b) / 3 > 105) & (2 * g - r - b < 12)
+    def cells_of(mask):
+        return unary_union([box(x0 + j * k * sx, y1 - (i + 1) * k * sy, x0 + (j + 1) * k * sx, y1 - i * k * sy)
+                            for i, j in zip(*np.nonzero(mask))])
+    # the green and the shadows, closed over the small gaps (a shadow, a bench), then the paving taken out:
+    #   what is left is the lawn as one sees it – with the alleys and the plaza between the pieces
+    g_ = cells_of(green | (shade & ~paved)).buffer(1.2).buffer(-1.5).buffer(0.3)
+    pv = cells_of(paved)
+    if not pv.is_empty:
+        g_ = g_.difference(pv.buffer(0.4).buffer(-0.8).buffer(0.4))          # only real paved areas, not a speck
+    if minus is not None and not minus.is_empty:       # the alleys of OpenStreetMap (under the crowns too), buildings
+        g_ = g_.difference(minus)
+    g_ = g_.buffer(0.3).buffer(-0.6).buffer(0.3).simplify(0.4)
     if inside is not None:
         g_ = g_.intersection(inside)
-    return [{"kontur": [list(p) for p in part.exterior.coords][:-1],
-             "otvori": [[list(p) for p in h.coords][:-1] for h in part.interiors if _Pa(h.coords).area > 2]}
-            for part in getattr(g_, "geoms", [g_]) if part.geom_type == "Polygon" and part.area > 6]
+    out = []
+    for part in getattr(g_, "geoms", [g_]):
+        if part.geom_type != "Polygon" or part.area < 6:
+            continue
+        holes = []
+        for h in part.interiors:                        # a hole is kept only where it is paved (a path, a plaza) –
+            hp = _Pa(h.coords)                          #   a dry or shaded patch of the lawn stays lawn
+            if hp.area > 2 and (pv.is_empty is False) and hp.intersection(pv).area > 0.5 * hp.area:
+                holes.append([list(p) for p in h.coords][:-1])
+            elif minus is not None and hp.area > 2 and hp.intersection(minus).area > 0.3 * hp.area:
+                holes.append([list(p) for p in h.coords][:-1])
+        out.append({"kontur": [list(p) for p in part.exterior.coords][:-1], "otvori": holes})
+    return out
 
 
 def osm_paths(x0, y0, x1, y1):
@@ -929,13 +954,24 @@ def cmd_obekt(a):
                     if a.trevni_ortofoto:              # the grass from the photo – the alleys between it are seen
                         from shapely.geometry import Polygon as _P, box as _box
                         frame_ = _box(ox0, oy0, ox1, oy1)
-                        zel = orto_zeleno(os.path.splitext(png)[0] + "_chisto.png", ox0, oy0, ox1, oy1, inside=frame_)
+                        from shapely.ops import unary_union as _uu
+                        from shapely.geometry import LineString as _LSz
+                        # the buildings with the paving round them (a sidewalk ~2 m – the crowns of the trees hide it)
+                        cut = [_P(s["kontur"]).buffer(TROTOAR_SGRADA_M) for s in sgradi
+                               if s.get("kontur") and len(s["kontur"]) >= 3]
+                        if a.pateki:                   # the alleys – also where the crowns of the trees hide them
+                            pths, _e = osm_paths(ox0, oy0, ox1, oy1)
+                            cut += [_LSz(p_["tochki"]).buffer(p_["shirina"] / 2 + 0.3) for p_ in pths
+                                    if len(p_["tochki"]) >= 2]
+                        zel = orto_zeleno(os.path.splitext(png)[0] + "_chisto.png", ox0, oy0, ox1, oy1, inside=frame_,
+                                          minus=_uu(cut) if cut else None)
                         orto_trevni = (frame_, [{"kontur": local(z["kontur"], bx0, by0),
                                                  "otvori": [local(h_, bx0, by0) for h_ in z["otvori"]]} for z in zel])
                         notes.append("Тревните площи около обекта са от ортофотото (зеленото на снимката) – алеите и "
                                      "настилките между тях са това, което не е зелено; приблизително (пътека под "
                                      "короните на дърветата не се вижда).")
                     summary["ortofoto"] = {"png": png, "godina": o.get("godina"), "pikseli_m": o.get("res"),
+                                           "ramka_kc": [round(ox0, 2), round(oy0, 2), round(ox1, 2), round(oy1, 2)],
                                            "tochki": [{"n": n, "x": round(x - bx0, 2), "y": round(y - by0, 2)}
                                                       for n, x, y in marks or []]}
                     notes.append(f"Ортофото {o.get('godina') or ''} (МЗХ, от КАИС): {png} – работна снимка за входовете и "
