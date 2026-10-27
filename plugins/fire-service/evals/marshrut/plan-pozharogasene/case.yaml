@@ -1,0 +1,21 @@
+schema_version: "1.1"
+name: marshrut-plan-pozharogasene
+description: План за пожарогасене на обект – plan-pozharogasene, не само схема (shemi) и не само разчет (sili-i-sredstva).
+tags: [marshrut, trigger, regresiya]
+runs: 3
+execution:
+  max_turns: 4
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: |
+    Направи план за пожарогасене на детската градина в с. Тестово – с конкретните схеми и разчета.
+graders:
+  - name: zarezhda-plan-pozharogasene
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?plan-pozharogasene"'
+  - name: ne-zarezhda-plan-konspekt-ptz
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?plan-konspekt-ptz"'
+    min: 0
+    max: 0

@@ -319,6 +319,9 @@ def main():
         out["_preobrazuvane"] = {"rot": rot, "k_dims": _FIT.get("k_dims", k), "k": k, "L": _FIT["L"], "sc": _FIT["sc"],
                                  "tc": _FIT["tc"], "T": _FIT["T"], "rms": rms,
                                  "fit": {kk: _FIT[kk] for kk in ("ang", "scale", "scales", "cover")}}
+    if a.kais:                                         # the frame of КАИС the floor is in – konkretna.py moves any
+        kk_ = json.load(open(a.kais)).get("kais") or {}   #   other scheme JSON of the object (e.g. the situational one) to it
+        out["_kais"] = {"x0": kk_.get("x0"), "y0": kk_.get("y0")}
     out["_m_na_mm"] = round(k, 5)
     out["_mashtab_na_odobrenia"] = f"1:{round(k * 1000)}"
     out["_kais_rms_m"] = None if rms is None else round(rms, 2)

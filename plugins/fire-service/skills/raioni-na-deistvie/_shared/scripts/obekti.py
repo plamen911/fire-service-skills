@@ -69,7 +69,8 @@ VIDOVE = {
     "situacionna_shema": "Ситуационна схема",
     "plan_za_pozharogasene": "План за пожарогасене",
 }
-SUFFIXES = ("_grafichna", "_legenda", "_shema")   # parts of one document: the picture of a docx, its scheme
+SUFFIXES = ("_grafichna", "_legenda", "_shema", "_razchet")   # parts of one document: the picture of a docx, its
+#   scheme, the calculation of a specific scheme (Razchet_… is kept as shema_<тема>_razchet.docx)
 SAME_M = 60          # same object when the points are this close
 FAR_M = 400          # a name match farther than this is another object
 TZ = datetime.timezone(datetime.timedelta(hours=2))
@@ -431,6 +432,8 @@ def target_name(vid, path):
     if not ext:
         raise Problem(f"BAD_FILE: {base} няма разширение")
     low = stem.lower()
+    if low.startswith("razchet_"):                     # Razchet_Konkretna_shema_….docx – the calculation of the scheme
+        return f"{vid}_razchet{ext}"
     extra = "" if low.endswith(vid) else next((x for x in SUFFIXES if low.endswith(x)), "")
     return f"{vid}{extra}{ext}"
 

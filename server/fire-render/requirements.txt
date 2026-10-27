@@ -5,3 +5,7 @@ pillow==12.3.0
 matplotlib==3.11.2
 PyYAML==6.0.3
 ezdxf==1.4.5
+numpy==2.5.3
+scipy==1.18.1
+shapely==2.2.0
+svgelements==1.9.6

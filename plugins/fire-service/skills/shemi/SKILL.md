@@ -120,6 +120,9 @@ python3 -c "import glob,os;print('\n'.join(glob.glob(os.path.expanduser('~/.clau
 - `scripts/situacionna.py` – ситуационната схема като .docx (Приложения № 2а и № 2б).
 - `scripts/cdr_import.py` – одобрен чертеж на етаж (.cdr, .svg, .pdf) като векторна подложка, вързана с КАИС.
 - `scripts/konkretna.py` – конкретна схема с решения за гасене (Приложение № 3а) по подложката и разчета.
+- `scripts/konkretna_docx.py` – конкретната схема като .docx: лицевата страна (№ 3а) и гърбът (№ 3б); целият план за
+  пожарогасене – скилът `plan-pozharogasene`.
+- `scripts/prilozhenia.py` – таблиците на Приложения № 2б, № 3б и № 4 (шрифт 10 pt).
 - `tests/fixtures/shema.json` – пълен пример с всички видове елементи (измислен обект).
 - `tests/fixtures/situacionna.json` – пълна ситуационна схема (измислена детска градина).
 

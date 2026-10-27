@@ -194,7 +194,7 @@ def grid(doc, header, rows, widths_cm, align=None):
             cell = t.cell(r, c)
             cell.width = Cm(widths_cm[c])
             lines = value if isinstance(value, list) else [value]
-            _cell(cell, [str(x) for x in lines] or [""], align=CENTER if r == 0 else (align or JUSTIFY))
+            _cell(cell, [str(x) for x in lines] or [""], align=CENTER if r == 0 else (JUSTIFY if align is None else align))
     return t
 
 

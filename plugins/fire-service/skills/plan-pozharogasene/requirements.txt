@@ -1,0 +1,6 @@
+# Python зависимости за скриптовете на скила (чертае shemi, смята sili-i-sredstva, бланката – plan-konspekti).
+#   pip install -r requirements.txt
+python-docx>=0.8.11
+matplotlib>=3.7
+ezdxf>=1.1      # .dxf на схемите за AutoCAD/CorelDRAW
+pillow>=10

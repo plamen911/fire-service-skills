@@ -395,12 +395,16 @@ def write(data, d, out, s, sheet=None):
                 ltext(bx + a_ + 1, y_ + h_ / 2, cap + (" " + val if val else ""), 1.6, "MIDDLE_LEFT")
             else:
                 ltext(bx + a_ + 1, y_ + h_ - 1.6, cap, 1.6, "MIDDLE_LEFT")
-                ltext(bx + (a_ + b_) / 2, y_ + 2.6, val, min(1.9, (b_ - a_ - 2) / (max(len(val), 1) * 0.62)))
+                ltext(bx + (a_ + b_) / 2, y_ + 2.6, val, min(2.5, (b_ - a_ - 2) / (max(len(val), 1) * 0.62)))
         msp.add_line(P(M(bx + 63, 0)), P(M(bx + 63, 17)), dxfattribs={"layer": "LIST"})
         import textwrap
         obekt = str(lst.get("obekt") or "Наименование на обекта, адрес, телефон")
-        for i, line in enumerate(textwrap.wrap(obekt, 34)[:4]):
-            ltext(bx + 31.5, 8.5 + (1.5 - i) * 2.6, line, 1.9)
+        # the size of TITLE_PT (10 pt ≈ 2.5 mm text height) and its line length – the same as on the picture
+        from shema import TITLE_PT
+        th_mm = TITLE_PT * 0.25
+        lines_ = textwrap.wrap(obekt, int((63 - 3) / (TITLE_PT * 0.3528 * 0.55)))[:4]
+        for i, line in enumerate(lines_):
+            ltext(bx + 31.5, 8.5 + ((len(lines_) - 1) / 2 - i) * th_mm * 1.45, line, th_mm)
         _ls = textwrap.wrap(str(lst.get("naslov") or "Ситуационна схема"), 30)
         for _i, _l in enumerate(_ls):
             ltext(bx + 106.5, 8.5 + ((len(_ls) - 1) / 2 - _i) * 3.4, _l, 3.5 if len(_ls) == 1 else 2.8)

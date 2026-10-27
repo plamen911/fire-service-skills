@@ -1369,6 +1369,9 @@ def sheet_scale(data, framed=False):
     return best
 
 
+TITLE_PT = 10        # the text of the title block (антетката) – one readable size (pt), as in the tables of the plan
+
+
 def draw_sheet(fig, lst, scale, fs):
     """The frame, the number field and the title block of Приложение № 2а, on a figure that is the frame."""
     fax = fig.add_axes([0, 0, 1, 1])
@@ -1404,24 +1407,33 @@ def draw_sheet(fig, lst, scale, fs):
             fax.plot([bx + a, bx + a], [y, y + h], color=INK, lw=0.5, zorder=2)
         val = str(lst.get(key) or "")
         if r == 0:
-            fax.text(bx + a + 1, y + h / 2, cap + (" " + val if val else ""), ha="left", va="center", fontsize=small, zorder=3)
+            fax.text(bx + a + 1, y + h / 2, cap, ha="left", va="center", fontsize=small, zorder=3)
+            if val:
+                fax.text(bx + a + 2 + len(cap) * small * 0.3528 * 0.55, y + h / 2, val, ha="left", va="center",
+                         fontsize=min(TITLE_PT, (b - a - 4 - len(cap) * small * 0.3528 * 0.55) / (len(val) * 0.55 * 0.3528)),
+                         zorder=3)
         else:
             fax.text(bx + a + 1, y + h - 1.6, cap, ha="left", va="center", fontsize=small, zorder=3)
-            if val:                                    # a long value (the file name) – smaller, to fit its cell
-                size = min(small + 0.8, (b - a - 2) / (len(val) * 0.55 * 0.3528))
+            if val:                                    # TITLE_PT; only a long value (the file name) – smaller, to fit
+                size = min(TITLE_PT, (b - a - 2) / (len(val) * 0.55 * 0.3528))
                 fax.text(bx + (a + b) / 2, y + 2.6, val, ha="center", va="center", fontsize=size, zorder=3)
     y, h = rows[2]
     fax.plot([bx + 63, bx + 63], [y, y + h], color=INK, lw=0.5, zorder=2)
     obekt = str(lst.get("obekt") or "")
-    if obekt:
-        fax.text(bx + 31.5, y + h / 2, "\n".join(textwrap.wrap(obekt, 34)[:4]), ha="center", va="center",
-                 fontsize=small + 0.8, linespacing=1.15, zorder=3)
+    if obekt:                                          # a fixed, readable size (TITLE_PT); the lines wrap to the cell
+        per_line = int((63 - 3) / (TITLE_PT * 0.3528 * 0.55))
+        fax.text(bx + 31.5, y + h / 2, "\n".join(textwrap.wrap(obekt, per_line)[:4]), ha="center", va="center",
+                 fontsize=TITLE_PT, linespacing=1.1, zorder=3)
     else:
         fax.text(bx + 31.5, y + h / 2, "Наименование на обекта,\nадрес, телефон", ha="center", va="center",
-                 fontsize=small + 0.8, zorder=3)
+                 fontsize=TITLE_PT, zorder=3)
     naslov = str(lst.get("naslov") or "Ситуационна схема")      # a specific scheme (Приложение № 3а) names its fire
-    fax.text(bx + 106.5, y + h / 2, "\n".join(textwrap.wrap(naslov, 30)), ha="center", va="center",
-             fontsize=fs + (3 if len(naslov) <= 30 else 1.5), linespacing=1.15, zorder=3)
+    big = TITLE_PT + 2                                  # the title – 12 pt; a long one wraps, no smaller than TITLE_PT
+    lines_ = textwrap.wrap(naslov, int((87 - 4) / (big * 0.3528 * 0.55)))
+    if len(lines_) > 3:
+        big, lines_ = TITLE_PT, textwrap.wrap(naslov, int((87 - 4) / (TITLE_PT * 0.3528 * 0.55)))
+    fax.text(bx + 106.5, y + h / 2, "\n".join(lines_[:4]), ha="center", va="center",
+             fontsize=big, linespacing=1.1, zorder=3)
     fax.text(bx - 3, by + 2, f"М 1:{scale}", ha="right", va="bottom", fontsize=fs)
 
 

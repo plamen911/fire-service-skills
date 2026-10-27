@@ -101,6 +101,56 @@ r = app.a_zapishi({"sesiya": sid2})
 ok(r["obekt"] == "OB-0042" and "OB-0042" in r["otgovor"]["args"] and "failove" in r, "zapishi uses the found object")
 ok(app.in_register({}) is None, "no point – no lookup")
 
+# the plan: a session of its own (plan.json), the rooms of a floor, the variant's checks, zapishi of every sheet
+ok(set(app.ACTIONS) == set(app.HANDLERS), "every action has a handler")
+try:
+    app.plan_session(sid2)
+    ok(False, "a scheme session is not a plan session")
+except app.Problem as e:
+    ok(e.code == "NOT_FOUND", "plan session needs plan.json")
+psid, ppath = app.session(None, new=True)
+pod = {"pomeshtenia": [{"ime": "Склад", "plosht_m2": 40, "razmeri_m": [8, 5], "tsentar": [0, 0]},
+                       {"ime": "Склад", "plosht_m2": 20, "razmeri_m": [5, 4], "tsentar": [30, 0]},
+                       {"ime": "Офис", "tsentar": [28, 1]}, {"ime": ""}]}
+app.jsave(ppath, "podlozhka_et1.json", pod)
+app.jsave(ppath, "plan.json", {"fail": "Plan_pozharogasene_Test", "varianti": [], "danni": []})
+ok(app.floors(ppath) == [1] and [r["ime"] for r in app.rooms(pod)] == ["Склад", "Склад", "Офис"], "floors and rooms")
+ok(app.room_in(pod, "склад", "Офис")["plosht_m2"] == 20, "two rooms of one name – the one next to blizo")
+for b, why in (({"sesiya": psid, "etazh": 2}, "no floor"), ({"sesiya": psid, "etazh": 1, "pomeshtenie": "Склад"}, "no vhod"),
+               ({"sesiya": psid, "etazh": 1, "pomeshtenie": "Няма", "vhod": "Офис", "hidrant": "1", "ime": "x",
+                 "ogneustoychivost": "II"}, "no room")):
+    try:
+        app.a_plan_variant(b)
+        ok(False, f"plan_variant accepts {why}")
+    except app.Problem as e:
+        ok(e.code == "BAD_INPUT", f"plan_variant: {why}")
+r = app.a_plan_promeni({"sesiya": psid, "operacii": [{"op": "set", "pat": "/danni", "stoynost": [["Подстъпи.", "Асфалт."]]}]})
+ok(r["plan"]["danni"] == ["Подстъпи."], "plan_promeni")
+try:
+    app.a_plan_zapishi({"sesiya": psid})
+    ok(False, "plan_zapishi before plan_sglobi")
+except app.Problem as e:
+    ok("plan_sglobi" in str(e), "plan_zapishi needs the built plan")
+app.jsave(ppath, "situacionna.json", {"list": {}})
+plan = app.jload(ppath, "plan.json")
+plan["varianti"] = [{"fail": "Konkretna_shema_Sklad_1et", "konkretna": {"list": {}}}]
+app.jsave(ppath, "plan.json", plan)
+app.meta(ppath, obekt="OB-0042", novi_podlozhki=[1])
+out = os.path.join(ppath, "out_plan")
+os.makedirs(out)
+for x in ("Plan_pozharogasene_Test.docx", "Konkretna_shema_Sklad_1et.docx", "Konkretna_shema_Sklad_1et.dxf",
+          "Konkretna_shema_Sklad_1et_grafichna.png", "Razchet_Konkretna_shema_Sklad_1et.docx"):
+    open(os.path.join(out, x), "wb").close()
+calls = []
+real_obekti, app.obekti = app.obekti, lambda *a, **k: calls.append(a) or {}
+r = app.a_plan_zapishi({"sesiya": psid, "klient": "И П"})
+app.obekti = real_obekti
+vids = [c[c.index("--vid") + 1] for c in calls if c[0] == "zapishi"]
+ok(vids == ["plan_za_pozharogasene", "shema_sklad_1et", "shema_podlozhka_et1"], f"plan_zapishi vids {vids}")
+ok(any(f.endswith("Razchet_Konkretna_shema_Sklad_1et.docx") for f in calls[1]), "the calculation goes with its scheme")
+whole = app.jload(out, "Plan_pozharogasene_Test.json")
+ok(whole["situacionna"] == {"list": {}}, "the plan JSON kept in the register is whole")
+
 # /vreme – the input is checked before vreme.py is run (no network here)
 for bad, why in (({"data": "x"}, "date"), ({"data": "2026-10-26", "mesto": "--rm"}, "mesto as an option"),
                  ({"data": "2026-10-26"}, "no place"), ({"data": "2026-10-26", "stantsiya": "15528", "ot": "25;rm"}, "hour"),

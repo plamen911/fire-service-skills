@@ -26,6 +26,9 @@ found by nachalo and returns the download links itself.
     POST /vreme {"data": "2026-10-26", "mesto": "Плевен" | "lat", "lon" | "stantsiya": "15528"|"LBPL",
                  "ot": "15:00", "do": "16:00", "do_data": "2026-10-28"}   – времето (vreme.py) за колегите,
                                                                      чиято среда не стига до архивите
+    POST /shema {"action": "plan_nachalo", "obekt": "OB-0010" | "lat", "lon" | "kadastar"}  – ПЛАНЪТ ЗА ПОЖАРОГАСЕНЕ:
+                 върху ситуационната схема и етажите от регистъра; plan_podlozhka (етаж от .cdr, base64),
+                 plan_variant (разчет + конкретна схема), plan_promeni (данните, решенията), plan_sglobi, plan_zapishi
     GET  /health
 
 The scripts are the plugin's own (kais.py, situacionna.py, obekti.py) from the public repository, pulled at
@@ -53,7 +56,8 @@ SHEMI = os.path.join(REPO, "plugins", "fire-service", "skills", "shemi")
 SCRIPTS = os.path.join(SHEMI, "_shared", "scripts")
 FORMULYAR = os.path.join(SHEMI, "references", "formulyar.json")
 VID = "situacionna_shema"
-ACTIONS = ("nachalo", "pokazhi", "promeni", "chertai", "zapishi")
+ACTIONS = ("nachalo", "pokazhi", "promeni", "chertai", "zapishi",
+           "plan_nachalo", "plan_podlozhka", "plan_variant", "plan_promeni", "plan_sglobi", "plan_zapishi")
 OPCII = {  # kais.py obekt options the model may set: name → (flag, takes a value)
     "radius": ("--radius", True), "granitsa": ("--granitsa", False), "ograda": ("--ograda", "maybe"),
     "trotoar": ("--trotoar", True), "trotoar_ulitsa": ("--trotoar-ulitsa", True), "bez_sasedni": ("--bez-sasedni", False),
@@ -580,7 +584,319 @@ def a_vreme(b):
     return json.loads(p.stdout)
 
 
-HANDLERS = {"nachalo": a_nachalo, "pokazhi": a_pokazhi, "promeni": a_promeni, "chertai": a_chertai, "zapishi": a_zapishi}
+
+# ------------------------------------------------------------------------------------- the fire-fighting plan
+
+PLUGIN = os.path.join(REPO, "plugins", "fire-service", "skills")
+PLAN = os.path.join(PLUGIN, "plan-pozharogasene", "scripts", "build_plan.py")
+SILI = os.path.join(PLUGIN, "sili-i-sredstva", "scripts", "sili.py")
+KONKRETNA = os.path.join(SHEMI, "scripts", "konkretna.py")
+CDR = os.path.join(SHEMI, "scripts", "cdr_import.py")
+PLAN_VID = "plan_za_pozharogasene"
+PODLOZHKA_RE = r"shema_podlozhka_et(\d+)"
+SILI_OPCII = {"vl": "--vl", "vl_red": "--vl-red", "i": "--i", "i_red": "--i-red", "struinik": "--struinik",
+              "q_pa": "--q-pa", "ataka": "--ataka", "hg": "--hg", "n_zashtita": "--n-zashtita",
+              "q_zashtita": "--q-zashtita", "t_dv": "--t-dv", "t_r": "--t-r", "t3": "--t3"}
+
+
+def plan_session(sid):
+    if not re.fullmatch(r"[0-9a-f]{16}", str(sid or "")):
+        raise Problem("BAD_INPUT", "липсва или е невярна \"sesiya\" (от отговора на plan_nachalo)")
+    path = os.path.join(DATA, sid)
+    if not os.path.isfile(os.path.join(path, "plan.json")):
+        raise Problem("NOT_FOUND", "няма такава сесия на план (пазят се 3 дни) – започни с plan_nachalo", 404)
+    os.utime(path)
+    return path
+
+
+def jload(path, name):
+    with open(os.path.join(path, name), encoding="utf-8") as f:
+        return json.load(f)
+
+
+def jsave(path, name, data):
+    tmp = os.path.join(path, name + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, os.path.join(path, name))
+
+
+def fetch(papka, name, dest):
+    """One file of the object's folder in the register → dest."""
+    sys.path.insert(0, SCRIPTS)
+    import api_config  # noqa: E402
+    res = api_config.post("obekti_url", {"action": "get", "folder": papka, "name": name}, timeout=120)
+    with open(dest, "wb") as f:
+        f.write(base64.b64decode(res["base64"]))
+
+
+def rooms(pod):
+    """The rooms of a floor, short: name, area, sides – what plan_variant takes as "pomeshtenie"."""
+    out = []
+    for r in pod.get("pomeshtenia") or []:
+        if str(r.get("ime") or "").strip():
+            out.append({"ime": r["ime"], "plosht_m2": r.get("plosht_m2"), "razmeri_m": r.get("razmeri_m")})
+    return out
+
+
+def floors(path):
+    return sorted(int(m.group(1)) for m in (re.fullmatch(r"podlozhka_et(\d+)\.json", f) for f in os.listdir(path)) if m)
+
+
+def slug(text):
+    s = re.sub(r"[^a-z0-9]+", "_", str(text).lower()).strip("_")
+    return s[:50]
+
+
+def a_plan_nachalo(b):
+    """The plan starts from what the register already has: the situational scheme (must be there) and the
+    floors (shema_podlozhka_et<N>.json, imported from the approved drawing)."""
+    pull()
+    cleanup()
+    found = None
+    if b.get("obekt"):
+        try:
+            found = obekti("pokazhi", str(b["obekt"]))
+        except (Problem, ValueError):
+            found = None
+        found = (found or {}).get("obekt")
+    else:
+        found = in_register(b)
+    if not found:
+        raise Problem("NOT_FOUND", "обектът не е в регистъра – първо ситуационната схема (shema nachalo … zapishi)", 404)
+    oid = found["id"]
+    docs = (obekti("pokazhi", oid).get("dokumenti") or {})
+    names = {f.get("name") for d in docs.values() for f in d.get("failove") or []}
+    if VID + ".json" not in names:
+        raise Problem("NOT_FOUND", f"{oid} няма ситуационна схема – първо shema nachalo … zapishi; планът се строи върху нея", 404)
+    papka = found.get("papka_id") or ""
+    sid, path = session(None, new=True)
+    fetch(papka, VID + ".json", os.path.join(path, "situacionna.json"))
+    for name in sorted(n for n in names if n):
+        m = re.fullmatch(PODLOZHKA_RE + r"\.json", name)
+        if m:
+            fetch(papka, name, os.path.join(path, f"podlozhka_et{m.group(1)}.json"))
+    plan = None
+    if PLAN_VID + ".json" in names and not (b.get("opcii") or {}).get("nanovo"):
+        fetch(papka, PLAN_VID + ".json", os.path.join(path, "plan.json"))
+        plan = jload(path, "plan.json")
+    if plan is None:
+        sit = jload(path, "situacionna.json")
+        lst = sit.get("list") or {}
+        plan = {"fail": "Plan_pozharogasene_" + (slug(oid).upper() or "OBEKT"), "godina": time.localtime().tm_year,
+                "obekt": found.get("ime") or "", "adres": found.get("adres") or "",
+                "identifikator": (sit.get("kais") or {}).get("imot") or "", "danni": [], "varianti": [],
+                "prilozhenie_4": {"broi": 14},
+                "izgotvil": {"lines": [], "name": b.get("klient") or lst.get("izgotvil") or "",
+                             "data": time.strftime("%d.%m.%Y")}}
+    plan["situacionna"] = "situacionna.json"
+    jsave(path, "plan.json", plan)
+    meta(path, obekt=oid, papka=papka, novi_podlozhki=[])
+    sit = jload(path, "situacionna.json")
+    hydr = [{"voda_id": v.get("voda_id"), "etiket": v.get("etiket")} for v in sit.get("vodoiztochnitsi") or []]
+    return {"sesiya": sid, "obekt": oid, "ime": found.get("ime"), "etazhi": {str(n): rooms(jload(path, f"podlozhka_et{n}.json"))
+                                                                            for n in floors(path)},
+            "hidranti": hydr, "plan": {"danni": [r[0] for r in plan.get("danni") or []],
+                                        "varianti": [v.get("ime") for v in plan.get("varianti") or []]},
+            "za_claude": "Етажите (подложките от одобрените чертежи) и хидрантите са на сървъра. Липсващ етаж – "
+                         "plan_podlozhka с .cdr-а; после за всеки вариант plan_variant; данните по чл. 6, ал. 1 – "
+                         "plan_promeni на /danni; накрая plan_sglobi и plan_zapishi."}
+
+
+def a_plan_podlozhka(b):
+    """A floor from the approved CorelDRAW drawing (cdr_import.py), fitted to the building in КАИС."""
+    path = plan_session(b.get("sesiya"))
+    n = int(b.get("etazh") or 0)
+    if n < 1 or n > 40:
+        raise Problem("BAD_INPUT", "\"etazh\" – номерът на етажа (1, 2 …)")
+    raw = b.get("cdr_base64") or ""
+    try:
+        blob = base64.b64decode(raw, validate=True)
+    except ValueError:
+        raise Problem("BAD_INPUT", "\"cdr_base64\" – .cdr файлът, base64") from None
+    if len(blob) < 100:
+        raise Problem("BAD_INPUT", "\"cdr_base64\" – .cdr файлът, base64")
+    cdr = os.path.join(path, f"et{n}.cdr")
+    with open(cdr, "wb") as f:
+        f.write(blob)
+    args = [CDR, cdr, "--kais", "situacionna.json", "-o", f"podlozhka_et{n}.json"]
+    other = [k for k in floors(path) if k != n]
+    if other and b.get("kato", True):
+        args += ["--kato", f"podlozhka_et{other[0]}.json"]
+    if b.get("sgrada"):
+        args += ["--sgrada", str(b["sgrada"])]
+    out = run(args, cwd=path)
+    m = meta(path)
+    meta(path, novi_podlozhki=sorted(set((m.get("novi_podlozhki") or []) + [n])))
+    pod = jload(path, f"podlozhka_et{n}.json")
+    try:
+        info = json.loads(out)
+    except ValueError:
+        info = {}
+    return {"etazh": n, "pomeshtenia": rooms(pod), "belezhki": pod.get("_belezhki") or [],
+            "kais_rms_m": pod.get("_kais_rms_m"), "izhod": {k: v for k, v in info.items() if k != "output"},
+            "za_claude": "Провери имената на помещенията; после plan_variant."}
+
+
+def room_in(pod, ime, blizo=None):
+    hits = [r for r in pod.get("pomeshtenia") or [] if str(r.get("ime") or "").strip().lower() == str(ime).strip().lower()]
+    if not hits:
+        raise Problem("BAD_INPUT", f"помещението „{ime}“ го няма на етажа – виж etazhi от plan_nachalo")
+    if len(hits) > 1 and blizo:
+        near = [r for r in pod["pomeshtenia"] if str(r.get("ime") or "").strip().lower() == str(blizo).strip().lower()]
+        if near and near[0].get("tsentar"):
+            c = near[0]["tsentar"]
+            hits.sort(key=lambda r: (r["tsentar"][0] - c[0]) ** 2 + (r["tsentar"][1] - c[1]) ** 2)
+    return hits[0]
+
+
+def a_plan_variant(b):
+    """One variant (чл. 6, ал. 2): the calculation (sili.py – the whole room, the sides from the drawing), the
+    specific scheme (konkretna.py) and its table (Приложение № 3б); kept in plan.json, a picture back."""
+    pull()
+    path = plan_session(b.get("sesiya"))
+    n = int(b.get("etazh") or 0)
+    if not os.path.isfile(os.path.join(path, f"podlozhka_et{n}.json")):
+        raise Problem("BAD_INPUT", f"няма подложка за етаж {n} – plan_podlozhka с .cdr-а")
+    for k in ("pomeshtenie", "vhod", "hidrant", "ime", "ogneustoychivost"):
+        if not str(b.get(k) or "").strip():
+            raise Problem("BAD_INPUT", f"plan_variant иска \"{k}\"")
+    pod = jload(path, f"podlozhka_et{n}.json")
+    room = room_in(pod, b["pomeshtenie"], b.get("blizo"))
+    ra, rb = (room.get("razmeri_m") or [None, None])[:2]
+    area = room.get("plosht_m2") or (ra * rb if ra and rb else None)
+    if not area:
+        raise Problem("BAD_INPUT", "помещението няма площ в чертежа")
+    sili = b.get("sili") or {}
+    k = len([v for v in jload(path, "plan.json").get("varianti") or []]) + 1
+    tag = slug(b.get("fail") or b["ime"]) or f"v{k}"
+    args = [SILI, "tvardi", "--forma", "pravoagalnik", "--fp", str(round(area, 1))]
+    if ra and rb:
+        args += ["--a", str(sili.get("a") or ra), "--b", str(rb if not sili.get("a") else area / float(sili["a"]))]
+    for key, flag in SILI_OPCII.items():
+        if sili.get(key) not in (None, ""):
+            args += [flag, str(sili[key])]
+    if not any(sili.get(x) for x in ("i", "i_red")):
+        raise Problem("BAD_INPUT", "sili: дай \"i_red\" (ред от таблица 2) или \"i\"")
+    if not sili.get("struinik"):
+        args += ["--struinik", "В"]
+    if not sili.get("q_pa"):
+        args += ["--q-pa", "40"]
+    if not sili.get("ataka"):
+        args += ["--ataka", "front1"]
+    s = json.loads(run(args, cwd=path))
+    jsave(path, f"s_{tag}.json", s)
+    t3b = b.get("tablitsa_3b")
+    targs = []
+    if isinstance(t3b, dict):
+        jsave(path, f"t3b_{tag}.json", {"redove": [t3b] if "redove" not in t3b else t3b["redove"]})
+        targs = ["--tablitsa-3b", f"t3b_{tag}.json"]
+    plan = jload(path, "plan.json")
+    sit = jload(path, "situacionna.json")
+    lst = sit.get("list") or {}
+    fail = str(b.get("fail") or f"Konkretna_shema_{tag}")
+    if not re.fullmatch(r"[A-Za-z0-9_]{3,60}", fail):
+        raise Problem("BAD_INPUT", "\"fail\" – на латиница, напр. Konkretna_shema_Garderob_2et")
+    args = [KONKRETNA, "--podlozhka", f"podlozhka_et{n}.json", "--kais", "situacionna.json", "--pomeshtenie", room["ime"],
+            "--vhod", str(b["vhod"]), "--pat", str(b.get("pat") or ""), "--hidrant", str(b["hidrant"]),
+            "--sili", f"s_{tag}.json", "--etazh", str(n), "--ogneustoychivost", str(b.get("ogneustoychivost") or ""),
+            "--kategoriya", str(b.get("kategoriya") or ""), "--obekt", str(lst.get("obekt") or plan.get("obekt") or ""),
+            "--sobstvenik", str(lst.get("sobstvenik") or ""), "--izgotvil", str(b.get("klient") or lst.get("izgotvil") or ""),
+            "--data", time.strftime("%d.%m.%Y"), "--fail", fail + ".dxf", "-o", f"k_{tag}.json"] + targs
+    if b.get("blizo"):
+        args += ["--blizo", str(b["blizo"])]
+    if b.get("hidrant_etiket"):
+        args += ["--hidrant-etiket", str(b["hidrant_etiket"])]
+    if b.get("ulitsi"):
+        args += ["--ulitsi", str(b["ulitsi"])]
+    run(args, cwd=path)
+    kj = jload(path, f"k_{tag}.json")
+    if b.get("naslov"):
+        kj.setdefault("list", {})["naslov"] = str(b["naslov"])
+    png = os.path.join(path, f"k_{tag}.png")
+    run([os.path.join(SHEMI, "scripts", "shema.py"), f"k_{tag}.json", "-o", png], cwd=path)
+    ra_s = f"{ra:g}".replace(".", ",") if ra else "?"
+    rb_s = f"{rb:g}".replace(".", ",") if rb else "?"
+    var = {"ime": str(b["ime"]), "fail": fail, "konkretna": kj, "sili": s,
+           "pomeshtenie": f"{room['ime']}, {n} етаж – {ra_s} × {rb_s} m", "reshenie": b.get("reshenie") or []}
+    vs = plan.setdefault("varianti", [])
+    idx = next((i for i, v in enumerate(vs) if v.get("fail") == fail), None)
+    if idx is None:
+        vs.append(var)
+    else:
+        vs[idx] = var
+    jsave(path, "plan.json", plan)
+    return {"variant": fail, "rezultat": s.get("rezultat"), "belezhki": s.get("belezhki"),
+            "stapki": [f"{x['formula']} {x['ime']}: {x['stoinost']} {x['merna']}" for x in s.get("stapki") or []],
+            "png_base64": picture(png), "format": "image/jpeg",
+            "za_claude": "Прегледай схемата (струйникът пред пожара, линиите от задницата на ПА). Решението "
+                         "(чл. 6, ал. 2) – plan_promeni на /varianti/N/reshenie, ако не е подадено; после plan_sglobi."}
+
+
+def a_plan_promeni(b):
+    path = plan_session(b.get("sesiya"))
+    plan = jload(path, "plan.json")
+    done = apply_ops(plan, b.get("operacii"))
+    jsave(path, "plan.json", plan)
+    return {"napraveno": done, "plan": {k: (v if not isinstance(v, (list, dict)) else
+                                            [x.get("ime") if isinstance(x, dict) else (x[0] if isinstance(x, list) and x else x)
+                                             for x in v] if isinstance(v, list) else list(v))
+                                        for k, v in plan.items() if k != "situacionna"}}
+
+
+def a_plan_sglobi(b):
+    pull()
+    path = plan_session(b.get("sesiya"))
+    out = os.path.join(path, "out_plan")
+    shutil.rmtree(out, ignore_errors=True)
+    os.makedirs(out)
+    res = json.loads(run([PLAN, "plan.json", "-d", out], cwd=path, timeout=480))
+    return {"failove": sorted(os.listdir(out)), "preduprezhdeniya": res.get("preduprezhdeniya") or [],
+            "za_claude": "Кажи предупрежденията (какво от Указанията липсва); поправка – plan_promeni и пак "
+                         "plan_sglobi; готовият план – plan_zapishi."}
+
+
+def a_plan_zapishi(b):
+    pull()
+    path = plan_session(b.get("sesiya"))
+    out = os.path.join(path, "out_plan")
+    plan = jload(path, "plan.json")
+    main = os.path.join(out, plan["fail"] + ".docx")
+    if not os.path.isfile(main):
+        raise Problem("BAD_INPUT", "първо plan_sglobi – няма сглобен план")
+    m = meta(path)
+    oid = m.get("obekt")
+    env = {"FIRE_SERVICE_AVTOR": str(b.get("klient") or "")}
+    whole = dict(plan)
+    whole["situacionna"] = jload(path, "situacionna.json")
+    jsave(out, plan["fail"] + ".json", whole)        # the whole input – the plan is rebuilt from it
+    saved = [obekti("zapishi", oid, "--vid", PLAN_VID, main, os.path.join(out, plan["fail"] + ".json"), cwd=path, env=env)]
+    for v in plan.get("varianti") or []:
+        f = v["fail"]
+        vid = "shema_" + slug(re.sub(r"^Konkretna_shema_?", "", f, flags=re.I))
+        kj = os.path.join(out, f + ".json")
+        jsave(out, f + ".json", v.get("konkretna") or {})
+        files = [os.path.join(out, x) for x in (f + ".docx", f + ".dxf", f + "_grafichna.png", "Razchet_" + f + ".docx")]
+        saved.append(obekti("zapishi", oid, "--vid", vid, *[x for x in files if os.path.isfile(x)], kj, cwd=path, env=env))
+    for n in m.get("novi_podlozhki") or []:
+        src = os.path.join(path, f"podlozhka_et{n}.json")
+        dst = os.path.join(out, f"shema_podlozhka_et{n}.json")
+        shutil.copy(src, dst)
+        saved.append(obekti("zapishi", oid, "--vid", f"shema_podlozhka_et{n}", dst, cwd=path, env=env))
+    try:
+        docs = obekti("pokazhi", oid).get("dokumenti") or {}
+    except (Problem, ValueError):
+        docs = {}
+    want = {PLAN_VID} | {"shema_" + slug(re.sub(r"^Konkretna_shema_?", "", v["fail"], flags=re.I)) for v in plan.get("varianti") or []}
+    fs = [{"ime": f.get("name"), "link": f.get("link")} for k, d in docs.items() if k in want
+          for f in d.get("failove") or [] if not str(f.get("name", "")).endswith(".json")]
+    return {"zapisano": True, "obekt": oid, "otgovori": len(saved), "failove": fs,
+            "za_claude": "Записано в регистъра. Дай линковете: планът, конкретните схеми и разчетите."}
+
+
+HANDLERS = {"nachalo": a_nachalo, "pokazhi": a_pokazhi, "promeni": a_promeni, "chertai": a_chertai, "zapishi": a_zapishi,
+            "plan_nachalo": a_plan_nachalo, "plan_podlozhka": a_plan_podlozhka, "plan_variant": a_plan_variant,
+            "plan_promeni": a_plan_promeni, "plan_sglobi": a_plan_sglobi, "plan_zapishi": a_plan_zapishi}
 
 
 # ------------------------------------------------------------------------------------------- server

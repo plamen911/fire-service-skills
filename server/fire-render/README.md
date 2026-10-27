@@ -11,4 +11,8 @@ Service и получава кратки отговори, картинка за
   името на колегата, който е поискал (n8n го подава).
 - Тайните са в `.env` на сървъра (`RENDER_TOKEN`, `FIRE_SERVICE_KEY`, `N8N_NETWORK`), не в хранилището.
 
+Освен ситуационната схема – и планът за пожарогасене (`plan_nachalo` … `plan_zapishi`, скилът
+`plan-pozharogasene`): за .cdr чертежите образът има `libreoffice-draw` – след промяна на `Dockerfile` или
+`requirements.txt` контейнерът се пресъздава (`docker compose up -d --build`); новите действия в `app.py` идват сами.
+
 Действия – виж началото на `app.py`. Тестове без мрежа: `python3 tests/test_app.py`.

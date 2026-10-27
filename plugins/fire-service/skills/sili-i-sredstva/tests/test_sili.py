@@ -141,8 +141,35 @@ def test_tables():
     print("  ok  tables")
 
 
+def test_room_and_docx():
+    import subprocess
+    import tempfile
+    # 30 min, vl 1 m/min, 1 direction, front 6 m → 6 × 25 = 150 m2 > the room 6 × 8 → the whole room
+    code, r = run("tvardi", "--forma", "pravoagalnik", "--vl", "1", "--t-dv", "25", "--a", "6", "--pomeshtenie",
+                  "6x8", "--i", "0.15", "--ataka", "front1", "--struinik", "В", "--q-pa", "40")
+    assert code == 0 and near(r["rezultat"]["plosht_na_pozhara_m2"], 48), r
+    assert any("цялото помещение" in x for x in r["belezhki"]), r
+    code, r2 = run("tvardi", "--forma", "pravoagalnik", "--fp", "20", "--a", "6", "--pomeshtenie", "6х8",
+                   "--i", "0.15", "--struinik", "В", "--q-pa", "40")
+    assert code == 0 and near(r2["rezultat"]["plosht_na_pozhara_m2"], 20), r2      # smaller – stays (Cyrillic х)
+    with tempfile.TemporaryDirectory() as d:
+        src = os.path.join(d, "s.json")
+        json.dump(r, open(src, "w", encoding="utf-8"), ensure_ascii=False)
+        p = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "razchet_docx.py"), src, "--kam",
+                            os.path.join(d, "Konkretna_shema_Test.docx"), "--naslov", "Конкретна схема № 1"],
+                           capture_output=True, text=True)
+        assert p.returncode == 0, p.stderr
+        out = json.loads(p.stdout)["output"]
+        assert os.path.basename(out) == "Razchet_Konkretna_shema_Test.docx" and os.path.exists(out), out
+        from docx import Document
+        text = "\n".join(c.text for t in Document(out).tables for row in t.rows for c in row.cells)
+        assert "(13)" in text and "48" in text, text
+    print("  ok  room cap and the .docx")
+
+
 def main():
     test_solid()
+    test_room_and_docx()
     test_tank()
     test_volume_and_powder()
     test_tables()
