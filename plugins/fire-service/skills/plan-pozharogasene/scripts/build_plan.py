@@ -102,12 +102,14 @@ def portrait(doc):
     sec.orientation = WD_ORIENT.PORTRAIT
     sec.page_width, sec.page_height = Cm(21.0), Cm(29.7)
     sec.left_margin, sec.right_margin, sec.top_margin, sec.bottom_margin = Cm(2.5), Cm(2.0), Cm(2.0), Cm(1.5)
+    razchet_docx.set_columns(sec, 1)                 # the section copies the one before – maybe the 2 columns
     return sec
 
 
 def landscape(doc):
     sec = doc.add_section(WD_SECTION.NEW_PAGE)
     page(sec)                                         # the margins of the sheets (left 2 cm for binding)
+    razchet_docx.set_columns(sec, 1)                 # not the two columns of the calculation before it
     return sec
 
 

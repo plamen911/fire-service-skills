@@ -55,6 +55,10 @@ def main():
             assert want in cells, (want, [l for l in cells.splitlines() if "Площ" in l or "(1" in l][:10])
         assert any("т. 7" in w for w in r["preduprezhdeniya"]), r["preduprezhdeniya"]    # „вероятни опасности“ missing
         assert len(doc.sections) >= 8, len(doc.sections)
+        from docx.oxml.ns import qn
+        cols = [(s._sectPr.find(qn("w:cols")).get(qn("w:num")) if s._sectPr.find(qn("w:cols")) is not None else "1")
+                for s in doc.sections]
+        assert cols.count("2") == 1 and cols[-1] == "1", cols      # only the calculation is in two columns
         print("  ok  plan, the sheets on their own and the gaps")
     print("OK plan-pozharogasene")
 
