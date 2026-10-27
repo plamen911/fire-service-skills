@@ -68,6 +68,39 @@ try:
     ok(False, "path in session id")
 except app.Problem:
     ok(True, "session id checked")
+# the form: compact questions with the streets as options, answers recorded with their "deistvie"
+app.FORMULYAR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(HERE))), "plugins", "fire-service",
+                             "skills", "shemi", "references", "formulyar.json")
+qd = {"ulitsi": [{"ime": "ул. „Първа“"}, {"ime": "ул. „Втора“"}, {"ime": "ул. „Първа“"}], "formulyar": {"pgi": "няма"}}
+qs = {q["id"]: q for e in app.questions(qd) for q in e["vaprosi"]}
+ok("pgi" not in qs and "gaz" in qs and "deistvie" not in qs["gaz"], "questions: open ones, no deistvie")
+ok(qs["vhod_kola"]["opcii"] == ["от ул. „Първа“", "от ул. „Втора“", "не личи – ще кажа къде"], "vhod_kola streets")
+d = app.answers(qd, {"gaz": "не", "vhod_kola": ["от ул. „Първа“"]})
+ok(qd["formulyar"]["gaz"] == "не" and list(d["gaz"]) == ["не"], "answer → its deistvie only")
+ok("*" in d["vhod_kola"], "street answer → the template for any choice")
+for bad in ({}, {"nyama": "x"}):
+    try:
+        app.answers(qd, bad)
+        ok(False, f"answers accepted {bad}")
+    except app.Problem:
+        ok(True, "answers refused")
+sid2, path2 = app.session(None, new=True)
+app.save(path2, {"list": {}})
+r = app.a_promeni({"sesiya": sid2, "operacii": [{"op": "formulyar", "stoynost": {"gaz": "не"}}]})
+ok(r["napraveno"] == [] and "gaz" in r["deistvie"] and app.load(path2)["formulyar"] == {"gaz": "не"}, "promeni formulyar")
+drawn = []
+real_chertai, app.a_chertai = app.a_chertai, lambda b: drawn.append(b["sesiya"]) or {"mashtab": "1:500"}
+r = app.a_promeni({"sesiya": sid2, "operacii": [{"op": "set", "pat": "/list/obekt", "stoynost": "Х"}, {"op": "chertai"}]})
+ok(drawn == [sid2] and r["mashtab"] == "1:500" and r["napraveno"] == ["set /list/obekt"], "promeni + chertai in one call")
+app.a_chertai = real_chertai
+# zapishi takes the object nachalo found (meta) and returns the links
+app.meta(path2, obekt="OB-0042")
+for x in (".docx", ".dxf", "_grafichna.png"):
+    open(os.path.join(path2, "out", app.VID + x), "wb").close()
+r = app.a_zapishi({"sesiya": sid2})
+ok(r["obekt"] == "OB-0042" and "OB-0042" in r["otgovor"]["args"] and "failove" in r, "zapishi uses the found object")
+ok(app.in_register({}) is None, "no point – no lookup")
+
 # /vreme – the input is checked before vreme.py is run (no network here)
 for bad, why in (({"data": "x"}, "date"), ({"data": "2026-10-26", "mesto": "--rm"}, "mesto as an option"),
                  ({"data": "2026-10-26"}, "no place"), ({"data": "2026-10-26", "stantsiya": "15528", "ot": "25;rm"}, "hour"),

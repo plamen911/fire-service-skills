@@ -11,11 +11,18 @@ short answers, a preview picture and, at the end, the files in the objects regis
 Only n8n calls this service (the connector tool `shema`): it runs in n8n's Docker network with no published
 port, and every request must carry the shared token (X-Render-Token). n8n adds who is calling ("klient").
 
-    POST /shema {"action": "nachalo", "lat", "lon" | "kadastar" | "papka_id", "opcii": {…}}
+    POST /shema {"action": "nachalo", "lat", "lon" | "kadastar" | "papka_id", "opcii": {…, "promyana"|"nanovo": true}}
     POST /shema {"action": "pokazhi", "sesiya", "pat": "/sgradi/0"}
-    POST /shema {"action": "promeni", "sesiya", "operacii": [{"op": "set"|"add"|"remove"|"merge", "pat", "stoynost"}]}
+    POST /shema {"action": "promeni", "sesiya", "operacii": [{"op": "set"|"add"|"remove"|"merge", "pat", "stoynost"},
+                                                             {"op": "formulyar", "stoynost": {id: отговор}}, {"op": "chertai"}]}
     POST /shema {"action": "chertai", "sesiya"}
-    POST /shema {"action": "zapishi", "sesiya", "obekt": "OB-0001" | "nov": {"ime", "adres", "masto"}}
+    POST /shema {"action": "zapishi", "sesiya"[, "obekt": "OB-0001" | "nov": {"ime", "adres", "masto"}]}
+
+Every round trip resends the whole conversation, so the service saves the model calls: nachalo looks the object up
+in the register first (an existing scheme comes back as links, without the minute-long КАИС query) and hands over
+only the form questions that apply (formulyar.json stays here); promeni records the answers and returns only the
+"deistvie" of the chosen options, and draws in the same call with {"op": "chertai"}; zapishi remembers the object
+found by nachalo and returns the download links itself.
     POST /vreme {"data": "2026-10-26", "mesto": "Плевен" | "lat", "lon" | "stantsiya": "15528"|"LBPL",
                  "ot": "15:00", "do": "16:00", "do_data": "2026-10-28"}   – времето (vreme.py) за колегите,
                                                                      чиято среда не стига до архивите
@@ -44,6 +51,7 @@ PULL_EVERY = 300
 SESSION_TTL = 3 * 24 * 3600
 SHEMI = os.path.join(REPO, "plugins", "fire-service", "skills", "shemi")
 SCRIPTS = os.path.join(SHEMI, "_shared", "scripts")
+FORMULYAR = os.path.join(SHEMI, "references", "formulyar.json")
 VID = "situacionna_shema"
 ACTIONS = ("nachalo", "pokazhi", "promeni", "chertai", "zapishi")
 OPCII = {  # kais.py obekt options the model may set: name → (flag, takes a value)
@@ -196,6 +204,101 @@ def outline(data):
     return out
 
 
+def meta(path, **upd):
+    """Small facts of the session besides the scheme (the object found in the register)."""
+    f = os.path.join(path, "meta.json")
+    try:
+        with open(f, encoding="utf-8") as fh:
+            m = json.load(fh)
+    except (OSError, ValueError):
+        m = {}
+    if upd:
+        m.update(upd)
+        with open(f, "w", encoding="utf-8") as fh:
+            json.dump(m, fh, ensure_ascii=False)
+    return m
+
+
+def obekti(*args, cwd=DATA, env=None):
+    script = os.environ.get("OBEKTI_SCRIPT") or os.path.join(SCRIPTS, "obekti.py")
+    os.makedirs(cwd, exist_ok=True)
+    return json.loads(run([script, "--json", *args], cwd=cwd, env=env))
+
+
+def links(oid):
+    """The download links (signed by n8n, 24 h, no Google account) of the object's situacionna_shema files."""
+    try:
+        d = obekti("pokazhi", oid)
+    except (Problem, ValueError):
+        return []
+    fs = ((d.get("dokumenti") or {}).get(VID) or {}).get("failove") or []
+    return [{"ime": f.get("name"), "link": f.get("link")} for f in fs if not str(f.get("name", "")).endswith(".json")]
+
+
+def in_register(b):
+    """The register entry for the point or the cadastral id, or None. A failing lookup never blocks the scheme."""
+    args = ["tarsi"]
+    if b.get("kadastar"):
+        args += ["--kadastar", str(b["kadastar"])]
+    if b.get("lat") is not None and b.get("lon") is not None:
+        args += ["--lat", str(float(b["lat"])), "--lon", str(float(b["lon"]))]
+    if len(args) == 1:
+        return None
+    try:
+        return obekti(*args).get("nameren")
+    except (Problem, ValueError, subprocess.TimeoutExpired):
+        return None
+
+
+def questions(data):
+    """The form questions still open, compact (no "deistvie" – promeni returns it for the chosen answers).
+    The streets around the parcel become the options of "vhod_kola"."""
+    with open(FORMULYAR, encoding="utf-8") as f:
+        form = json.load(f)
+    done = data.get("formulyar") or {}
+    streets = []
+    for u in data.get("ulitsi") or []:
+        name = isinstance(u, dict) and str(u.get("ime") or "").strip()
+        if name and name not in streets:
+            streets.append(name)
+    out = []
+    for scr in form["screens"]:
+        qs = []
+        for q in scr["questions"]:
+            if q["id"] in done:
+                continue
+            item = {"id": q["id"], "vapros": q["question"], "opcii": q["options"]}
+            if q["id"] == "vhod_kola" and streets:
+                item["opcii"] = ["от " + x for x in streets[:3]] + ["не личи – ще кажа къде"]
+            for k in ("multi", "always", "kogato", "dinamichni"):
+                if q.get(k):
+                    item[k] = q[k]
+            qs.append(item)
+        if qs:
+            out.append({"ekran": scr["title"], "vaprosi": qs})
+    return out
+
+
+def answers(data, given):
+    """Records the form answers in the scheme and returns what each one means for the drawing and the table."""
+    if not isinstance(given, dict) or not given:
+        raise Problem("BAD_INPUT", "formulyar: \"stoynost\" е {id: отговор}")
+    with open(FORMULYAR, encoding="utf-8") as f:
+        qs = {q["id"]: q for scr in json.load(f)["screens"] for q in scr["questions"]}
+    data.setdefault("formulyar", {}).update(given)
+    out = {}
+    for qid, ans in given.items():
+        q = qs.get(qid)
+        if not q:
+            raise Problem("BAD_INPUT", f"formulyar: няма въпрос „{qid}“ – ид-тата са {', '.join(qs)}")
+        dei = q.get("deistvie") or {}
+        picked = [a for a in (ans if isinstance(ans, list) else [ans]) if isinstance(a, str)]
+        hit = {a: dei[a] for a in picked if a in dei}
+        # a street, a point, a name or a free "Друго" – the option templates say what to do with it
+        out[qid] = hit if len(hit) == len(picked) else dei
+    return out
+
+
 def pointer(pat):
     if pat in ("", "/"):
         return []
@@ -263,20 +366,39 @@ def apply_ops(data, ops):
 
 # ------------------------------------------------------------------------------------------- actions
 
+def from_register(path, papka):
+    sys.path.insert(0, SCRIPTS)
+    import api_config  # noqa: E402
+    res = api_config.post("obekti_url", {"action": "get", "folder": papka, "name": VID + ".json"}, timeout=120)
+    with open(os.path.join(path, "shema.json"), "wb") as f:
+        f.write(base64.b64decode(res["base64"]))
+    return load(path)
+
+
 def a_nachalo(b):
     pull()
     cleanup()
-    sid, path = session(None, new=True)
+    opcii = b.get("opcii") or {}
     papka = str(b.get("papka_id") or "").strip()
+    found = None if papka else in_register(b)
+    if found and not papka:
+        fs = links(found["id"])
+        if fs and not (opcii.get("promyana") or opcii.get("nanovo")):
+            return {"ima_shema": True, "obekt": found["id"], "ime": found.get("ime"), "adres": found.get("adres"),
+                    "failove": fs,
+                    "za_claude": "Обектът вече има ситуационна схема – дай линковете и спри. Промяна на записаната: "
+                                 "nachalo отново с opcii.promyana; изцяло нова от КАИС: opcii.nanovo."}
+        if fs and opcii.get("promyana"):
+            papka = found.get("papka_id") or ""
+    sid, path = session(None, new=True)
+    if found:
+        meta(path, obekt=found["id"])
     if papka:  # an object already in the register: continue from its stored JSON
-        sys.path.insert(0, SCRIPTS)
-        import api_config  # noqa: E402
-        res = api_config.post("obekti_url", {"action": "get", "folder": papka, "name": VID + ".json"}, timeout=120)
-        with open(os.path.join(path, "shema.json"), "wb") as f:
-            f.write(base64.b64decode(res["base64"]))
-        data = load(path)
-        return {"sesiya": sid, "ot_registara": True, "shema": outline(data),
-                "za_claude": "Схемата е заредена от регистъра. Промени с promeni, после chertai и zapishi."}
+        data = from_register(path, papka)
+        return {"sesiya": sid, "ot_registara": True, "obekt": (found or {}).get("id"), "shema": outline(data),
+                "vaprosi": questions(data),
+                "za_claude": "Схемата е заредена от регистъра. Промени с promeni (с {\"op\": \"chertai\"} накрая), "
+                             "после zapishi."}
     args = [os.path.join(SCRIPTS, "kais.py"), "obekt", "-o", "kais.json", "--shema", "shema.json", "--voda", "--ortofoto"]
     if b.get("kadastar"):
         args += ["--id", str(b["kadastar"])]
@@ -286,7 +408,7 @@ def a_nachalo(b):
         args += ["--link", str(b["link"])]
     else:
         raise Problem("BAD_INPUT", "nachalo иска \"kadastar\", \"lat\"+\"lon\", \"link\" или \"papka_id\"")
-    for k, v in (b.get("opcii") or {}).items():
+    for k, v in opcii.items():
         if k not in OPCII or v in (None, False, ""):
             continue
         flag, takes = OPCII[k]
@@ -299,9 +421,12 @@ def a_nachalo(b):
     for k in ("kais_json", "fon", "shema", "ortofoto"):
         rez.pop(k, None)
     data = load(path)
-    ans = {"sesiya": sid, "kais": rez, "shema": outline(data),
-           "za_claude": "Данните от КАИС са на сървъра. Допълни с promeni (входове, газ, ПГИ, list, tablitsa), "
-                        "после chertai; на картинката е ортофотото с номерираните точки."}
+    ans = {"sesiya": sid, "kais": rez, "shema": outline(data), "vaprosi": questions(data),
+           "za_claude": "Данните от КАИС са на сървъра. Задай vaprosi наведнъж (входовете – по номерираните точки на "
+                        "ортофотото); отговорите – promeni с {\"op\": \"formulyar\"} (връща deistvie); deistvie и "
+                        "антетката – второ promeni с {\"op\": \"chertai\"} накрая; после zapishi."}
+    if found:
+        ans["obekt"] = found["id"]
     orto = os.path.join(path, "shema_ortofoto.png")
     if os.path.isfile(orto):
         ans["png_base64"], ans["format"] = picture(orto, 1100), "image/jpeg"
@@ -329,9 +454,24 @@ def a_pokazhi(b):
 def a_promeni(b):
     _, path = session(b.get("sesiya"))
     data = load(path)
-    done = apply_ops(data, b.get("operacii"))
+    ops = b.get("operacii")
+    if not isinstance(ops, list) or not ops:
+        raise Problem("BAD_INPUT", "\"operacii\" – списък с {op, pat, stoynost}")
+    draw = any(isinstance(o, dict) and o.get("op") == "chertai" for o in ops)
+    form = [o for o in ops if isinstance(o, dict) and o.get("op") == "formulyar"]
+    rest = [o for o in ops if not (isinstance(o, dict) and o.get("op") in ("chertai", "formulyar"))]
+    res = {}
+    for o in form:
+        res.setdefault("deistvie", {}).update(answers(data, o.get("stoynost")))
+    res["napraveno"] = apply_ops(data, rest) if rest else []
     save(path, data)
-    return {"napraveno": done, "shema": outline(data)}
+    if draw:
+        res.update(a_chertai(b))
+    else:
+        res["shema"] = outline(data)
+        if "deistvie" in res:
+            res["za_claude"] = "Приложи deistvie на отговорите с още едно promeni, с {\"op\": \"chertai\"} накрая."
+    return res
 
 
 def a_chertai(b):
@@ -367,9 +507,8 @@ def a_zapishi(b):
         raise Problem("BAD_INPUT", "първо chertai – няма начертана схема")
     shutil.copy(os.path.join(path, "shema.json"), os.path.join(out, VID + ".json"))
     files.append(os.path.join(out, VID + ".json"))
-    obekti = os.environ.get("OBEKTI_SCRIPT") or os.path.join(SCRIPTS, "obekti.py")
     env = {"FIRE_SERVICE_AVTOR": str(b.get("klient") or "")}
-    oid = str(b.get("obekt") or "").strip()
+    oid = str(b.get("obekt") or ("" if b.get("nov") else meta(path).get("obekt")) or "").strip()
     nov = None
     if not oid:
         n = b.get("nov") or {}
@@ -377,20 +516,21 @@ def a_zapishi(b):
             raise Problem("BAD_INPUT", "zapishi иска \"obekt\" (OB-…) или \"nov\" с ime, adres, masto")
         data = load(path)
         kais = (data.get("kais") or {})
-        args = [obekti, "--json", "nov", "--ime", n["ime"], "--masto", n["masto"], "--adres", n.get("adres", "")]
+        args = ["nov", "--ime", n["ime"], "--masto", n["masto"], "--adres", n.get("adres", "")]
         for k in ("lat", "lon"):
             if n.get(k) is not None:
                 args += [f"--{k}", str(float(n[k]))]
         if kais.get("imot") or n.get("kadastar"):
             args += ["--kadastar", str(n.get("kadastar") or kais.get("imot"))]
-        nov = json.loads(run(args, cwd=path, env=env))
+        nov = obekti(*args, cwd=path, env=env)
         oid = (nov.get("nov") or {}).get("id") or ""
         if not oid:
             return {"zapisano": False, "otgovor": nov,
                     "za_claude": "Обектът не е създаден – виж отговора (вероятно прилича на съществуващ)."}
-    res = json.loads(run([obekti, "--json", "zapishi", oid, "--vid", VID, *files], cwd=path, env=env))
-    return {"zapisano": True, "obekt": oid, "nov_obekt": bool(nov), "otgovor": res,
-            "za_claude": "Записано в регистъра. Линковете за файловете – obekti list с папката на обекта (поле download)."}
+    res = obekti("zapishi", oid, "--vid", VID, *files, cwd=path, env=env)
+    meta(path, obekt=oid)
+    return {"zapisano": True, "obekt": oid, "nov_obekt": bool(nov), "otgovor": res, "failove": links(oid),
+            "za_claude": "Записано в регистъра. Дай на потребителя линковете от failove – .docx, .dxf и картинката."}
 
 
 VREME = os.path.join(SCRIPTS, "vreme.py")
