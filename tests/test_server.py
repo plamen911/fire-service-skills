@@ -258,6 +258,8 @@ def test_kais(tmp, base):
                          {"ime": "", "vid": "service", "shirina": 5, "tochki": [[x0 + 300, y0 + 300], [x0 + 310, y0 + 310]]}],
               "istochnik": "КАИС", "zaiavki_kais": 9}
     kais.osm_grass = lambda *a: ([[[x0 + 20, y0 + 20], [x0 + 30, y0 + 20], [x0 + 30, y0 + 30]]], "")   # no network
+    kais.osm_water = lambda *a: (None, "")                  # no network – the real rivers would cut the grass
+    kais.osm_paths = lambda *a: ([], "")
     Stub.plan, Stub.seen = [(200, answer)], []
     out, sh = os.path.join(tmp, "k", "kais.json"), os.path.join(tmp, "k", "shema.json")
     code, printed, err = call(kais.main, ["obekt", "--link", "43.41,24.65", "-o", out, "--shema", sh])

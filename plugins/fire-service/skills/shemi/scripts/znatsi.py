@@ -692,9 +692,19 @@ def draw_parcel(ax, kontur, label, s, fs, avoid=()):
         ax.text(tx, ty + 0.4 * s, label, ha="center", va="bottom", fontsize=fs - 0.5, zorder=4,
                 bbox=dict(fc="white", ec="none", pad=0.6, alpha=0.85))
 
-def draw_grass(ax, kontur, pal, z=1.1):
-    """A grass area – green outline and sparse green dots (чл. 9, ал. 9, т. 5); under the streets."""
-    ax.add_patch(Polygon(kontur, closed=True, fill=False, hatch="..", ec=pal.grass, lw=0.5, zorder=z))
+def draw_grass(ax, kontur, pal, z=1.1, otvori=()):
+    """A grass area – green outline and sparse green dots (чл. 9, ал. 9, т. 5); under the streets. `otvori` – the
+    holes in it (a path, a paved yard, a building inside the grass)."""
+    if not otvori:
+        ax.add_patch(Polygon(kontur, closed=True, fill=False, hatch="..", ec=pal.grass, lw=0.5, zorder=z))
+        return
+    from matplotlib.path import Path as _Path
+    from matplotlib.patches import PathPatch
+    verts, codes = [], []
+    for ring in [kontur] + list(otvori):
+        verts += list(ring) + [ring[0]]
+        codes += [_Path.MOVETO] + [_Path.LINETO] * (len(ring) - 1) + [_Path.CLOSEPOLY]
+    ax.add_patch(PathPatch(_Path(verts, codes), fill=False, hatch="..", ec=pal.grass, lw=0.5, zorder=z))
 
 
 def draw_no_parking(ax, r, pal):
