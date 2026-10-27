@@ -325,11 +325,19 @@ def back_page(sec, columns=2):
     sec.page_width, sec.page_height = B.Cm(29.7), B.Cm(21.0)
     sec.left_margin = sec.right_margin = B.Cm(1.5)       # the back – the binding margin is on the other side
     sec.top_margin = sec.bottom_margin = B.Cm(1.2)
+    set_columns(sec, columns)
+
+
+def set_columns(sec, n):
+    """The number of text columns of a section. A new section copies the one before it – the columns too – so a
+    section after the calculation must set 1 again (set_columns(sec, 1))."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
     pr = sec._sectPr
     for old in pr.findall(qn("w:cols")):
         pr.remove(old)
     cols = OxmlElement("w:cols")
-    cols.set(qn("w:num"), str(columns))
+    cols.set(qn("w:num"), str(n))
     cols.set(qn("w:space"), str(int(1.0 * 567)))
     pr.append(cols)
 
