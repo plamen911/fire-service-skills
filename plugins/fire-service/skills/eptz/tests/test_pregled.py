@@ -183,11 +183,13 @@ ok(not any("въпросите са" in g or "прилагане" in g for g in 
 r = check(GOOD.replace("2. Къде се е намирало огнището?", "2. Къде се е намирало огнището?\n3. " + PRILOZHI_Q), META)
 ok(any("прилагане на документи" in g for g in r["greshki"]), "the attach-documents request listed in раздел II")
 r = check(GOOD + "\nТова е по литературата (Симеонов, 2007).\n", META)
-ok(any("Пожаротехническа експертиза, 2007" in g for g in r["greshki"]), "the old citation „(Симеонов, 2007)“")
+ok(any("ПТЕ, 2007" in g for g in r["greshki"]), "the old citation „(Симеонов, 2007)“")
 r = check(GOOD + "\nТова е по литературата (ICSC 0087; Симеонов, 2007).\n", META)
-ok(any("Пожаротехническа експертиза, 2007" in g for g in r["greshki"]), "the old citation inside a combined one")
+ok(any("ПТЕ, 2007" in g for g in r["greshki"]), "the old citation inside a combined one")
 r = check(GOOD + "\nТова е по литературата (Пожаротехническа експертиза, 2007).\n", META)
-ok(not any("Симеонов" in g for g in r["greshki"]), "the new citation by title passes")
+ok(any("ПТЕ, 2007" in g for g in r["greshki"]), "the full title, written by hand, is caught too")
+r = check(GOOD + "\nТова е по литературата (ПТЕ, 2007).\n", META)
+ok(not any("Симеонов" in g for g in r["greshki"]), "the abbreviated citation passes")
 
 if failures:
     print(f"\n{len(failures)} FAILED")
