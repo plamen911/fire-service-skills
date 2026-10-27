@@ -96,12 +96,12 @@ def test_citiraj():
     check(t == "Версията се проверява по т. 7.6 (Методическо ръководство, 2007). Пак (Методическо ръководство, 2007).",
           "two points of one source side by side → one reference; the next sentence keeps its own")
     t, _, _ = s.citiraj("А [[simeonov: с. 5]], а Б [[simeonov: с. 9]].")
-    check(t == "А (Симеонов, 2007), а Б.", "the same reference twice in one sentence → once")
+    check(t == "А (Пожаротехническа експертиза, 2007), а Б.", "the same reference twice in one sentence → once")
     check(len(lit) == 4 and "Симеонов" in lit[0] and "ICSC 1561" in lit[2] and "Чочев" in lit[3],
           "mandatory first, then cited in order, each once")
     check(lit[-1].endswith(".") and all(x.endswith(";") for x in lit[:-1]), "punctuation of the list")
     t, lit, _ = s.citiraj("Ръчно (Чочев, 2003, прил. № 2) и [[icsc:0087; simeonov]].")
-    check(t.endswith("(ICSC 0087; Симеонов, 2007)."), "several sources in one marker")
+    check(t.endswith("(ICSC 0087; Пожаротехническа експертиза, 2007)."), "several sources in one marker")
     check(any("Чочев" in x for x in lit), "a hand-typed reference is listed too")
     for bad, why in (("[[nqma]]", "unknown key"), ("[[icsc:9999]]", "card not in the table"),
                      ("(ICSC 9999)", "hand-typed unknown card")):
