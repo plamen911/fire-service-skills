@@ -57,7 +57,8 @@ python3 -c "import glob,os;print('\n'.join(glob.glob(os.path.expanduser('~/.clau
 ```
 
 1. Прочети `_shared/conventions.md` и `_shared/terminology.md`.
-2. Ако липсва matplotlib: `pip install -r requirements.txt`.
+2. Ако липсва matplotlib или ezdxf (без ezdxf .dxf не се записва): `pip install -r requirements.txt`
+   (`--break-system-packages`, ако pip го иска).
 3. Прочети началото на `scripts/shema.py` – там е описан целият вход: полета, видове, координати.
 4. Каталогът на знаците – `python3 scripts/znatsi.py -o znatsi.png` (с `--cvetna` – в цвят); покажи
    го, когато потребителят пита какви знаци има или как изглежда някой.

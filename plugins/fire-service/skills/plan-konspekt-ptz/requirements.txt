@@ -1,0 +1,5 @@
+# Python зависимости за скриптовете на скила (схемата се чертае от shemi).
+#   pip install -r requirements.txt
+python-docx>=0.8.11
+matplotlib>=3.7
+ezdxf>=1.1      # .dxf на схемата за AutoCAD/CorelDRAW

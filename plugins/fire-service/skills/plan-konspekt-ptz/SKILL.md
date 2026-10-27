@@ -106,7 +106,9 @@ python3 scripts/build_ptz.py data.json -o "/mnt/user-data/outputs/Plan-konspekt-
 
 - Име на файла – латиница: `Plan-konspekt-PTZ_{Обект}_{ГГГГ-ММ-ДД}.docx`.
 - До .docx скриптът записва схемата като `…_shema.png` и същата схема като `…_shema.dxf` за AutoCAD
-  и CorelDRAW (при сгради от КАИС – в координати КС2005); пътят е в `dxf` на резултата.
+  и CorelDRAW (при сгради от КАИС – в координати КС2005); пътят е в `dxf` на резултата. Предупреждение
+  „DXF не се записа“ значи, че липсва ezdxf: `pip install -r requirements.txt` (`--break-system-packages`,
+  ако pip го иска) и сглоби отново – .dxf се предава винаги.
 - Предай .docx и .dxf със `SendUserFile` (или `present_files`) – .dxf винаги, за редакция. В чата кажи накратко: какви сили и усложнения има сценарият,
   колко е общото време и какво е попълнено по подразбиране.
 
