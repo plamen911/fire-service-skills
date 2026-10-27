@@ -188,6 +188,10 @@ r = check(GOOD + "\nТова е по литературата (ICSC 0087; Сим
 ok(any("ПТЕ, 2007" in g for g in r["greshki"]), "the old citation inside a combined one")
 r = check(GOOD + "\nТова е по литературата (Пожаротехническа експертиза, 2007).\n", META)
 ok(any("ПТЕ, 2007" in g for g in r["greshki"]), "the full title, written by hand, is caught too")
+r = check(GOOD + "\nВерсията се проверява по основанията от Методическото ръководство (Методическо ръководство, 2007).\n", META)
+ok(any("се подкрепя от следните обстоятелства" in g for g in r["greshki"]), "„Версията се проверява по основанията …“ is caught")
+r = check(GOOD + "\nВерсията за злонамерено внесен външен огнеизточник се подкрепя от следните обстоятелства:\n", META)
+ok(not any("основанията" in g for g in r["greshki"]), "the prescribed lead-in passes")
 r = check(GOOD + "\nТова е по литературата (ПТЕ, 2007).\n", META)
 ok(not any("Симеонов" in g for g in r["greshki"]), "the abbreviated citation passes")
 
