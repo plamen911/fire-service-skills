@@ -1,0 +1,23 @@
+# Runs next to n8n, in n8n's Docker network, with NO published port – only n8n can reach it
+# (http://fire-render:8080). The secrets (RENDER_TOKEN, FIRE_SERVICE_KEY) and N8N_NETWORK are in .env on the
+# server, never in the repository.
+services:
+  fire-render:
+    build: .
+    container_name: fire-render
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - render-data:/data
+    networks:
+      - n8n
+    mem_limit: 1g
+    read_only: false
+    security_opt:
+      - no-new-privileges:true
+networks:
+  n8n:
+    external: true
+    name: ${N8N_NETWORK:?set N8N_NETWORK in .env}
+volumes:
+  render-data:
