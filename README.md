@@ -354,5 +354,4 @@ Places, после OpenStreetMap, само в област Плевен) → п�
 Ключът `fire-service-places-n8n` е в Google Cloud, проект „AI Generate Monthly Work“, и е вписан само в
 n8n (възелът „Kais request“, `PLACES_KEY`). Ограничен е до Places API (New); квотата е 100 текстови търсения
 на ден – в безплатния месечен лимит на Google. Ако ключът изтече или сметката за плащане спре, търсенето по
-име продължава само през OpenStreetMap – нищо не се чупи. Нов ключ: кажи на Claude „смени ключа за Google
-Places“.
+име продължава само през OpenStreetMap – нищо не се чупи.
