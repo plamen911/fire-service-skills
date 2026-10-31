@@ -115,6 +115,14 @@ def main():
     ok(r.returncode == 2 and "номер" in r.stderr, "без номер – отказ")
     ok(out("dobavi", "--masto", "Гиген", "--ulitsa", "Главна", "--orientir", "до язовира", "--bez-nomer",
            "--lat", "43.7010", "--lon", "24.4840", "--dry-run")["deystvie"] in ("dobaven", "obnoven"), "--bez-nomer")
+    d = out("dobavi", "--masto", "Гиген", "--ulitsa", "парк „Тестов“", "--orientir", "до паркинга", "--bez-nomer",
+            "--lat", "43.7010", "--lon", "24.4840", "--dry-run")
+    ok("ул. парк" not in json.dumps(d, ensure_ascii=False), "a park is written without „ул.“")
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("voda", VODA); vm = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(vm)
+    ok(vm.street("Христо Ботев 12") == "ул. Христо Ботев 12" and vm.street("бул. Русе 5") == "бул. Русе 5"
+       and vm.street("парк „Кайлъка“") == "парк „Кайлъка“" and vm.street("") == "", "street(): „ул.“ only for a street")
     # потвърждаване на място на хидрант без координати и на приблизителен
     d = out("potvardi", "00001-004", "--lat", "43.6490", "--lon", "24.4070", "--proveril", "Иван Дъбов")
     ok(d["vodoiztochnik"]["tochnost"] == "проверена" and d["premesten_m"] is None, d)

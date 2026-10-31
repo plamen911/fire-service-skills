@@ -254,7 +254,7 @@ def unit(r):
 # ── output ─────────────────────────────────────────────────────────────────────────────────
 def describe(r):
     kind = ", ".join(x for x in (r["vid"], r["tip"], r["diametar"]) if x)
-    where = ", ".join(x for x in (("ул. " + r["ulitsa"]) if r["ulitsa"] else "", r["orientir"]) if x) or "без адрес"
+    where = ", ".join(x for x in (street(r["ulitsa"]), r["orientir"]) if x) or "без адрес"
     p = point(r)
     coord = f'{p[0]:.7f}, {p[1]:.7f} – {TOCHNOST.get(r["tochnost"], r["tochnost"])}' if p else TOCHNOST[""]
     line = f'{r["id"]} | {kind} | {where} | {coord}'
@@ -469,7 +469,7 @@ def cmd_eksport(a, store):
         marks = []
         for r in rows:
             p = point(r)
-            desc = "; ".join(x for x in (r["tip"], r["diametar"], ("ул. " + r["ulitsa"]) if r["ulitsa"] else "", r["orientir"],
+            desc = "; ".join(x for x in (r["tip"], r["diametar"], street(r["ulitsa"]), r["orientir"],
                                          TOCHNOST.get(r["tochnost"], ""), r["sastoyanie"], r["belezhka"]) if x)
             marks.append(f'<Placemark><name>{esc(r["naseleno_masto"] + " – " + r["vid"] + " " + r["id"])}</name>'
                          f"<description>{esc(desc)}</description><Point><coordinates>{p[1]:.7f},{p[0]:.7f},0</coordinates></Point></Placemark>")
@@ -503,16 +503,29 @@ def finish(a, store, rows, obj, text):
     emit(a, obj, text + (" (проба – нищо не е записано)" if a.dry_run else ""))
 
 
+PLACE_WORDS = re.compile(r"^\s*(ул\.|бул\.|пл\.|ж\.?к\.|кв\.|м\.|местност|парк|градина|промишлена|индустриална|"
+                         r"стопански|извън|път|шосе|площад|булевард|улица)", re.I)
+
+
+def street(v):
+    """„ул. Христо Ботев 12“ – but a park, a quarter, a road or a locality is written as it is, without „ул.“."""
+    v = (v or "").strip()
+    if not v:
+        return ""
+    return v if PLACE_WORDS.match(v) else "ул. " + v
+
+
 def require_address(a):
-    """The owner's rule: a new water source always has a street, a number and a landmark. The number is taken from
-    the address of the landmark the user names; --bez-nomer only where there is truly none (a field, a dam)."""
+    """The owner's rule: a new water source always has a street, a number and a landmark. The street and the number are
+    found by Claude from the address of the landmark the user names (kais.py mesto); where the point is not on a
+    street (a park, a locality, an industrial zone, a field, a dam) --ulitsa holds that place and --bez-nomer is given."""
     missing = [name for name, v in (("--ulitsa", a.ulitsa), ("--orientir", a.orientir)) if not (v or "").strip()]
     if missing:
-        raise Problem("MISSING: " + ", ".join(missing) + " – водоизточник се записва с улица, номер и ориентир "
-                      "(номерът – от адреса на ориентира)")
+        raise Problem("MISSING: " + ", ".join(missing) + " – водоизточник се записва с улица, номер и ориентир: намери "
+                      "адреса на ориентира (kais.py mesto); извън улица – мястото (парк, местност) и --bez-nomer")
     if not re.search(r"\d", a.ulitsa) and not a.bez_nomer:
-        raise Problem("MISSING: номер в --ulitsa (напр. „Христо Ботев 12“) – вземи го от адреса на ориентира; "
-                      "--bez-nomer само когато мястото наистина няма номер")
+        raise Problem("MISSING: номер в --ulitsa (напр. „Христо Ботев 12“) – намери го от адреса на ориентира (kais.py mesto); "
+                      "--bez-nomer само когато мястото няма номер (парк, местност, поле, язовир) – тогава в --ulitsa е мястото")
 
 
 def cmd_dobavi(a, store):
@@ -827,7 +840,7 @@ def main():
     p.add_argument("--diametar", default=""); p.add_argument("--ulitsa", default=""); p.add_argument("--orientir", default="")
     p.add_argument("--sastoyanie", default=""); p.add_argument("--belezhka", default="")
     p.add_argument("--vapreki", action="store_true", help="записва и точка далеч от центъра на населеното място")
-    p.add_argument("--bez-nomer", action="store_true", help="мястото няма номер (поле, язовир) – иначе номерът е задължителен")
+    p.add_argument("--bez-nomer", action="store_true", help="мястото няма номер (парк, местност, поле, язовир) – в --ulitsa се пише мястото; иначе номерът е задължителен")
     p = sub.add_parser("potvardi", parents=[common, where, write]); p.add_argument("id"); p.add_argument("--sastoyanie", default="")
     p = sub.add_parser("promeni", parents=[common, write]); p.add_argument("id")
     p.add_argument("fields", nargs="+", metavar="поле=стойност")
