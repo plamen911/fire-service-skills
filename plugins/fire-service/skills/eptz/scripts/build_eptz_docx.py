@@ -129,6 +129,30 @@ def parse_md(md):
     # слива съседни редове от един параграф (разделени без празен ред)
     return {k: [x for x in v if x[0] != "sep"] for k, v in secs.items()}
 
+# ---------- основание ----------
+def sadebno_delo(meta):
+    """A court case (\"delo_vid\": \"гражданско дело\", \"НОХД\" …) instead of ЗМ/ДП with a постановление."""
+    vid = (meta.get("delo_vid") or "").strip()
+    return bool(vid) and vid.upper() not in ("ДП", "ДОСЪДЕБНО ПРОИЗВОДСТВО")
+
+def grazhdansko_delo(meta):
+    """A civil (or administrative) case – the expert works under ГПК, not НПК."""
+    vid = (meta.get("delo_vid") or "").lower()
+    return sadebno_delo(meta) and ("граждан" in vid or "гр." in vid or "администр" in vid or "адм." in vid)
+
+def osnovanie_sad(meta):
+    """The sentence in „I. Основание“ and the lead-in of „II. Представен материал“ for a court case."""
+    vid, no, sad = meta["delo_vid"].strip(), m(meta, "delo_no"), m(meta, "sad")
+    sastav = (meta.get("sastav") or "").strip()
+    akt = (meta.get("akt") or "определение на съда").strip()
+    vazl = (meta.get("vazlozheno_na") or "РДПБЗН – Плевен").strip()
+    pismo = (meta.get("pismo") or "").strip()
+    no_g = no if no.endswith("г.") else f"{no} г."
+    delo = f"{vid} № {no_g} по описа на {sad}" + (f", {sastav}" if sastav else "")
+    osn = (f"{akt[0].upper()+akt[1:]} по {delo}, с което е допусната СЪДЕБНА ПОЖАРО-ТЕХНИЧЕСКА ЕКСПЕРТИЗА "
+           f"и изготвянето на заключението е възложено на {vazl}" + (f", и {pismo}" if pismo else "") + ".")
+    return osn, f"Материали по {vid} № {no_g} по описа на {sad}"
+
 # ---------- основно ----------
 def build(content, meta, out, final, template):
     doc = Document(template)
@@ -160,16 +184,23 @@ def build(content, meta, out, final, template):
     anchor = kids[del_to]   # първият запазен празен ред
 
     new = []
-    zm = f"ЗМ № {m(meta,'zm_no')} по описа на {m(meta,'zm_opis')}"
-    # прокуратура: "prokuratura" (напр. "ОП – Плевен") има предимство; иначе "РП – {rp_grad}"
-    prok = m(meta, "prokuratura", f"РП – {m(meta, 'rp_grad')}")
-    dp = f"ДП № {m(meta,'dp_no')} по описа на {prok}"
-    post = f"постановление № {m(meta,'postanovlenie_no')} от {m(meta,'postanovlenie_date')}"
-    new += [clone(P_HDR, "I. Основание за провеждане на експертизата."),
-            clone(P_BODY, f"{post[0].upper()+post[1:]} за назначаване на СЪДЕБНА ПОЖАРО-ТЕХНИЧЕСКА ЕКСПЕРТИЗА на {m(meta,'naznachil')} във връзка със {zm} и {dp}."),
-            clone(P_BLANK),
-            clone(P_HDR, "II. Представен доказателствен материал.")]
-    obshto = f"Материали по ДП № {m(meta,'dp_no')} по описа на {prok} и ЗМ № {m(meta,'zm_no')} г. по описа на {m(meta,'zm_opis')}"
+    hdr_I = clone(P_HDR, "I. Основание за провеждане на експертизата.")
+    hdr_II = clone(P_HDR, "II. Представен доказателствен материал.")
+    if sadebno_delo(meta):
+        # expertise assigned by a court (гражданско дело, НОХД …) – no постановление, ЗМ or ДП
+        osn, obshto = osnovanie_sad(meta)
+        akt = (meta.get("akt") or "определение на съда").strip()
+        zaglavie = f"За проведена СЪДЕБНА ПОЖАРО-ТЕХНИЧЕСКА ЕКСПЕРТИЗА по {obshto[len('Материали по '):]}, назначена с {akt.rstrip('.')}."
+    else:
+        zm = f"ЗМ № {m(meta,'zm_no')} по описа на {m(meta,'zm_opis')}"
+        # прокуратура: "prokuratura" (напр. "ОП – Плевен") има предимство; иначе "РП – {rp_grad}"
+        prok = m(meta, "prokuratura", f"РП – {m(meta, 'rp_grad')}")
+        dp = f"ДП № {m(meta,'dp_no')} по описа на {prok}"
+        post = f"постановление № {m(meta,'postanovlenie_no')} от {m(meta,'postanovlenie_date')}"
+        osn = f"{post[0].upper()+post[1:]} за назначаване на СЪДЕБНА ПОЖАРО-ТЕХНИЧЕСКА ЕКСПЕРТИЗА на {m(meta,'naznachil')} във връзка със {zm} и {dp}."
+        obshto = f"Материали по ДП № {m(meta,'dp_no')} по описа на {prok} и ЗМ № {m(meta,'zm_no')} г. по описа на {m(meta,'zm_opis')}"
+        zaglavie = f"За проведена СЪДЕБНА ПОЖАРО-ТЕХНИЧЕСКА ЕКСПЕРТИЗА по {zm} и {dp}, назначена с {post} на {m(meta,'naznachil')}."
+    new += [hdr_I, clone(P_BODY, osn), clone(P_BLANK), hdr_II]
     material = meta.get("predstaven_material")
     if isinstance(material, list) and [x for x in material if str(x).strip()]:
         # списък с документите от делото (от снимките): оглед, албум, разпити, телефонограма, експертизи …
@@ -234,9 +265,16 @@ def build(content, meta, out, final, template):
             continue
         s = ptext(el)
         if s.startswith("За проведена"):
-            set_text(el, f"За проведена СЪДЕБНА ПОЖАРО-ТЕХНИЧЕСКА ЕКСПЕРТИЗА по {zm} и {dp}, назначена с {post} на {m(meta,'naznachil')}.")
+            set_text(el, zaglavie)
+        elif s.startswith("В съответствие с чл. 149") and grazhdansko_delo(meta):
+            # the НПК articles do not apply in a civil case – the expert's duties there are by ГПК
+            set_text(el, "Разяснени са ми правата и задълженията като вещо лице по ГПК. Предупреден съм за "
+                         "отговорността ми по чл. 291 от НК при даване на невярно заключение.")
         elif s.startswith("Експерт по досъдебното"):
             rs = el.findall(qn("w:r"))
+            if sadebno_delo(meta):
+                for t in rs[0].findall(qn("w:t")):
+                    t.text = t.text.replace("досъдебното производство", "делото")
             tail = f" {m(meta,'expert_name','[Име на експерта]')} – {m(meta,'expert_position')}."
             for r in rs[2:]: el.remove(r)
             for t in rs[1].findall(qn("w:t")): t.text = typo(tail)

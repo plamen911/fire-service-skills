@@ -106,6 +106,28 @@ def test_eptz():
     check("—" not in t_no and " - " not in t_no, "only en dash as a dash")
     check_literatura(tmp, mp)
 
+    # a court case (гражданско дело) instead of ЗМ/ДП with a постановление
+    sad = {k: v for k, v in meta.items() if k not in ("zm_no", "zm_opis", "dp_no", "rp_grad", "postanovlenie_no",
+                                                      "postanovlenie_date", "naznachil")}
+    sad.update({"delo_vid": "гражданско дело", "delo_no": "1111/2026", "sad": "Районен съд – Плевен",
+                "sastav": "III граждански състав",
+                "akt": "определение от открито съдебно заседание на 01.10.2026 г. (протокол рег. № 22/02.10.2026 г.)",
+                "pismo": "писмо изх. № 333/05.10.2026 г. на Районен съд – Плевен", "vazlozheno_na": "РСПБЗН – Плевен",
+                "predstaven_material": ["Препис от искова молба"]})
+    sp = os.path.join(tmp, "sad.json")
+    json.dump(sad, open(sp, "w", encoding="utf-8"), ensure_ascii=False)
+    out = os.path.join(tmp, "sad.docx")
+    build(content, sp, out, final=True)
+    t_s = doc_text(out)
+    check("Определение от открито съдебно заседание на 01.10.2026 г. (протокол рег. № 22/02.10.2026 г.) по гражданско дело "
+          "№ 1111/2026 г. по описа на Районен съд – Плевен, III граждански състав" in t_s, "court case: основание")
+    check("възложено на РСПБЗН – Плевен, и писмо изх. № 333/05.10.2026 г." in t_s, "court case: възложено на + писмо")
+    check("Материали по гражданско дело № 1111/2026 г. по описа на Районен съд – Плевен, както следва:" in t_s,
+          "court case: материали")
+    check("ЗМ №" not in t_s and "постановление" not in t_s.lower() and "[...]" not in t_s and "досъдебното" not in t_s, "court case: no ЗМ/ДП/постановление")
+    check("назначена с определение от открито съдебно заседание" in t_s and "г.." not in t_s, "court case: title sentence")
+    check("по ГПК" in t_s and "НПК" not in t_s, "civil case: ГПК instead of НПК")
+
 
 def literatura(path):
     """The numbered paragraphs after „Използвана литература“."""
