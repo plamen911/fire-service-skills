@@ -235,7 +235,9 @@ def check(content, meta, vaprosi=None, materiali=""):
                            "телефонограмата, преди да пишеш, че ги няма")
 
     # ── the weather: an airport's data never presented as НИМХ data ──
-    for par in re.split(r"\n\s*\n", content):
+    # sentence by sentence: НИМХ data quoted from the case materials may stand in the same paragraph as the
+    # airport's data – only the same sentence presents one as the other
+    for par in re.split(r"(?<=[.!?])\s+(?=[А-ЯA-Z])|\n\s*\n", content):
         if "[[metar:" in par and re.search(r"НИМХ|Национални?я? институт по метеорология", par) and "nimh-buletin" not in par:
             greshki.append("данните от летище (маркер [[metar:…]]) са представени като данни на НИМХ – пиши „по данни "
                            "от най-близката метеорологична станция“")

@@ -205,6 +205,8 @@ r = check(GOOD + "\nПо данни от метеорологичната ста
 ok(any("летище" in g for g in r["greshki"]), "„летище“ in the text is caught")
 r = check(GOOD + "\nПо данни на НИМХ няма гръмотевици [[metar:LBPL: 01.10.2026, 13:00–15:00 ч.]].\n", META)
 ok(any("НИМХ" in g and "metar" in g for g in r["greshki"]), "airport data presented as НИМХ")
+r = check(GOOD + "\nПо данните на НИМХ, посочени в материалите, денят е горещ. По данни от най-близката метеорологична станция няма гръмотевици [[metar:LBPL: 01.10.2026, 13:00–15:00 ч.]].\n", META)
+ok(not any("metar" in g for g in r["greshki"]), "НИМХ from the materials and the airport station in separate sentences pass")
 r = check(GOOD + "\nПо данни от най-близката метеорологична станция няма гръмотевици [[metar:LBPL: 01.10.2026, 13:00–15:00 ч.]].\n", META)
 ok(not any("metar" in g or "летище" in g for g in r["greshki"]), "the airport fallback written correctly passes")
 out = GOOD.replace("пожар в стопанска постройка", "пожар в контейнер за отпадъци") + \
