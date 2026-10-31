@@ -1200,6 +1200,30 @@ def cmd_mesto(a):
     print(json.dumps(call(body), ensure_ascii=False, indent=1))
 
 
+
+def _pip_install(paket):
+    """Инсталира липсващ пакет веднъж (облачната среда на Claude често го няма) – тихо, с таймаут."""
+    import subprocess
+    import sys
+    for extra in (["--break-system-packages"], []):
+        try:
+            r = subprocess.run([sys.executable, "-m", "pip", "install", "-q", *extra, paket],
+                               capture_output=True, timeout=240)
+        except Exception:  # pragma: no cover
+            return False
+        if r.returncode == 0:
+            return True
+    return False
+
+
+def _osiguri_shapely():
+    try:
+        import shapely  # noqa: F401
+    except ImportError:
+        if _pip_install("shapely>=2.0"):
+            import importlib
+            importlib.invalidate_caches()
+
 def main():
     ap = argparse.ArgumentParser(description="Кадастралната карта (КАИС) за ситуационни схеми и планове")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1259,6 +1283,8 @@ def main():
             a.link = None
         except ValueError:
             fail("BAD_INPUT", f"„{a.link}“ не е „ширина,дължина“")
+    if a.cmd == "obekt":
+        _osiguri_shapely()
     {"obekt": cmd_obekt, "tarsi": cmd_tarsi, "mesto": cmd_mesto}[a.cmd](a)
 
 
