@@ -107,6 +107,15 @@ ok('articles: "1-9"' in t2, "articles field updated")
 ok("> Непълен документ:" not in t2 and "Транскрипция на скан" in t2, "--palen drops only the incomplete note")
 ok(os.path.basename(r["file"]) == os.path.basename(f1), "same name – replaced in place")
 
+r = run("dopalni", f1, p3, "-o", os.path.join(d, "out2"), "--nepalen", "Страниците свършват с чл. 9.")
+t3 = open(r["file"], encoding="utf-8").read()
+ok(t3.count("> Непълен документ:") == 1 and "свършват с чл. 9." in t3 and "свършват с чл. 6." not in t3,
+   "--nepalen replaces the incomplete note")
+p4 = write(os.path.join(d, "p4.md"), "(2) Втората алинея на последния член започва нова страница.\n\n" + art(10))
+r = run("dopalni", r["file"], p4, "-o", os.path.join(d, "out3"))
+t4 = open(r["file"], encoding="utf-8").read()
+ok("\n\n(2) Втората алинея" in t4, "a page starting with „(2)“ is a new paragraph, not glued")
+
 print("zapis")
 r = run("zapis", bad)
 ok(not r["ok"] and "грешки" in r.get("error", ""), "a file with errors is not saved")
