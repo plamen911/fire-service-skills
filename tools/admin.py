@@ -36,8 +36,10 @@ Fire Service: инструментите `keys`, `staff_update` и `samples_save
     python3 tools/admin.py files list raioni
     python3 tools/admin.py files get raioni naseleni_mesta.csv -o .
     python3 tools/admin.py files put raioni naseleni_mesta.csv      # нова таблица на районите на действие
-    # копието на работния поток в n8n става само – всеки понеделник (работният поток „Backup – Fire Service API
-    # (weekly)“): n8n_fire-service-api.workflow.json + последните 2 с дата в _admin; на ръка, ако трябва:
+    # копието на работния поток в n8n става само – всеки понеделник: cron на сървъра (UTC) изнася в 03:07 UTC
+    # (docker exec n8n n8n export:workflow --id=FzVFOmL3CCB7uPEo --output=/home/node/.n8n-files/backup/fire-service-api.json),
+    # работният поток „Backup – Fire Service API (weekly)“ го качва в 06:37 българско време:
+    # n8n_fire-service-api.workflow.json + последните 2 с дата в _admin; на ръка, ако трябва:
     python3 tools/admin.py files put admin backup.json --name n8n_fire-service-api.workflow.json
 
 Как се добавя колега: 1) има ли го в списъка на служителите (`staff get`) – ако не, `staff add`;
