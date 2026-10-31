@@ -99,6 +99,13 @@ ok(any("най-малко към най-вероятната" in z for z in r["z
 i4 = GOOD.index("## IV.")
 r = check(GOOD[:i4], META)
 ok(any("Общи изводи" in g for g in r["greshki"]), "no section IV")
+ONE = GOOD[:GOOD.index("---\n\n### Изследване на въпрос № 2")].replace(
+    "2. Къде се е намирало огнището?\n", "")
+r = check(ONE, META, QUESTIONS[:1])
+ok(not any("Общи изводи" in g for g in r["greshki"]), f"one question without section IV is fine: {r['greshki']}")
+r = check(ONE + "\n## IV. Общи изводи от проведеното изследване на поставените въпроси.\n\n"
+          "### Отговор на първи въпрос: Каква е причината за пожара?\n\nНебрежност.\n", META, QUESTIONS[:1])
+ok(any("при един въпрос" in g for g in r["greshki"]), "one question with section IV is an error")
 r = check(GOOD.replace("Отговор на втори въпрос", "Отговор на трети въпрос"), META)
 ok(any("по ред" in g for g in r["greshki"]), "ordinals in section IV out of order")
 r = check(GOOD.replace("**Обобщен отговор на първи въпрос:**", "**Заключение:**"), META)
