@@ -135,10 +135,15 @@ def check(content, meta, vaprosi=None, materiali=""):
         greshki.append(f"отговорите не са по ред 1…N: {answers}")
     if listed and answers and len(listed) != len(answers):
         greshki.append(f"въпросите в раздел II са {len(listed)}, а изследванията – {len(answers)}")
-    if sec4 is None:
+    # при един въпрос общите изводи само повтарят обобщения отговор – раздел IV (VI в документа) не се пише
+    edin = len(listed) == 1 or (not listed and len(answers) == 1)
+    if edin and sec4 is not None:
+        greshki.append("при един въпрос не се добавя раздел „## IV. Общи изводи …“ (VI в документа) – "
+                       "изследването завършва с „Обобщен отговор на първи въпрос:“")
+    elif sec4 is None and not edin:
         greshki.append("няма раздел „## IV. Общи изводи от проведеното изследване на поставените въпроси.“ – "
                        "всеки въпрос се повтаря дословно с кратък отговор")
-    else:
+    elif sec4 is not None:
         heads = re.findall(r"^###\s*Отговор на ([а-я]+) въпрос\s*:?\s*(.*)$", sec4, re.M)
         got = [h[0] for h in heads]
         if got != ORDINAL[:len(got)]:
