@@ -46,7 +46,7 @@ python3 -c "import glob,os;print('\n'.join(glob.glob(os.path.expanduser('~/.clau
 3. **Ако в разговора има инструментите `voda` и `voda_save` (конектор Fire Service)** – ползвай
    тях вместо скрипта: `voda` с `action` `masto`, `blizo`, `sluzhba` или `statistika`; `voda_save`
    с `dobavi`, `potvardi` или `promeni`. Аргументите и отговорът са същите като на скрипта с
-   `--json`. Виж `_shared/connector.md`. Ако няма нито инструменти, нито ключ (`NO_KEY`) – кажи,
+   `--json`. Виж `_shared/connector.md` и `_shared/connector_voda.md`. Ако няма нито инструменти, нито ключ (`NO_KEY`) – кажи,
    че данните не са достъпни, и не давай места на хидранти по памет.
 
 ## Входни данни

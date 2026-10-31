@@ -33,7 +33,7 @@ python3 -c "import glob,os;print('\n'.join(glob.glob(os.path.expanduser('~/.clau
 1. Прочети `_shared/conventions.md` (общите правила) и `_shared/terminology.md`.
 2. Скриптът е `_shared/scripts/obekti.py` – командите и полетата са в началото му.
 3. **Без личен ключ, с конектора Fire Service** – инструментите `obekti` и `obekti_save`; как – в
-   `_shared/connector.md` и в края на този файл.
+   `_shared/connector.md`, `_shared/connector_obekti.md` и в края на този файл.
 
 ## Входни данни
 

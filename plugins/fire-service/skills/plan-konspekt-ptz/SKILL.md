@@ -39,7 +39,7 @@ python3 -c "import glob,os;print('\n'.join(glob.glob(os.path.expanduser('~/.clau
    `../shemi/references/kais.md`.
 4. Данните на разработилия са от профила на потребителя (`_shared/profile.md`). Началникът на
    звеното е от списъка на служителите – скриптът го взима сам. С конектора Fire Service – виж
-   `_shared/connector.md`.
+   `_shared/connector.md` и `_shared/connector_obekti.md`.
 
 ## Входни данни
 
