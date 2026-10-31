@@ -33,6 +33,12 @@ history.md с промените. Индексът obekti.csv в корена н
     Към всеки документ се пази и входният му .json – от него документът се изгражда наново, когато нещо
     се промени, вместо да се чертае от нулата.
 
+АРХИВ НА СТАРИТЕ ПЛАНОВЕ („_Архив оперативни планове“ в корена на регистъра) – само за дупки в данните,
+след КАИС, Указанията, образците и търсене в интернет (виж _shared/arhiv.md):
+    python3 _shared/scripts/obekti.py arhiv "Мосю Бриколаж"                  # редовете от INDEX.md
+    python3 _shared/scripts/obekti.py arhiv --papka "ПТЗ/Pleven"               # файловете с линкове
+    python3 _shared/scripts/obekti.py arhiv --papka "Оперативни планове/Kirov" --chete Harakteristika.md
+
 Режим „конектор“ (колега без личен ключ): прочети с инструмента `obekti` (get root/obekti.csv и
 нужните файлове) в папка ПАПКА – `ПАПКА/root/obekti.csv`, `ПАПКА/<papka_id>/history.md` – и пусни
 скрипта с `--store ПАПКА --avtor "Име Фамилия"`. Четенето работи направо; при запис скриптът не пише
@@ -547,6 +553,68 @@ def cmd_promeni(store, reg, a):
     return {"obekt": row}
 
 
+# --------------------------------------------------------------------------- the archive of old plans
+
+ARHIV = "_Архив оперативни планове"
+ARHIV_INDEX = "INDEX.md"
+ARHIV_MAX_TEXT = 30000
+
+
+def arhiv_folder(store, papka=""):
+    """The folder id of the archive root, or of a subfolder given as 'Група/Обект[/подпапка]'."""
+    cur = next((f["id"] for f in store.list("root") if f.get("folder") and f["name"] == ARHIV), None)
+    if not cur:
+        raise Problem(f"NOT_FOUND: в регистъра няма папка „{ARHIV}“")
+    for part in [x for x in str(papka or "").split("/") if x.strip()]:
+        nxt = next((f["id"] for f in store.list(cur) if f.get("folder") and f["name"] == part.strip()), None)
+        if not nxt:
+            raise Problem(f"NOT_FOUND: в архива няма „{papka}“ – виж колоната „папка“ в INDEX.md")
+        cur = nxt
+    return cur
+
+
+def arhiv_rows(index_text):
+    """The table rows of INDEX.md with their group: (група, папка, обект, адрес, година, файлове, рег.)."""
+    rows, grupa = [], ""
+    for line in index_text.splitlines():
+        if line.startswith("## "):
+            grupa = line[3:].strip()
+        elif line.startswith("| ") and not line.startswith("| папка") and not line.startswith("|---"):
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cells) >= 6:
+                rows.append(dict(grupa=grupa, papka=f"{grupa}/{cells[0]}", obekt=cells[1], adres=cells[2],
+                                 godina=cells[3], failove=cells[4], registar=cells[5] if len(cells) > 5 else ""))
+    return rows
+
+
+def cmd_arhiv(store, a):
+    root = arhiv_folder(store)
+    if not a.papka:
+        data = store.get(root, ARHIV_INDEX)
+        if data is None:
+            raise Problem(f"NOT_FOUND: {ARHIV}/{ARHIV_INDEX}")
+        rows = arhiv_rows(data.decode("utf-8"))
+        words = fold(a.tekst).split()
+        hits = [r for r in rows if all(w in fold(" ".join(r.values())) for w in words)] if words else rows
+        return {"arhiv": ARHIV, "namereni": len(hits), "redove": hits[:20],
+                "belezhka": "само за липсващи данни; в отчета – „по план от <година> г.“ (виж _shared/arhiv.md)"}
+    folder = arhiv_folder(store, a.papka)
+    files = store.list(folder)
+    if a.chete:
+        data = store.get(folder, a.chete)
+        if data is None:
+            raise Problem(f"NOT_FOUND: в „{a.papka}“ няма „{a.chete}“")
+        if not a.chete.lower().endswith((".md", ".txt", ".csv")):
+            raise Problem("BAD_REQUEST: --chete е за текстови файлове (.md, .txt); PDF и снимки – по линка download")
+        text = data.decode("utf-8", errors="replace")
+        return {"papka": a.papka, "fail": a.chete, "tekst": text[:ARHIV_MAX_TEXT],
+                "otrezan": len(text) > ARHIV_MAX_TEXT}
+    return {"papka": a.papka,
+            "failove": [{"name": f["name"], "razmer": f.get("size"), "link": f.get("download")}
+                        for f in files if not f.get("folder")],
+            "podpapki": [f["name"] for f in files if f.get("folder")]}
+
+
 def main():
     p = argparse.ArgumentParser(description="Регистърът на обектите (fire-service/Обекти в Drive)")
     p.add_argument("--json", action="store_true")
@@ -572,10 +640,15 @@ def main():
     s.add_argument("--opisanie"); s.add_argument("--data"); s.add_argument("--snimki-id")
     s = sub.add_parser("preimenuvai"); s.add_argument("id"); s.add_argument("--ime", required=True); s.add_argument("--ot")
     s = sub.add_parser("promeni"); s.add_argument("id"); s.add_argument("fields", nargs="+")
+    s = sub.add_parser("arhiv", help="архивът на старите планове – индекс, файлове, текст")
+    s.add_argument("tekst", nargs="?", default=""); s.add_argument("--papka"); s.add_argument("--chete")
     a = p.parse_args()
 
     try:
         store = Store(a.store, a.avtor) if a.store else Remote()
+        if a.cmd == "arhiv":
+            print(json.dumps(cmd_arhiv(store, a), ensure_ascii=False, indent=None if a.json else 1))
+            return
         reg = Register(store)
         if a.cmd == "tarsi":
             if not (a.tekst or a.ime or a.adres or a.kadastar or a.lat is not None):
