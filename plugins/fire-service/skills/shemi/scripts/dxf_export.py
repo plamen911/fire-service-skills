@@ -34,7 +34,33 @@ LAYERS = {  # name: (ACI colour, true colour or None, linetype)
 FONT = "arial.ttf"            # a TrueType font with Cyrillic – AutoCAD and CorelDRAW both have it
 
 
+def _pip_install(paket):
+    """Инсталира липсващ пакет веднъж (облачната среда на Claude често го няма) – тихо, с таймаут."""
+    import subprocess
+    import sys
+    for extra in (["--break-system-packages"], []):
+        try:
+            r = subprocess.run([sys.executable, "-m", "pip", "install", "-q", *extra, paket],
+                               capture_output=True, timeout=240)
+        except Exception:  # pragma: no cover
+            return False
+        if r.returncode == 0:
+            return True
+    return False
+
+
 def available():
+    """DXF се записва винаги – ако ezdxf липсва, се инсталира веднъж и се внася наново."""
+    global ezdxf, dxfcolors
+    if ezdxf is None and _pip_install("ezdxf>=1.1"):
+        try:
+            import importlib
+            importlib.invalidate_caches()
+            import ezdxf as _e
+            from ezdxf import colors as _c
+            ezdxf, dxfcolors = _e, _c
+        except ImportError:  # pragma: no cover
+            pass
     return ezdxf is not None
 
 
