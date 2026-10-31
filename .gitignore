@@ -8,3 +8,4 @@ regs/
 obraztsi/
 plugins/fire-service/evals/results/
 dist/
+.pytest_cache/

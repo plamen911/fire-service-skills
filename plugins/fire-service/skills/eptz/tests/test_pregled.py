@@ -201,6 +201,23 @@ r = check(GOOD + "\nВерсията за злонамерено внесен в
 ok(not any("основанията" in g for g in r["greshki"]), "the prescribed lead-in passes")
 r = check(GOOD + "\nТова е по литературата (ПТЕ, 2007).\n", META)
 ok(not any("Симеонов" in g for g in r["greshki"]), "the abbreviated citation passes")
+r = check(GOOD + "\nПо данни от метеорологичната станция на летище Долна Митрополия няма гръмотевици.\n", META)
+ok(any("летище" in g for g in r["greshki"]), "„летище“ in the text is caught")
+r = check(GOOD + "\nПо данни на НИМХ няма гръмотевици [[metar:LBPL: 01.10.2026, 13:00–15:00 ч.]].\n", META)
+ok(any("НИМХ" in g and "metar" in g for g in r["greshki"]), "airport data presented as НИМХ")
+r = check(GOOD + "\nПо данни от най-близката метеорологична станция няма гръмотевици [[metar:LBPL: 01.10.2026, 13:00–15:00 ч.]].\n", META)
+ok(not any("metar" in g or "летище" in g for g in r["greshki"]), "the airport fallback written correctly passes")
+out = GOOD.replace("пожар в стопанска постройка", "пожар в контейнер за отпадъци") + \
+    "\nВремето е за обект без пожароизвестителна или пожарогасителна инсталация.\n"
+r = check(out, META)
+ok(any("на открито" in g for g in r["greshki"]), "„обект без … инсталация“ at an outdoor fire is caught")
+r = check(GOOD + "\nВремето е за обект без пожароизвестителна или пожарогасителна инсталация.\n", META)
+ok(not any("на открито" in g for g in r["greshki"]), "the same phrase indoors passes")
+ogled = GOOD.replace("тестово село.", "тестово село. Огледът е извършен на 01.10.2026 г. от разследващ полицай.")
+r = check(ogled, META)
+ok(any("веществени доказателства" in g for g in r["greshki"]), "section I without the seized-evidence sentence")
+r = check(ogled.replace("разследващ полицай.", "разследващ полицай. Събрани и иззети веществени доказателства от местопроизшествието – няма."), META)
+ok(not any("веществени доказателства" in g for g in r["greshki"]), "with „– няма.“ it passes")
 
 if failures:
     print(f"\n{len(failures)} FAILED")

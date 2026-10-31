@@ -503,8 +503,22 @@ def finish(a, store, rows, obj, text):
     emit(a, obj, text + (" (проба – нищо не е записано)" if a.dry_run else ""))
 
 
+def require_address(a):
+    """The owner's rule: a new water source always has a street, a number and a landmark. The number is taken from
+    the address of the landmark the user names; --bez-nomer only where there is truly none (a field, a dam)."""
+    missing = [name for name, v in (("--ulitsa", a.ulitsa), ("--orientir", a.orientir)) if not (v or "").strip()]
+    if missing:
+        raise Problem("MISSING: " + ", ".join(missing) + " – водоизточник се записва с улица, номер и ориентир "
+                      "(номерът – от адреса на ориентира)")
+    if not re.search(r"\d", a.ulitsa) and not a.bez_nomer:
+        raise Problem("MISSING: номер в --ulitsa (напр. „Христо Ботев 12“) – вземи го от адреса на ориентира; "
+                      "--bez-nomer само когато мястото наистина няма номер")
+
+
 def cmd_dobavi(a, store):
     p = check_point(origin_of(a))
+    if not getattr(a, "ot_kartata", False):   # the import from the checked map has no street – that path is exempt
+        require_address(a)
     if not store.path:
         return remote_write(a, store, {"action": "dobavi", "masto": a.masto, "obshtina": a.obshtina, "vid": a.vid, "tip": a.tip,
                                        "lat": p[0], "lon": p[1], "diametar": a.diametar, "ulitsa": a.ulitsa, "orientir": a.orientir,
@@ -713,7 +727,7 @@ def cmd_karta(a, store):
     done, failed = [], []
     if a.zapishi:
         for m in new:
-            ns = argparse.Namespace(json=True, csv=a.csv, lat=m["lat"], lon=m["lon"], link=None, dry_run=a.dry_run,
+            ns = argparse.Namespace(json=True, csv=a.csv, ot_kartata=True, lat=m["lat"], lon=m["lon"], link=None, dry_run=a.dry_run,
                                     proveril=a.proveril, masto=m["masto"], obshtina=a.obshtina, vid="хидрант", tip=m["tip"],
                                     diametar="", ulitsa="", orientir="", sastoyanie="", belezhka=m["belezhka"], vapreki=False)
             buf = io.StringIO()
@@ -812,6 +826,7 @@ def main():
     p.add_argument("--diametar", default=""); p.add_argument("--ulitsa", default=""); p.add_argument("--orientir", default="")
     p.add_argument("--sastoyanie", default=""); p.add_argument("--belezhka", default="")
     p.add_argument("--vapreki", action="store_true", help="записва и точка далеч от центъра на населеното място")
+    p.add_argument("--bez-nomer", action="store_true", help="мястото няма номер (поле, язовир) – иначе номерът е задължителен")
     p = sub.add_parser("potvardi", parents=[common, where, write]); p.add_argument("id"); p.add_argument("--sastoyanie", default="")
     p = sub.add_parser("promeni", parents=[common, write]); p.add_argument("id")
     p.add_argument("fields", nargs="+", metavar="поле=стойност")

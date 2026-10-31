@@ -90,24 +90,31 @@ def main():
     ok(run("eksport", "--masto", "Гиген", "-o", kml).returncode == 2, "няма точни за износ")
     # проба: нищо не се записва
     before = open(TABLE, encoding="utf-8").read()
-    d = out("dobavi", "--masto", "Гиген", "--tip", "надземен", "--lat", "43.7010", "--lon", "24.4840", "--dry-run")
+    d = out("dobavi", "--masto", "Гиген", "--tip", "надземен", "--ulitsa", "Главна 1", "--orientir", "пред кметството", "--lat", "43.7010", "--lon", "24.4840", "--dry-run")
     ok(d["deystvie"] == "dobaven" and d["dry_run"] and open(TABLE, encoding="utf-8").read() == before, "проба")
     # нов водоизточник: следващ номер, проверена, с дата и кой
     d = out("dobavi", "--masto", "Гиген", "--tip", "надземен", "--lat", "43.7010", "--lon", "24.4840",
-            "--orientir", "пред кметството", "--proveril", "Иван Дъбов")
+            "--ulitsa", "Главна 1", "--orientir", "пред кметството", "--proveril", "Иван Дъбов")
     v = d["vodoiztochnik"]
     ok(v["id"] == "00004-003" and v["tochnost"] == "проверена" and v["proveril"] == "Иван Дъбов" and v["proveren_na"], v)
     ok(v["sluzhba"] == "РСПБЗН – Гулянци" and v["naseleno_masto"] == "с. Гиген", v)
     # същата точка втори път (на няколко метра) обновява записа, не създава втори
-    d = out("dobavi", "--masto", "Гиген", "--lat", "43.70103", "--lon", "24.48402", "--diametar", "80")
+    d = out("dobavi", "--masto", "Гиген", "--ulitsa", "Главна 1", "--orientir", "пред кметството", "--lat", "43.70103", "--lon", "24.48402", "--diametar", "80")
     ok(d["deystvie"] == "obnoven" and d["vodoiztochnik"]["id"] == "00004-003", d)
     ok(d["vodoiztochnik"]["diametar"] == "80" and d["vodoiztochnik"]["orientir"] == "пред кметството", "допълва, не трие")
     ok(out("masto", "Гиген")["obshto"] == 3, "един запис, не два")
     # далеч от населеното място се отказва; с --vapreki минава
-    r = run("dobavi", "--masto", "Гиген", "--lat", "43.5", "--lon", "24.6")
+    r = run("dobavi", "--masto", "Гиген", "--ulitsa", "Главна 1", "--orientir", "пред кметството", "--lat", "43.5", "--lon", "24.6")
     ok(r.returncode == 2 and "TOO_FAR" in r.stderr, r.stderr)
-    ok(out("dobavi", "--masto", "Гиген", "--lat", "43.5", "--lon", "24.6", "--vapreki", "--dry-run")["deystvie"] == "dobaven", "--vapreki")
-    ok(run("dobavi", "--masto", "Гиген", "--vid", "кладенец", "--lat", "43.7", "--lon", "24.48").returncode == 2, "непознат вид")
+    ok(out("dobavi", "--masto", "Гиген", "--ulitsa", "Главна 1", "--orientir", "пред кметството", "--lat", "43.5", "--lon", "24.6", "--vapreki", "--dry-run")["deystvie"] == "dobaven", "--vapreki")
+    ok(run("dobavi", "--masto", "Гиген", "--vid", "кладенец", "--ulitsa", "Главна 1", "--orientir", "пред кметството", "--lat", "43.7", "--lon", "24.48").returncode == 2, "непознат вид")
+    # улица, номер и ориентир са задължителни (правилото на собственика)
+    r = run("dobavi", "--masto", "Гиген", "--lat", "43.7010", "--lon", "24.4840", "--dry-run")
+    ok(r.returncode == 2 and "MISSING" in r.stderr and "--ulitsa" in r.stderr and "--orientir" in r.stderr, r.stderr)
+    r = run("dobavi", "--masto", "Гиген", "--ulitsa", "Главна", "--orientir", "пред кметството", "--lat", "43.7010", "--lon", "24.4840", "--dry-run")
+    ok(r.returncode == 2 and "номер" in r.stderr, "без номер – отказ")
+    ok(out("dobavi", "--masto", "Гиген", "--ulitsa", "Главна", "--orientir", "до язовира", "--bez-nomer",
+           "--lat", "43.7010", "--lon", "24.4840", "--dry-run")["deystvie"] in ("dobaven", "obnoven"), "--bez-nomer")
     # потвърждаване на място на хидрант без координати и на приблизителен
     d = out("potvardi", "00001-004", "--lat", "43.6490", "--lon", "24.4070", "--proveril", "Иван Дъбов")
     ok(d["vodoiztochnik"]["tochnost"] == "проверена" and d["premesten_m"] is None, d)

@@ -190,6 +190,19 @@ def test_otchet():
     r, out = run("build_otchet.py", data, tmp)
     check(r.returncode == 0 and "ПРИСЪСТВАЛИ СЛУЖИТЕЛИ: ……… служители" in doc_text(out)[0]
           and "е ……… сек., което е за ……… точки." in doc_text(out)[0], "popalni: false leaves dots to fill in by hand")
+    # the connector (no key): the exercise as its own text, with its norm – the points still come out
+    data.pop("popalni")
+    data["tema2"] = {"tekst": "Проиграване на упражнение № 1.1", "normativ": [{"do_sek": 65, "tochki": 6},
+                                                                         {"do_sek": 70, "tochki": 5}]}
+    data["zvena"] = [{"zveno": "РСПБЗН – Левски", "prisastvali": 3, "sekundi": 68}, {"zveno": "РСПБЗН – Кнежа"}]
+    r, out = run("build_otchet.py", data, tmp)
+    text = doc_text(out)[0] if r.returncode == 0 else r.stderr
+    check("е 68 сек., което е за 5 точки." in text and "………" not in text, f"own text with a norm → points, filled in: {text[-200:]}")
+    data["tema2"] = {"tekst": "Проиграване на упражнение"}
+    data["zvena"] = [{"zveno": "РСПБЗН – Левски", "prisastvali": 3}]
+    r, out = run("build_otchet.py", data, tmp)
+    text = doc_text(out)[0] if r.returncode == 0 else ""
+    check(r.returncode == 0 and "………" not in text and "без грешки" in text, "own text, no norm, no result → still filled in")
     from build_otchet import points
     norm = [{"do_sek": 60, "tochki": 6}, {"do_sek": 75, "tochki": 4}]
     check(points(norm, 60) == 6 and points(norm, 72) == 4 and points(norm, 90) == 0, "points by a norm table")

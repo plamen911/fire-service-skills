@@ -516,9 +516,11 @@ def cmd_tablitsi(a):
 def main():
     ap = argparse.ArgumentParser(description="Сили и средства за гасене – по методиката към Указания № Iз-2749/2010 г.")
     sub = ap.add_subparsers(dest="cmd", required=True)
+    outp = argparse.ArgumentParser(add_help=False)
+    outp.add_argument("-o", "--out", help="записва JSON-а и във файл (вместо пренасочване с „>“)")
     f = lambda s: float(str(s).replace(",", "."))   # noqa: E731  (12,5 and 12.5 both work)
 
-    p = sub.add_parser("tvardi", help="I. Твърди горими вещества – вода")
+    p = sub.add_parser("tvardi", parents=[outp], help="I. Твърди горими вещества – вода")
     p.add_argument("--forma", required=True, help="krag, polukrag, sektor (90°) или pravoagalnik")
     p.add_argument("--fp", type=f, help="площ на пожара, m2 (вместо извеждане от времето)")
     p.add_argument("--vl", type=f, help="линейна скорост на разпространение, m/min")
@@ -544,7 +546,7 @@ def main():
     p.add_argument("--q-pa", type=f, help="разход на помпата на пожарния автомобил, l/s")
     p.set_defaults(fn=cmd_tvardi)
 
-    p = sub.add_parser("rezervoar", help="II. Резервоар с ЛЗТ/ГТ – охлаждане и пенна атака")
+    p = sub.add_parser("rezervoar", parents=[outp], help="II. Резервоар с ЛЗТ/ГТ – охлаждане и пенна атака")
     p.add_argument("--d", type=f, help="диаметър на горящия резервоар, m")
     p.add_argument("--razliv", action="store_true", help="разлив в обваловката – интензивност за охлаждане 1,0 l/s.m")
     p.add_argument("--sasedni", type=int, help="брой съседни резервоари за охлаждане")
@@ -556,7 +558,7 @@ def main():
     p.add_argument("--pgv-na-ekip", type=int, help="пеногенератори, които подава един екип")
     p.set_defaults(fn=cmd_rezervoar)
 
-    p = sub.add_parser("obem", help="III. Пяна по обем")
+    p = sub.add_parser("obem", parents=[outp], help="III. Пяна по обем")
     p.add_argument("--v", type=f, help="обем за гасене, m3")
     p.add_argument("--a", type=f, help="ширина, m")
     p.add_argument("--l", type=f, help="дължина, m")
@@ -565,7 +567,7 @@ def main():
     p.add_argument("--pgv", help="пенообразуващ уред от таблица 14")
     p.set_defaults(fn=cmd_obem)
 
-    p = sub.add_parser("prah", help="IV. Огнегасителен прах")
+    p = sub.add_parser("prah", parents=[outp], help="IV. Огнегасителен прах")
     p.add_argument("--fp", type=f, help="площ на пожара, m2")
     p.add_argument("--i", type=f, help="интензивност, kg/s.m2 (по подразбиране 0,3 – прах с общо предназначение)")
     p.add_argument("--i-red", help="ред от таблица 7")
@@ -575,7 +577,7 @@ def main():
     p.add_argument("--w-pa", type=f, help="прах в един автомобил за прахово гасене, kg")
     p.set_defaults(fn=cmd_prah)
 
-    p = sub.add_parser("tablitsi", help="таблиците към методиката")
+    p = sub.add_parser("tablitsi", parents=[outp], help="таблиците към методиката")
     p.add_argument("nomer", nargs="?", help="1, 2, 4, 7, 10, 11 или 14")
     p.add_argument("--tarsi", help="търси обект в таблици 1, 2 и 7")
     p.set_defaults(fn=cmd_tablitsi)
@@ -585,7 +587,11 @@ def main():
         result, code = a.fn(a), 0
     except Problem as e:
         result, code = {"ok": False, "error": str(e)}, 2
-    print(json.dumps(result, ensure_ascii=False, indent=1))
+    text = json.dumps(result, ensure_ascii=False, indent=1)
+    if getattr(a, "out", None):
+        with open(a.out, "w", encoding="utf-8") as fh:
+            fh.write(text + "\n")
+    print(text)
     sys.exit(code)
 
 

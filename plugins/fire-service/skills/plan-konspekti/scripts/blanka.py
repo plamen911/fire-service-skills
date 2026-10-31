@@ -118,14 +118,14 @@ def _borderless(table):
     tbl_pr.append(borders)
 
 
-def _cell(cell, lines, align=LEFT):
+def _cell(cell, lines, align=LEFT, size=None):
     """lines: [text | (text, {"size", "align"})]; the first one reuses the cell's paragraph."""
     for i, item in enumerate(lines):
         text, opt = (item, {}) if isinstance(item, str) else item
         p = cell.paragraphs[0] if i == 0 else cell.add_paragraph()
         fmt(p, opt.get("align", align), line=None)
         if text:
-            run(p, text, size=opt.get("size"))
+            run(p, text, size=opt.get("size", size))
 
 
 def letterhead(doc, extra=None):
@@ -177,9 +177,12 @@ def letterhead(doc, extra=None):
     blank(doc)
 
 
-def grid(doc, header, rows, widths_cm, align=None):
+TABLE_PT = 11   # the owner's rule: the text in tables is 10–11 pt
+
+
+def grid(doc, header, rows, widths_cm, align=None, size=TABLE_PT):
     """A bordered table: header = column titles, rows = lists of cell texts (a cell may be a list of
-    paragraphs). No bold; the header is centered."""
+    paragraphs). No bold; the header is centered; the text is 11 pt (TABLE_PT)."""
     t = doc.add_table(rows=1 + len(rows), cols=len(header))
     t.style = "Table Grid"
     t.alignment = WD_TABLE_ALIGNMENT.CENTER
@@ -194,7 +197,8 @@ def grid(doc, header, rows, widths_cm, align=None):
             cell = t.cell(r, c)
             cell.width = Cm(widths_cm[c])
             lines = value if isinstance(value, list) else [value]
-            _cell(cell, [str(x) for x in lines] or [""], align=CENTER if r == 0 else (JUSTIFY if align is None else align))
+            _cell(cell, [str(x) for x in lines] or [""], align=CENTER if r == 0 else (JUSTIFY if align is None else align),
+                  size=size)
     return t
 
 

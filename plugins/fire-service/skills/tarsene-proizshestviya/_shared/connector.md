@@ -38,11 +38,13 @@
 | `kais.py obekt` / `tarsi` (сградите от кадастъра – само за схеми на силите, не за ситуационна) | `kais` с `action: "obekt"` и `id` или `lat`, `lon`; `tarsi` с `tekst` | контурите и улиците (`ulitsi`, от OpenStreetMap) са в КС2005 (метри) – извади началото на `ramka.bbox`; фонът (картинката) не идва през конектора |
 | `kais.py mesto` (обект по име – магазин, бензиностанция, фирма) | `kais` с `action: "mesto"`, `tekst` (името) и `masto` (населеното място) | кандидатите (`ime`, `adres`, `lat`, `lon`, `iztochnik`) – покажи ги за избор, после `kais` `obekt` с `lat`/`lon`; в регистъра – точката и идентификаторът от КАИС, не от Google; без браузър |
 | `kais.py … --ortofoto` (ортофотото за входовете) | `kais` с `action: "ortofoto"` и `bbox` [x0, y0, x1, y1] в КС2005 – контурът на имота от `obekt` плюс ~15 m; `sloi: "2022"` – предишното издание | връща готова картинка (слепена в n8n) – виж я и я покажи на потребителя; номерираните точки по оградата ги няма: опиши входа спрямо сградите и улицата и го потвърди във формуляра |
-| `voda.py dobavi` / `potvardi` / `promeni` / `premahni` | `voda_save` с `action` и същите полета (`promeni` – `id` и `set`; `premahni` – `id` и `prichina`) | всеки може да записва; премахва администраторът или който е въвел точката; първо с `dry_run: true`; координатите са само от потребителя |
+| `voda.py dobavi` / `potvardi` / `promeni` / `premahni` | `voda_save` с `action` и същите полета (`promeni` – `id` и `set`; `premahni` – `id` и `prichina`) | всеки може да записва; премахва администраторът или който е въвел точката; първо с `dry_run: true`; координатите са само от потребителя; при `dobavi` винаги подавай `ulitsa` с номера (от адреса на ориентира) и `orientir` – без тях не записвай |
 | `obekti.py tarsi` / `pokazhi` / `istoriya` (регистърът на обектите) | `obekti` с `action: "get"`, `folder: "root"`, `name: "obekti.csv"` → запиши го в `ПАПКА/root/obekti.csv` (декодирай base64) → `obekti.py --store ПАПКА tarsi …`; за `pokazhi` – `obekti` `list` с `folder` = `papka_id` – всеки файл идва с `download` | на потребителя давай линковете `download` (отварят файла без Google акаунт, 24 часа); не тегли файловете с `get` и не ги декодирай от base64, за да ги предадеш – `get` е само за `obekti.csv`, `history.md` и входния `.json` при промяна |
 | `obekti.py arhiv` (архивът на старите планове – само за липсващи данни, виж `_shared/arhiv.md`) | `obekti` `list` с `folder: "root"` → `id` на „_Архив оперативни планове“ → `get` на `INDEX.md` → `list` на групата, после на папката на обекта | PDF и снимки – давай линка `download`; `get` само за един `.md`, който трябва; не чети целия архив |
 | `obekti.py nov` / `zapishi` / `snimka` / `preimenuvai` / `promeni` | `obekti.py --store ПАПКА --avtor "<ime от whoami>" …` (с обекти.csv и `history.md` на обекта в ПАПКА) → изпълни `kachi` по ред с `obekti_save` (`put` с base64 на файла и `if_md5`, `rename`) | при `nov` скриптът първо иска папката: `obekti_save` `mkdir` с `folder: "root"` и името от `NEED_MKDIR` → пусни `nov` отново с `--papka-id`; `CONFLICT` = друг е записал междувременно – прочети отново и повтори |
 | `vreme.py` (времето за ЕПТЗ и справка) | `vreme` с `data` и `mesto` (или `lat`/`lon`, или `stantsiya` – WMO 15528 / ICAO LBPL), `ot`, `do`; за засушаване – и `do_data` | същият скрипт, пуснат на сървъра: отговорът е като неговия JSON – станцията, разстоянието, `obobshtenie`, `marker`, а с `do_data` – дните и `buletin_nimh`. Пренеси маркера както е |
+| `plan_grafik.py mesec` / `godina` (план-графикът на занятията на ОЦ) | `regs_list` с `name: "Plan-Grafik"` → `regs_read` → запиши текста във файл → `plan_grafik.py … --file ФАЙЛ` | |
+| `uprazhneniya.py get` (упражнение по ПСП) | `regs_list` с `name: "Spetsializirana-Metodika"` (файлът `…_Appendices.md`) → `regs_read` с `match: "Упражнение № 1.9 Б"` | подай го в `"tema2"` като свой текст (`tekst`, `tsel`, `opisanie` …); за отчета – и `normativ` или `max_tochki` от картата |
 | `obraztsi.py index` / `get` | `samples` с `kind: "spravka"` или `"eptz"` и `name` | започни с `name: "INDEX.md"`, после избрания файл |
 | `dnevnik.py eptz …` (дневник на ползването) | `dnevnik` със същите полета (`ekspert`, `zm`, `dp`, `obekt`, `prichina`, `stranitsi`, `suma_eur`, `snimki`, `pdf`, `pdf_stranitsi`, `skanirani`, `drugi`, `tekst_v_chata`, `model`, `ustroystvo`, `nahodki`) – броевете ги изчисли сам от качените файлове; часът и средата се записват в n8n | всеки може да записва; без текста на заключението; при грешка – продължи |
 | `regs.py index` | `regs_list` с `name: "_INDEX_"`, после `regs_read` | индексът е голям – чети го с `match`, не целия |
@@ -81,7 +83,8 @@
 
 ## Служителите в документите
 
-Скриптовете за документи (`build_spravka.py`, `build_udostoverenie.py`, `build_smetka.py`)
+Скриптовете за документи (`build_spravka.py`, `build_udostoverenie.py`, `build_smetka.py`,
+`build_eptz_docx.py`, `build_konspekt.py`, `build_otchet.py`, `build_ptz.py`, `build_plan.py`)
 взимат началника и директора от списъка на служителите само когато има личен ключ. В режим
 „конектор“ ги подай изрично в `data.json`:
 
@@ -89,7 +92,9 @@
    в `"addressee"` (ДО / НАЧАЛНИКА НА / РСПБЗН – … / ЗВАНИЕ / ИМЕ).
 2. Директора вземи от `staff` (`dl: "директор"`) и го подай като `"director"`
    (`{"label": "ДИРЕКТОР:", "rank": "КОМИСАР", "name": "…"}`); за сметката – `{"rank", "name"}`.
-3. Съставителя („изготвил“, подписващ) – от `whoami` и `_shared/profile.md`; за друг
+3. Утвърждаващия в план-конспектите и в плана за пожарогасене (началника на звеното или директора) – от
+   `staff` и го подай като `"approver"` (`{"lines": ["НАЧАЛНИК НА", "РСПБЗН – …:", "ЗВАНИЕ"], "name": "…"}`).
+4. Съставителя („изготвил“, подписващ) – от `whoami` и `_shared/profile.md`; за друг
    служител – от `staff` и `sluzhiteli.py --spravka --zapis`.
 
 Останал в документа текст в квадратни скоби (`[Име Фамилия]`, `[звание]`) значи, че данните

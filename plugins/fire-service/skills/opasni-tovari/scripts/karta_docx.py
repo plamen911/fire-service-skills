@@ -33,7 +33,20 @@ except ImportError:
 
 ASSETS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "etiketi")
 ORANGE = "F39200"
-FONT = "Arial"
+FONT = "Times New Roman"   # the font of every document of the plugin (_shared/conventions.md)
+
+
+def blanka():
+    """The common letterhead of the plugin (plan-konspekti/scripts/blanka.py), or None when that skill is missing."""
+    try:
+        import importlib.util
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "plan-konspekti", "scripts", "blanka.py")
+        spec = importlib.util.spec_from_file_location("blanka", path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def shade(cell, fill):
@@ -168,9 +181,9 @@ def body(doc, lines):
             zone = "Зони" in title or title.startswith("Разстояния")
             t = doc.add_table(rows=1, cols=1); t.autofit = False
             c = t.rows[0].cells[0]; c.width = Cm(18.0)
-            shade(c, "C00000" if zone else "404040")
+            borders(c, 12 if zone else 6)                  # an outlined box, no solid fill – saves the printer's toner
             p = c.paragraphs[0]; p.paragraph_format.space_before = Pt(1); p.paragraph_format.space_after = Pt(1)
-            run(p, title.upper() if zone else title, size=10, bold=True, color="FFFFFF")
+            run(p, title.upper() if zone else title, size=10, color="C00000" if zone else None)
             continue
         if ln.startswith("**") and ln.endswith("**"):
             p = para(doc, 0.5); p.paragraph_format.space_before = Pt(2)
@@ -200,12 +213,22 @@ def build(r, lines, out, title):
     st.element.rPr.rFonts.set(qn("w:eastAsia"), FONT)
     for p0 in list(doc.paragraphs):
         p0._element.getparent().remove(p0._element)
+    B = blanka()
+    if B is not None:                                  # the same letterhead as every other document
+        B.letterhead(doc)
+        para(doc, 2)
     header_block(doc, r, title)
     body(doc, lines)
     p = para(doc, 0, align=WD_ALIGN_PARAGRAPH.RIGHT)
     run(p, "Изготвено на " + datetime.date.today().strftime("%d.%m.%Y") + " г. със скила „Опасни товари“ (fire-service).",
         size=7.5, color="595959")
     doc.save(out)
+    try:                                               # the common check: letterhead, no bold, „–“, „№ “
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_shared", "scripts"))
+        import docx_common
+        docx_common.report(out)
+    except ImportError:
+        pass
 
 
 def to_pdf(docx_path):

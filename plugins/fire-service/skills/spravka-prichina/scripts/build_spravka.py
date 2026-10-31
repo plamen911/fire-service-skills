@@ -54,6 +54,43 @@ ARSON = re.compile(r"\bпалеж\w*|\bподпал\w*|\bумис[ъл]\w*|\bу�
 VINOVNIK = re.compile(r"\bизвършител\w*|\b(?:деец|деецът|дееца)\b|\bобвиняем\w*|\bзаподозр\w*|\bподсъдим\w*"
                       r"|самопризна\w*|\bпризна(?:л|ла|ва|ние)\w*|\bпо вина на\b|заповед за защита", re.I)
 
+# personal data – the same patterns as the ЕПТЗ review (eptz/scripts/pregled.py)
+NAME3 = re.compile(r"\b([А-Я][а-я]+) ([А-Я][а-я]+(?:ов|ев|ин|ски|ова|ева|ина|ска)) ([А-Я][а-я]+(?:ов|ев|ин|ски|ова|ева|ина|ска))\b")
+EGN = re.compile(r"(?<!\d)\d{10}(?!\d)")
+PHONE = re.compile(r"(?<![\d/])(?:\+359|0)\s?8[7-9]\d[\s-]?\d{3}[\s-]?\d{3}(?!\d)")
+WORDS = (200, 500)   # the body is 250–450 words (SKILL.md, „Обем“); outside 200–500 – a warning
+
+
+def validate(data):
+    """The rules checked before the справка is built. → (errors, warnings); with an error nothing is written."""
+    errors, warnings = [], []
+    if not str(data.get("intro") or "").strip():
+        errors.append("липсва \"intro\"")
+    if not str(data.get("signer_name") or "").strip():
+        warnings.append("липсва \"signer_name\" – съставителят (от профила или от списъка на служителите)")
+    body = [str(data.get("intro") or "")] + [str(x) for k in ("section1", "section2", "section3") for x in data.get(k) or []]
+    for text in body:
+        m = ARSON.search(text)
+        if m:
+            errors.append(f"„{m.group(0)}“ – в справката се пише „злонамерено внесен външен огнеизточник“")
+        m = VINOVNIK.search(text)
+        if m:
+            errors.append(f"„{m.group(0)}“ – без причинители и самопризнания: фактът безлично, с източника "
+                          "(„По информация на собственика в двора са изгаряни отпадъци.“)")
+        for m in NAME3.finditer(text):
+            errors.append(f"три имена – само име и фамилия: „{m.group(0)}“")
+        for m in EGN.finditer(text):
+            errors.append(f"10-цифрено число (ЕГН?) – не се пише: „{m.group(0)}“")
+        for m in PHONE.finditer(text):
+            errors.append(f"телефонен номер – не се пише: „{m.group(0)}“")
+    n = sum(len(x.split()) for x in body)
+    if n > WORDS[1]:
+        warnings.append(f"тялото е {n} думи – целта е 250–450; режи първо описанията в т. 1 и 2")
+    elif data.get("section3") and n < WORDS[0]:
+        warnings.append(f"тялото е само {n} думи – провери дали не липсват факти (целта е 250–450)")
+    return errors, warnings
+
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, "..", "assets", "template.docx")
 MODEL = os.path.join(HERE, "..", "assets", "body_paragraph_model.xml")
@@ -247,14 +284,6 @@ def build(data, out_path):
 
     for text in lines:
         anchor.addprevious(make_body_paragraph(model_xml, text))
-    for text in lines:
-        m = ARSON.search(text)
-        if m:
-            print(f"⚠ „{m.group(0)}“ – в справката се пише „злонамерено внесен външен огнеизточник“", file=sys.stderr)
-        m = VINOVNIK.search(text)
-        if m:
-            print(f"⚠ „{m.group(0)}“ – без причинители и самопризнания: фактът безлично, с източника "
-                  "(„По информация на собственика в двора са изгаряни отпадъци.“)", file=sys.stderr)
 
     typo_all(doc, W + "t")
     doc.save(out_path)
@@ -272,6 +301,14 @@ def main():
         data = json.load(fh)
 
     out = args.out or os.path.splitext(args.data)[0] + ".docx"
+    errors, warnings = validate(data)
+    for w in warnings:
+        print(f"⚠ {w}", file=sys.stderr)
+    if errors:
+        for e in errors:
+            print(f"BAD_INPUT: {e}", file=sys.stderr)
+        print("Справката не е изградена – поправи data.json и пусни скрипта отново.", file=sys.stderr)
+        return 2
     build(data, out)
     print(out)
 

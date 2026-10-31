@@ -318,8 +318,19 @@ def write(data, d, out, s, sheet=None):
             from znatsi import readable
             text((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + 0.8 * th, v["etiket"], layer="VODA",
                  rot=readable(math.degrees(math.atan2(b[1] - a[1], b[0] - a[0]))))
-    for ln in data["linii"]:
-        poly(ln["tochki"], "VODA")
+    from shema import hose_points   # noqa: E402  – the same rules as the picture
+    for i, ln in enumerate(data["linii"]):
+        pts_ = ln.get("_pts") or hose_points(ln, data, s, i)
+        poly(pts_, "VODA")
+        if (ln["struinik"] or ln["myasto"]) and len(pts_) > 1:   # the nozzle – a small triangle at the end
+            (ex, ey), (px, py) = pts_[-1], pts_[-2]
+            d_ = math.dist((ex, ey), (px, py)) or 1.0
+            ux, uy = (ex - px) / d_, (ey - py) / d_
+            L, W = 0.9 * s, 0.35 * s
+            tip = (ex + ux * L, ey + uy * L)
+            poly([(ex - uy * W, ey + ux * W), tip, (ex + uy * W, ey - ux * W)], "VODA", closed=True)
+        if ln["etiket"]:
+            text(pts_[-1][0], pts_[-1][1] + 1.4 * s, ln["etiket"], layer="VODA")
     # the water signs of Приложение № 6 – the same lines as on the picture (znatsi), layer VODA
     import znatsi as Z
     for r in data.get("reki", []):

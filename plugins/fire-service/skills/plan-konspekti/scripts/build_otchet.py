@@ -11,7 +11,9 @@ data.json:
   "data": "27.10.2026 г.",                                  // датата на занятието
   "tema1": "Гасене на пожари в житни масиви",               // темата на лекцията
   "tema2": {"uprazhnenie": "1.1"},                          // упражнение от данните за упражненията
-                                                            //   или {"tekst": "Проиграване на …"}
+                                                            //   или {"tekst": "Проиграване на …"} – с конектора и
+                                                            //   "normativ": [{"do_sek", "tochki"}, …] или "max_tochki"
+                                                            //   от картата на упражнението (regs_read), за точките
   "zvena": [
     {"zveno": "РСПБЗН – Червен бряг", "prisastvali": 3, "sekundi": 72, "tochki": 4},
     {"zveno": "РСПБЗН – Кнежа", "prisastvali": 3, "rezultat": "Служителите изпълниха упражнението без грешки."}
@@ -24,8 +26,8 @@ data.json:
   "rezultat"            свободен текст (едно изречение);
   "sekundi" + "tochki"  „… е 72 сек., което е за 4 точки.“;
   "sekundi"             упражнение за време (Приложение № 1 на методиката): точките се смятат по
-                        норматива му в данните за упражненията; за упражнение без норматив (за правилно
-                        изпълнение или със свой текст) скриптът спира с NO_NORM – попитай за точките;
+                        норматива му в данните за упражненията (или в "tema2"."normativ"); без норматив
+                        скриптът спира с NO_NORM – попитай за точките;
   "tochki"              упражнение за правилно изпълнение (Приложение № 2): „При изпълнение на
                         упражнението служителите постигнаха N точки.“; повече от най-многото по
                         картата на упражнението се отказва
@@ -129,6 +131,11 @@ def result_sentence(z, ex, number, warnings=None, fill=None):
             sec, pts = z.get("sekundi"), z.get("tochki")
             warnings.append(f"за {z.get('zveno')} резултатът е попълнен по обичайното ("
                             + (f"{sec} сек." if sec is not None else f"{pts} точки") + ") – смени го, ако истинският е друг")
+    if sec is None and pts is None and fill:          # no norm and no top score: still filled, never left blank
+        if warnings is not None:
+            warnings.append(f"за {z.get('zveno')} резултатът е попълнен с общо изречение – няма норматив; подай "
+                            "\"normativ\" или \"max_tochki\" в \"tema2\" за точки")
+        return "Служителите изпълниха упражнението правилно и без грешки."
     if sec is None and pts is None and warnings is not None:
         warnings.append(f"за {z.get('zveno')} няма резултат – оставен е за попълване на ръка")
         return blank_result(ex)
@@ -162,6 +169,8 @@ def build(d, out):
     ex_data = {} if t2.get("tekst") and not t2.get("uprazhnenie") else exercises()
     number = t2.get("uprazhnenie") or (None if t2.get("tekst") else ex_data["po_podrazbirane"])
     ex = ex_data["uprazhneniya"].get(number) if number else {}
+    if t2.get("tekst") and not number:               # the exercise as its own text (the connector, no key): its norm
+        ex = {k: t2[k] for k in ("normativ", "max_tochki") if t2.get(k)}   # and top score may come with it
     if number and ex is None:
         bad(f"няма упражнение „{number}“ в данните за упражненията – подай \"tema2\": {{\"tekst\": …}}")
     text2 = t2.get("tekst") or exercise_text(number, ex, ex_data["metodika"])

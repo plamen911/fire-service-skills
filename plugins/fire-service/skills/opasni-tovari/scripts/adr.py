@@ -48,6 +48,21 @@ GAS_BG = {"HCl": "хлороводород (HCl)", "H2S": "сероводоро�
 USLOVIE = {"": "", "voda": "при разлив във вода", "susha": "при разлив на сушата", "orazhie": "при използване като оръжие"}
 
 
+def zona(t):
+    """The inhalation hazard zone of an ERG Table 1 row (A–D, from its English name), or "" – an UN number can have
+    two rows with very different distances (zone A and zone B), and they must not look the same."""
+    import re as _re
+    m = _re.search(r"Inhalation Hazard Zone ([A-D])", t.get("ime_en") or "")
+    return m.group(1) if m else ""
+
+
+def t1_label(t, sep=" "):
+    parts = [USLOVIE[t["uslovie"]]] if t["uslovie"] else []
+    if zona(t):
+        parts.append(f"зона {zona(t)} при вдишване")
+    return (f" ({', '.join(parts)})" if sep == " (" else sep + ", ".join(parts)) if parts else ""
+
+
 # ------------------------------------------------------------------ data
 def _csv(name):
     with open(os.path.join(DATA, name), encoding="utf-8", newline="") as f:
@@ -364,7 +379,7 @@ def zones(r, vid, kolichestvo, vreme, vyatar="", sad="", voda=False, erg_overrid
         if not pre:
             size = size.capitalize()
         for t in t1:
-            label = f" ({USLOVIE[t['uslovie']]})" if t["uslovie"] else ""
+            label = t1_label(t, " (")
             rows3 = table3(un, sad) if big and t["tablica3"] == "1" else []
             if rows3:
                 for x in rows3:
@@ -484,7 +499,7 @@ def card_text(r, erg_override=""):
     if t1:
         out.append("- Токсичен при вдишване – Таблица 1 (изолиране във всички посоки / защита по посока на вятъра ден / нощ):")
         for t in t1:
-            label = f" {USLOVIE[t['uslovie']]}" if t["uslovie"] else ""
+            label = t1_label(t, " ")
             small = f"малък разлив{label}: {t['malak_izol_m']} m / {km(t['malak_den_km'])} / {km(t['malak_nosht_km'])}"
             large = (f"голям разлив: {t['golyam_izol_m']} m / {km(t['golyam_den_km'])} / {km(t['golyam_nosht_km'])}"
                      if t["golyam_izol_m"] else "голям разлив: според съда и вятъра (Таблица 3, по-долу)")

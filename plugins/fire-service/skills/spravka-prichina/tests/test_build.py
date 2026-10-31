@@ -120,7 +120,18 @@ if __name__ == "__main__":
     json.dump(bad, open(dp, "w", encoding="utf-8"), ensure_ascii=False)
     r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "build_spravka.py"), dp, "-o", out],
                        capture_output=True, text=True)
-    check("самопризна" in r.stderr and "без причинители" in r.stderr, "a self-admission is warned about")
-    check("подпалване" in r.stderr and "злонамерено внесен" in r.stderr, "„подпалване“ is warned about")
+    check("самопризна" in r.stderr and "без причинители" in r.stderr, "a self-admission is reported")
+    check("подпалване" in r.stderr and "злонамерено внесен" in r.stderr, "„подпалване“ is reported")
+    check(r.returncode == 2 and not os.path.exists(out), "and the справка is not built until they are fixed")
+    bad = dict(base, section3=["Свидетелят Иван Петров Тестов, тел. " + "0888 " + "123 456" + ", видял пламъци."])
+    json.dump(bad, open(dp, "w", encoding="utf-8"), ensure_ascii=False)
+    r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "build_spravka.py"), dp, "-o", out],
+                       capture_output=True, text=True)
+    check(r.returncode == 2 and "три имена" in r.stderr and "телефонен" in r.stderr, "personal data stops the build")
+    bad = dict(base, signer_name="")
+    json.dump(bad, open(dp, "w", encoding="utf-8"), ensure_ascii=False)
+    r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "build_spravka.py"), dp, "-o", out],
+                       capture_output=True, text=True)
+    check(r.returncode == 0 and "signer_name" in r.stderr, "a missing signer is reported (placeholders stay)")
     print("\nALL PASS" if not failures else f"\n{len(failures)} FAILED")
     sys.exit(1 if failures else 0)

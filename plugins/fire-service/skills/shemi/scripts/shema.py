@@ -25,7 +25,7 @@ shema.py — чертае СХЕМА за разполагане на силит
 Шрифтовете и знаците са едни и същи при всяка ширина – картинката се вмъква без мащабиране.
 
 Координатите са в метри: x – на изток (надясно), y – на север (нагоре), началото е долният ляв ъгъл
-на терена. Сградите са правоъгълници, успоредни на осите. Ъглите са в градуси: 0 – изток, 90 – север.
+на терена. Сградите са правоъгълници, успоредни на осите, или с произволен контур ("kontur"). Ъглите са в градуси: 0 – изток, 90 – север.
 Задължително е само "sgradi" (поне една сграда); всичко останало е по желание.
 
 {
@@ -720,7 +720,7 @@ def load(d):
         if place not in (None, "", *PLACES):
             bad(f"linii[{i}].myasto: {', '.join(PLACES)}")
         out["linii"].append({"tochki": pts, "vid": kind, "struinik": nozzle or None, "myasto": place or None,
-                             "etiket": str(ln.get("etiket") or ""), "gladka": ln.get("gladka", True),
+                             "etiket": str(ln.get("etiket") or ""),
                              "etiket_pri": ln.get("etiket_pri") if ln.get("etiket_pri") in ("sreda", "nachalo") else "kray"})
     for i, r in enumerate(items(d, "razklonitel")):
         ways = int(num(r.get("patya", 3), f"razklonitel[{i}].patya"))
@@ -1216,11 +1216,8 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
     for e in data["evakuatsiya"]:
         draw_evacuation(ax, chaikin(e), s, pal)
     hoses = 0
-    for ln in data["linii"]:
-        pts = at_pump(ln["tochki"], data["avtomobili"], s)    # a hose line is coupled at the rear – the pump
-        pts = chaikin(pts) if ln["gladka"] else pts
-        if ln["struinik"]:                             # the nozzle is always in front of the fire, never in it:
-            pts = nozzle_before_fire(pts, data["pozhar"], 1.25 * s)    #   the line ends where its head stays outside
+    for i, ln in enumerate(data["linii"]):
+        pts = hose_points(ln, data, s, i)               # the same points go to the DXF (dxf_export)
         hoses += draw_line(ax, pts, ln["vid"], s, hose_m, pal)
         _, direction = point_at(pts, length(pts))
         if ln["struinik"] or ln["myasto"]:
@@ -1556,6 +1553,7 @@ def render(d, out_png, out_svg=None, width_cm=None, height_cm=None, out_dxf=None
                     lax.text(wx + 0.82, top, data["vyatar"]["sila"], fontsize=fs, va="center")
             draw_legend_rows(lax, col_rows, row_lines, top - 0.22, width_in, pal, fs, line_in)
 
+    warnings += data.get("_hose_warn", [])
     fig.savefig(out_png, dpi=300, facecolor="white")
     if out_dxf:                                        # the same scheme for AutoCAD / CorelDRAW
         import dxf_export
@@ -1596,6 +1594,30 @@ def at_pump(pts, trucks, s):
             else:
                 pts = pts[:-1] + [stub, r]
     return pts
+
+
+def hose_points(ln, data, s, i=0):
+    """The drawn points of a hose line – the owner's rules, the same in the picture and in the DXF:
+    coupled at the rear of the fire engine (the pump), always a smooth curve (never sharp angles), and the nozzle
+    always in front of the fire, never in the hatched area. Stores them in ln["_pts"]; a line that had to be cut back
+    or that still crosses a fire area leaves a warning in data["_hose_warn"]."""
+    pts = at_pump(ln["tochki"], data["avtomobili"], s)
+    pts = chaikin(pts)
+    if ln["struinik"] or ln["myasto"]:                  # a nozzle is drawn at the end
+        cut = nozzle_before_fire(pts, data["pozhar"], 1.25 * s)
+        if len(cut) < len(pts) or (cut and pts and math.dist(cut[-1], pts[-1]) > 0.05):
+            data.setdefault("_hose_warn", []).append(
+                f"linii[{i}]: краят беше в пожара – струйникът е изнесен пред него; провери линията")
+        pts = cut
+    if any(_in_fire(p, data["pozhar"]) for p in pts[1:-1]):
+        data.setdefault("_hose_warn", []).append(
+            f"linii[{i}]: линията минава през пожара – заобиколи го с още една точка")
+    ln["_pts"] = pts
+    return pts
+
+
+def _in_fire(p, fires):
+    return any(f["x"] < p[0] < f["x"] + f["w"] and f["y"] < p[1] < f["y"] + f["h"] for f in fires)
 
 
 def nozzle_before_fire(pts, fires, reach):
@@ -1680,7 +1702,7 @@ def main():
     ap.add_argument("-o", "--out", required=True, help="изходен .png")
     ap.add_argument("--svg", help="и .svg")
     ap.add_argument("--dxf", help="DXF за AutoCAD/CorelDRAW (по подразбиране – до .png, със същото име)")
-    ap.add_argument("--bez-dxf", action="store_true", help="без DXF")
+    ap.add_argument("--bez-dxf", action="store_true", help=argparse.SUPPRESS)  # tests only – a scheme always has a DXF
     ap.add_argument("--shirina-cm", type=float, help="ширината на картинката, cm (16.5 – A4 изправена, 25.2 – легнала)")
     ap.add_argument("--visochina-cm", type=float, help="най-голямата височина на чертежа, cm")
     a = ap.parse_args()

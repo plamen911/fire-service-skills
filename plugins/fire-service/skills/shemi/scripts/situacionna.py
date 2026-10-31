@@ -178,7 +178,12 @@ def build(d, out):
     dxf = base + ".dxf"                                # the graphic part for AutoCAD / CorelDRAW
     if not str(lst.get("fail") or "").strip():         # „Име на файла“ – the drawing's own file
         lst["fail"] = os.path.basename(dxf)
-    _, _, warnings, extra = shema.render(d, png, out_dxf=dxf)
+    dropped = [k for k in ("fon", "podlozhka") if d.pop(k, None)]   # the owner's rules: no cadastral picture behind a
+    _, _, warnings, extra = shema.render(d, png, out_dxf=dxf)     # situational scheme, no doors and windows in it
+    if dropped:
+        warnings.append("ситуационната схема е без " + " и ".join(
+            {"fon": "фон от кадастъра", "podlozhka": "вътрешно разпределение (врати и прозорци)"}[k] for k in dropped)
+            + " – махнато е")
 
     doc = Document()
     st = doc.styles["Normal"]

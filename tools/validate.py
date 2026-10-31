@@ -10,7 +10,7 @@ validate.py — проверява репозиторито преди push (и 
 
 Проверява:
   • marketplace.json и plugin.json са валиден JSON и имената съвпадат;
-  • всеки скил има SKILL.md с front-matter (name = име на папката, description ≤ 1024 знака)
+  • всеки скил има SKILL.md с front-matter (name = име на папката, description ≤ 600 знака – общият бюджет на описанията)
     и задължителните раздели от templates/SKILL_TEMPLATE.md;
   • всеки SKILL.md сочи към _shared/conventions.md;
   • файловете, споменати в SKILL.md като `references/…`, `assets/…`, `scripts/…`, `_shared/…`,
@@ -36,6 +36,7 @@ import re
 import subprocess
 import sys
 
+DESC_MAX = 600   # chars per skill description (the hard limit is 1024; 16 skills × 1000 overflowed the listing)
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PLUGIN = os.path.join(ROOT, "plugins", "fire-service")
 SKILLS = os.path.join(PLUGIN, "skills")
@@ -164,8 +165,9 @@ def check_skill(d):
     desc = fm.get("description", "")
     if not desc:
         err(f"{name}: empty description")
-    elif len(desc) > 1024:
-        err(f"{name}: description is {len(desc)} chars (max 1024)")
+    elif len(desc) > DESC_MAX:
+        err(f"{name}: description is {len(desc)} chars (max {DESC_MAX} – the descriptions of all skills share one "
+            "listing budget; past it some skills reach the model with a name only and are never routed to)")
     for h in REQUIRED:
         if not re.search("^" + re.escape(h), text, re.M):
             err(f"{name}: missing section '{h}'")
@@ -267,6 +269,11 @@ def check_letterhead():
             problems.append("table width is not 10188 dxa")
         if first.find(w + "tblPr/" + w + "tblBorders/" + w + "bottom") is None:
             problems.append("no rule under the letterhead")
+        jc = first.find(w + "tblPr/" + w + "jc")
+        if jc is None or jc.get(w + "val") != "center":
+            problems.append("the letterhead table is not centred (it is wider than the text and runs past the margin)")
+        if any(b.get(w + "val") not in ("0", "false") for b in first.iter(w + "b")):
+            problems.append("bold in the letterhead")
         for msg in problems:
             bad += 1
             err(f"letterhead in {rel}: {msg}")

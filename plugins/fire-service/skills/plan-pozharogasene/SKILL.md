@@ -1,14 +1,11 @@
 ---
 name: plan-pozharogasene
 description: >-
-  Изготвя ПЛАН ЗА ПОЖАРОГАСЕНЕ на обект по Указанията рег. № Iз-2749/18.11.2010 г. като готов .docx на бланката на
-  РДПБЗН – Плевен: „УТВЪРЖДАВАМ“, данните за обекта (чл. 6, ал. 1), ситуационна схема (Приложения № 2а и № 2б), за
-  всеки вариант решение, конкретна схема (№ 3а и № 3б) и разчет на силите и средствата (№ 5), бланка за отчитане (№ 4);
-  до плана – листовете поотделно (Konkretna_shema_….docx, Razchet_Konkretna_shema_….docx, .dxf за AutoCAD/CorelDRAW).
-  Ползвай я ВИНАГИ при „план за пожарогасене на …“, „оперативен план за …“, „направи плана за гасене на училището/
-  детската градина/склада“, „конкретни схеми с разчет“, „актуализирай плана за пожарогасене“, „нов вариант към плана“
-  – дори без думата „план“. НЕ я ползвай само за ситуационна схема или схема без план – shemi; само за разчет – sili-i-sredstva;
-  за ПТЗ – plan-konspekt-ptz.
+  План за пожарогасене на обект по Указанията Iз-2749 като .docx: данни за обекта, ситуационна схема, варианти с
+  конкретни схеми и разчет на силите и средствата за всеки, бланка за отчитане; листовете и .dxf поотделно.
+  Ползвай я ВИНАГИ при „план за пожарогасене на …“, „оперативен план за …“, „конкретна схема с разчет“,
+  „актуализирай плана“, „нов вариант към плана“. НЕ я ползвай само за ситуационна схема или схема без план –
+  shemi; само разчет – sili-i-sredstva; ПТЗ – plan-konspekt-ptz.
 ---
 
 # План за пожарогасене
@@ -36,10 +33,11 @@ description: >-
 python3 -c "import glob,os;print('\n'.join(glob.glob(os.path.expanduser('~/.claude/plugins/**/skills/plan-pozharogasene'),recursive=True)+glob.glob('/mnt/skills/**/plan-pozharogasene',recursive=True)))"
 ```
 
-1. Прочети `_shared/conventions.md` и `_shared/terminology.md`.
-2. Прочети `references/struktura.md` – какво иска всяка разпоредба на Указанията и откъде идва.
-3. Без личен ключ (конекторът Fire Service) – само `references/konektor.md`: всичко става на сървъра.
-4. Схемите – `../shemi/SKILL.md` (конкретната схема: `../shemi/references/sili.md`); разчетът –
+1. Без личен ключ (в разговора са инструментите на конектора Fire Service) – прочети само
+   `references/konektor.md` и работи по него: всичко става на сървъра; останалото тук не ти трябва.
+2. С личен ключ: прочети `_shared/conventions.md`, `_shared/terminology.md` и `references/struktura.md` – какво
+   иска всяка разпоредба на Указанията и откъде идва.
+3. Схемите – `../shemi/SKILL.md` (конкретната схема: `../shemi/references/sili.md`); разчетът –
    `../sili-i-sredstva/SKILL.md`.
 
 ## Входни данни
@@ -82,11 +80,11 @@ python3 -c "import glob,os;print('\n'.join(glob.glob(os.path.expanduser('~/.clau
 
 1. **Регистърът.** `python3 _shared/scripts/obekti.py tarsi …` и `pokazhi OB-…` – ситуационната схема, етажите,
    старият план (`plan_za_pozharogasene.json`: от него се продължава).
-2. **Етажите.** За всеки етаж без подложка – `cdr_import.py <чертеж>.cdr --kais situacionna_shema.json -o
+2. **Етажите.** За всеки етаж без подложка – `python3 ../shemi/scripts/cdr_import.py <чертеж>.cdr --kais situacionna_shema.json -o
    podlozhka_et<N>.json` (вторият етаж – с `--kato podlozhka_et1.json`). КАИС е с предимство пред котите на чертежа.
-3. **Вариантите.** За всяко помещение: `sili.py tvardi --forma pravoagalnik --fp <площта> --a <по-дългата
-   страна> --b <другата> --vl-red … --i-red … --ataka front1 --struinik В --q-pa 40 > s_<x>.json` (пожарът е цялото
-   помещение – Fп ≤ помещението), после `konkretna.py --podlozhka … --kais situacionna_shema.json --sili s_<x>.json
+3. **Вариантите.** За всяко помещение: `python3 ../sili-i-sredstva/scripts/sili.py tvardi -o s_<x>.json --forma
+   pravoagalnik --fp <площта> --a <по-дългата страна> --b <другата> --vl-red … --i-red … --ataka front1 --struinik В
+   --q-pa 40` (пожарът е цялото помещение – Fп ≤ помещението), после `python3 ../shemi/scripts/konkretna.py --podlozhka … --kais situacionna_shema.json --sili s_<x>.json
    --tablitsa-3b t3b_<x>.json … -o k_<x>.json` (`../shemi/references/sili.md`). Покажи картинката и провери:
    струйникът пред пожара, линиите плавни, от задницата на ПА.
 4. **plan.json** – обектът, `danni` (точките на чл. 6, ал. 1), `situacionna`, `varianti` (с `reshenie` по
@@ -98,8 +96,8 @@ python3 -c "import glob,os;print('\n'.join(glob.glob(os.path.expanduser('~/.clau
    ```
    Кажи `preduprezhdeniya` – какво от Указанията липсва (`references/struktura.md`, „Какво остава“).
 6. **Запис.** `obekti.py zapishi OB-… --vid plan_za_pozharogasene Plan_….docx plan.json` (с вградени JSON-и – така
-   планът се строи наново); за всеки вариант `--vid shema_<x> Konkretna_shema_<x>.docx .dxf _grafichna.png
-   Razchet_Konkretna_shema_<x>.docx k_<x>.json`; новите етажи – `--vid shema_podlozhka_et<N>`.
+   планът се строи наново); за всеки вариант `--vid shema_<x> Konkretna_shema_<x>.docx Konkretna_shema_<x>.dxf
+   Konkretna_shema_<x>_grafichna.png Razchet_Konkretna_shema_<x>.docx k_<x>.json`; новите етажи – `--vid shema_podlozhka_et<N>`.
 
 ## Изход
 
@@ -125,7 +123,7 @@ python3 -c "import glob,os;print('\n'.join(glob.glob(os.path.expanduser('~/.clau
 - Конкретната схема и разчетът са на един лист: отпред схемата, на гърба изчисленията. Таблицата № 3б е на
   отделен лист. Таблиците и разчетите не се смесват на една страница.
 - Разчетът е само изчисленията – без шапка, дата и подпис – и се побира на една страница (`razchet_docx.fit`
-  смалява шрифта до 8 pt и минава на 2 колони). Видът – като одобрения разчет: формулата, числата в нея и
+  смалява шрифта до 8 pt – първо в 2, после в 3 колони; ако и така не се събере, дава предупреждение). Видът – като одобрения разчет: формулата, числата в нея и
   резултатът на един ред, символите с индекси, разделителят – запетая.
 - Страниците след разчета (№ 3б, текстовете, № 4) са на цялата ширина – една колона; всеки раздел задава колоните
   си (`set_columns(sec, 1)`), иначе наследява 2-те колони на разчета.
@@ -133,9 +131,10 @@ python3 -c "import glob,os;print('\n'.join(glob.glob(os.path.expanduser('~/.clau
 - Шрифтът в таблиците – фиксиран 10 pt; наименованието на обекта – 12 pt.
 
 Схемите:
-- Тревните площи – от най-реалистичната снимка: сателитната (Google), подадена от потребителя, с привързване по
-  4 ъгъла на покрива на обекта (`cv2.getPerspectiveTransform`) и проверка по известна точка (фонтан, ъгъл);
-  ортофотото на КАИС – само ако няма такава. Пътеките от снимката се изрязват от тревата.
+- Тревните площи – по подразбиране от ортофотото на КАИС (`kais.py … --trevni-ortofoto --pateki`). Ако
+  потребителят даде по-реалистична сателитна снимка, начертай тревата по нея ръчно (контурите в `shema.json`),
+  като я връзваш по ъглите на покрива на обекта и проверяваш по известна точка (фонтан, ъгъл) – скрипт за това
+  няма. Пътеките се изрязват от тревата.
 - Пожарният автомобил не стои в тревата: I и II ПА – на най-близката настилка (`on_paving`). Хидрант в тревата –
   II ПА на настилката до него, линията за засмукване – от хидранта до ПА.
 - Съседните обекти и площадите – с имената им (хотел …, пл. …), само частта до обекта, за да не се смали мащабът.

@@ -407,6 +407,9 @@ def page(doc, d, naslov=None, obekt=None, pomeshtenie=None, belezhki=(), new_sec
         title(doc, naslov, obekt, pomeshtenie, short=True)
     else:
         size, cols, ok = fit(d, naslov, obekt, pomeshtenie)
+        if not ok:
+            warnings.append("разчетът не се събира на една страница дори на 8 pt в 3 колони – съкрати бележките "
+                            "или раздели разчета; той се печата на гърба на листа на схемата")
         SIZE[0], SHORT[0] = size, False
         sec = doc.add_section(WD_SECTION.NEW_PAGE) if new_section else doc.sections[-1]
         back_page(sec, cols)

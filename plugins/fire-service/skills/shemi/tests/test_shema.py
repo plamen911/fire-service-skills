@@ -174,6 +174,14 @@ def test_situacionna_docx():
         import ezdxf
         texts = [e.dxf.text for e in ezdxf.readfile(res["dxf"]).modelspace().query("TEXT")]
         check("s.dxf" in texts, "„Име на файла“ in the title block is the .dxf's name")
+    # no cadastral picture and no inner layout on a situational scheme – removed, with a warning
+    fx2 = dict(fx, podlozhka=[{"tochki": [[0, 0], [5, 0]], "lw_mm": 0.5}])
+    src = os.path.join(tempfile.mkdtemp(), "s2.json")
+    json.dump(fx2, open(src, "w", encoding="utf-8"), ensure_ascii=False)
+    r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "situacionna.py"), src, "-o",
+                        os.path.join(os.path.dirname(src), "s2.docx")], capture_output=True, text=True)
+    w = json.loads(r.stdout)["preduprezhdeniya"] if r.returncode == 0 else []
+    check(any("врати и прозорци" in x for x in w), f"doors and windows are dropped from a situational scheme: {w}")
 
 
 def test_outline_building():
@@ -436,6 +444,33 @@ def test_naves():
     check(r.returncode == 0, f"renders a scheme with a canopy: {r.stderr}")
 
 
+def test_dxf_hoses():
+    print("shema.py – the DXF hose lines follow the same rules as the picture")
+    import ezdxf
+    import math
+    data = {"teren": [80, 60],
+            "sgradi": [{"x": 38, "y": 18, "w": 19, "h": 19, "etiket": "Склад"}],
+            "pozhar": [{"x": 40, "y": 20, "w": 15, "h": 15}],
+            "avtomobili": [{"id": "I ПА", "x": 10, "y": 30, "ugal": 0}],
+            # starts at the cab, sharp corner, ends deep inside the fire
+            "linii": [{"tochki": [[11, 30], [25, 30], [25, 25], [47, 27]], "vid": "glavna", "struinik": "glaven"}]}
+    r, out = run(data)
+    check(r.returncode == 0, f"renders: {r.stderr[-200:]}")
+    res = json.loads(r.stdout)
+    check(any("изнесен пред него" in w for w in res["preduprezhdeniya"]), "a nozzle moved out of the fire is reported")
+    doc = ezdxf.readfile(os.path.splitext(out)[0] + ".dxf")
+    polys = [list(e.get_points("xy")) for e in doc.modelspace().query("LWPOLYLINE[layer=='VODA']")]
+    hose = max(polys, key=len)
+    check(len(hose) > 6, f"the hose is a smooth curve, not 4 raw points ({len(hose)})")
+    fire = lambda p: 40 <= p[0] <= 55 and 20 <= p[1] <= 35
+    check(not any(fire(p) for p in hose), "no point of the hose is inside the fire")
+    check(hose[0][0] < 10, f"the hose starts at the rear of the engine (the pump), not at the cab: {hose[0]}")
+    check(any(len(p) == 3 for p in polys), "the nozzle is marked at the end of the line")
+    loaded, _ = shema.load({**data, "linii": [{**data["linii"][0], "gladka": False}]})
+    pts = shema.hose_points(loaded["linii"][0], loaded, loaded["s"])
+    check(len(pts) > 4, "\"gladka\": false no longer turns the smoothing off")
+
+
 if __name__ == "__main__":
     test_naves()
     test_street_names_inside()
@@ -451,6 +486,7 @@ if __name__ == "__main__":
     test_kais_fields()
     test_parcel_label()
     test_dxf()
+    test_dxf_hoses()
     test_situacionna_sheet()
     test_situacionna_docx()
     test_library()
