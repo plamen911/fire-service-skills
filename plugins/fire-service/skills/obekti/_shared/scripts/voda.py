@@ -523,6 +523,7 @@ def cmd_dobavi(a, store):
         return remote_write(a, store, {"action": "dobavi", "masto": a.masto, "obshtina": a.obshtina, "vid": a.vid, "tip": a.tip,
                                        "lat": p[0], "lon": p[1], "diametar": a.diametar, "ulitsa": a.ulitsa, "orientir": a.orientir,
                                        "sastoyanie": a.sastoyanie, "belezhka": a.belezhka, "vapreki": a.vapreki,
+                                       "bez_nomer": getattr(a, "bez_nomer", False), "ot_kartata": getattr(a, "ot_kartata", False),
                                        "dry_run": a.dry_run, "proveril": a.proveril})
     s = settlement(a.masto, a.obshtina)
     centre = centres().get(s["ekatte"])
