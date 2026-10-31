@@ -10,7 +10,7 @@ akti.py — внос на цял документ (заповед, правил�
     python3 scripts/akti.py proveri akt/ФАЙЛ.md                        # членове, полета, несигурни места
     python3 scripts/akti.py kandidati akt/ФАЙЛ.md [--listing listing.json]
     python3 scripts/akti.py sravni akt/ФАЙЛ.md regs/tier-c_….md        # дубликат / продължение / друго
-    python3 scripts/akti.py dopalni regs/tier-c_….md chast.md -o akt [--palen]
+    python3 scripts/akti.py dopalni regs/tier-c_….md chast.md -o akt [--palen | --nepalen "…"]
     python3 scripts/akti.py zapis akt/ФАЙЛ.md                          # само администраторът
 
 data.json:
@@ -69,13 +69,16 @@ ART = re.compile(r"^## Чл\. (\d+)([а-я]?)\s*$", re.M)
 LOOSE_ART = re.compile(r"^(?:Чл|ЧЛ)\s*[.,]\s*\d+", re.M)
 UNSURE = re.compile(r"\[\?\]|\[нечетливо\]")
 NEPALEN = "> Непълен документ: "
+OLD_PAGES_NOTE = re.compile(r"^> (Непълен документ: |Наличните страници)")
+NEW_PARA = re.compile(r"^(\(\d+\)|\d+\.\s|[а-я]\)\s|§\s*\d+)")
 
 
 # ── text ────────────────────────────────────────────────────────────────────
 
 def join_parts(texts):
-    """Joins the parts in page order; a part that does not start with a heading continues the last
-    paragraph of the previous one (a page cut in the middle of a sentence)."""
+    """Joins the parts in page order. A part that starts with a heading or a new paragraph – „(4)“, „1.“,
+    „а)“, „§ 1.“ – starts a new paragraph; any other part continues the last paragraph of the previous one
+    (a page cut in the middle of a sentence)."""
     body = ""
     for t in texts:
         t = t.strip()
@@ -83,7 +86,7 @@ def join_parts(texts):
             continue
         if not body:
             body = t
-        elif t.startswith("#"):
+        elif t.startswith("#") or NEW_PARA.match(t):
             body = body.rstrip() + "\n\n" + t
         else:
             body = body.rstrip() + " " + t
@@ -348,8 +351,10 @@ def cmd_dopalni(a):
     notes = re.match(r"^\s*((?:>.*\n)+)", body)
     note_block = notes.group(1) if notes else ""
     rest = body[notes.end():] if notes else body
-    if a.palen:
-        note_block = "".join(l for l in note_block.splitlines(True) if not l.startswith(NEPALEN))
+    if a.palen or a.nepalen:   # the old "pages end at …" note goes; --nepalen writes the new one
+        note_block = "".join(l for l in note_block.splitlines(True) if not OLD_PAGES_NOTE.match(l))
+    if a.nepalen:
+        note_block += NEPALEN + typo(a.nepalen) + "\n"
     joined = join_parts([rest, part_body])
     info = articles_of(joined)
     fields = {"articles": articles_field(info)}
@@ -414,6 +419,7 @@ def main(argv=None):
     p = sub.add_parser("dopalni"); p.add_argument("staro"); p.add_argument("chast")
     p.add_argument("-o", "--out", default="akt"); p.add_argument("--palen", action="store_true",
                                                                  help="документът вече е пълен – махни бележката за липсващите страници")
+    p.add_argument("--nepalen", help="новата бележка докъде стигат наличните страници (заменя старата)")
     p.set_defaults(fn=cmd_dopalni)
     p = sub.add_parser("zapis"); p.add_argument("file"); p.set_defaults(fn=cmd_zapis)
     a = ap.parse_args(argv)
