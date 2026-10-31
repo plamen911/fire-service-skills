@@ -292,8 +292,8 @@ def test_vreme():
     lat, lon = map(float, vreme.koordinati("с. Долни Луковит").split(","))
     check(vreme.nay_blizka(lat, lon) == ("LBPL", 24), "a settlement by name → airport and distance")
     t, lit, _ = s.citiraj("при 34–36 °C и вятър 1 m/s [[metar:LBPL: 04.08.2026, 16:00–19:00 ч.]].")
-    check(t == "при 34–36 °C и вятър 1 m/s (METAR LBPL, 04.08.2026).", "marker renders with the date")
-    check(any("летище Долна Митрополия (LBPL)" in l and "mesonet" in l for l in lit), "the airport is listed")
+    check(t == "при 34–36 °C и вятър 1 m/s (Метеорологични данни, 04.08.2026).", "marker renders with the date")
+    check(any("станция Долна Митрополия (LBPL)" in l and "mesonet" in l for l in lit), "the airport is listed")
     check(s.proveri_chisla("вятър 9 m/s [[metar:LBPL: 04.08.2026]]") == [], "offline – the weather is not checked")
     try:
         s.citiraj("x [[metar:XXXX: 04.08.2026]]")
