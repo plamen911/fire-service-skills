@@ -36,7 +36,9 @@ Fire Service: инструментите `keys`, `staff_update` и `samples_save
     python3 tools/admin.py files list raioni
     python3 tools/admin.py files get raioni naseleni_mesta.csv -o .
     python3 tools/admin.py files put raioni naseleni_mesta.csv      # нова таблица на районите на действие
-    python3 tools/admin.py files put admin backup.json --name n8n_workflow.json
+    # копието на работния поток в n8n става само – всеки понеделник (работният поток „Backup – Fire Service API
+    # (weekly)“): n8n_fire-service-api.workflow.json + последните 2 с дата в _admin; на ръка, ако трябва:
+    python3 tools/admin.py files put admin backup.json --name n8n_fire-service-api.workflow.json
 
 Как се добавя колега: 1) има ли го в списъка на служителите (`staff get`) – ако не, `staff add`;
 2) `key add "Име Фамилия"` – името точно както е в колоната ime_kratko; 3) дай му адреса от
