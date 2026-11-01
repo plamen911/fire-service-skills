@@ -973,6 +973,7 @@ def cmd_obekt(a):
                                            "ramka_kc": [round(ox0, 2), round(oy0, 2), round(ox1, 2), round(oy1, 2)],
                                            "tochki": [{"n": n, "x": round(x - bx0, 2), "y": round(y - by0, 2)}
                                                       for n, x, y in marks or []]}
+                    sh["ortofoto_tochki"] = summary["ortofoto"]["tochki"]   # за портала по номер (shemi/dopalni.py)
                     notes.append(f"Ортофото {o.get('godina') or ''} (МЗХ, от КАИС): {png} – работна снимка за входовете и "
                                  "порталите, не влиза в листа по Приложение № 2а. Номерираните точки по оградата са в "
                                  "`ortofoto.tochki` (координатите на схемата) – вход при точка N е `vhodove` там.")

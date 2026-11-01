@@ -25,7 +25,9 @@
      закръглено нагоре;
    - необходимите и забранените гасителни вещества, пламна температура – `svoistva-veshtestva` и
      `sili-i-sredstva` (таблиците към методиката).
-3. **Чертане и документ.**
+3. **Чертане и документ.** Първо непитаното (категория, огнеустойчивост, маршрут, вход по точката, табло, собственик,
+   таблица) – `python3 scripts/dopalni.py situacionna.json --kais kais.json`; изброй `prieto` в чата, питай само за
+   `ne_e_popalneno`. После:
    ```bash
    python3 scripts/situacionna.py situacionna.json -o "/mnt/user-data/outputs/Situacionna_shema_<Обект>.docx"
    ```

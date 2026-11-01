@@ -113,6 +113,8 @@ python3 -c "import glob,os;print('\n'.join(glob.glob(os.path.expanduser('~/.clau
 - `references/formulyar.md`, `references/formulyar.json` – бързият формуляр.
 - `scripts/znatsi.py` – библиотеката с условните знаци и каталогът им.
 - `scripts/shema.py` – входът е описан в началото на скрипта.
+- `scripts/dopalni.py` – попълва непитаното преди чертането (категория, огнеустойчивост по табл. 4 –
+  `references/ogneustoychivost.json`, маршрут, вход по точката, табло, собственик, таблица) и казва какво е прието.
 - `scripts/situacionna.py` – ситуационната схема като .docx (Приложения № 2а и № 2б).
 - `scripts/cdr_import.py` – одобрен чертеж на етаж (.cdr, .svg, .pdf) като векторна подложка, вързана с КАИС.
 - `scripts/konkretna.py` – конкретна схема с решения за гасене (Приложение № 3а) по подложката и разчета.

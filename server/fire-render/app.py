@@ -274,8 +274,12 @@ def questions(data):
             item = {"id": q["id"], "vapros": q["question"], "opcii": q["options"]}
             if q["id"] == "vhod_kola" and streets:
                 item["opcii"] = ["от " + x for x in streets[:3]] + ["не личи – ще кажа къде"]
+            if q["id"] == "portali":
+                if not data.get("ortofoto_tochki"):
+                    continue                       # без ортофото няма номера – входът се пита по улицата
+                item["opcii"] = ["точка … (по ортофотото)", "не личи – ще кажа къде"]
             for k in ("multi", "always", "kogato", "dinamichni"):
-                if q.get(k):
+                if q.get(k) and not (q["id"] == "portali" and k == "kogato"):   # portali – винаги, с ортофотото
                     item[k] = q[k]
             qs.append(item)
         if qs:
@@ -488,17 +492,25 @@ def a_chertai(b):
         save(path, data)
     if not lst.get("obekt"):
         raise Problem("BAD_INPUT", "липсва list.obekt (антетката) – promeni set /list/obekt")
+    # всичко, което не се пита (категория, огнеустойчивост, маршрут, вход по точката, табло, собственик, таблица),
+    # се попълва тук, а не от модела – на безплатния план той иначе го пита след чертането
+    args = [os.path.join(SHEMI, "scripts", "dopalni.py"), "shema.json"]
+    if os.path.isfile(os.path.join(path, "kais.json")):
+        args += ["--kais", "kais.json"]
+    dop = json.loads(run(args, cwd=path))
     out = os.path.join(path, "out")
     shutil.rmtree(out, ignore_errors=True)
     os.makedirs(out)
     res = json.loads(run([os.path.join(SHEMI, "scripts", "situacionna.py"), "shema.json", "-o",
                           os.path.join(out, VID + ".docx")], cwd=path))
+    res["prieto"], res["ne_e_popalneno"] = dop.get("prieto") or [], dop.get("ne_e_popalneno") or []
     for k in ("output", "grafichna", "dxf"):
         res.pop(k, None)
     res["failove"] = sorted(os.listdir(out))
     res["png_base64"], res["format"] = picture(os.path.join(out, VID + "_grafichna.png")), "image/jpeg"
     res["za_claude"] = ("Прегледай картинката (надписи, входове, хидранти). Поправи с promeni и chertai отново; "
-                        "когато е готова – zapishi.")
+                        "когато е готова – zapishi. НЕ задавай въпроси за нещата в prieto и preduprezhdeniya – те са "
+                        "приети; само ги изброй в отговора. Питай единствено за ne_e_popalneno, ако не е празно.")
     return res
 
 
