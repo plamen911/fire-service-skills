@@ -157,6 +157,73 @@ def fill_label(d, kais, prieto):
     prieto.append(f"надписът на главната сграда – „{short}“ (по името на обекта; в КАИС – „{kb.get('predn') or '–'}“)")
 
 
+def arhiv_of(d):
+    """Данните от стария оперативен план (arhiv_danni.py), запомнени в JSON-а – търсят се веднъж."""
+    a = d.get("arhiv_danni")
+    if a is None and d.get("arhiv", True) is not False and (d.get("list") or {}).get("obekt"):
+        try:
+            from arhiv_danni import lookup
+            a = d["arhiv_danni"] = lookup(d["list"]["obekt"], (d.get("list") or {}).get("adres") or "")
+        except Exception:  # noqa: BLE001 – архивът е допълнение: без него схемата пак се прави
+            a = None
+    return a if isinstance(a, dict) and a.get("namereno") else None
+
+
+def fill_from_archive(d, kais, prieto, ne):
+    """Каквото КАИС няма, а старият план на обекта казва – взема се оттам, без въпрос, с годината на плана
+    (_shared/arhiv.md). План отпреди 2010 г. е ориентир – „да се провери на място“."""
+    a = arhiv_of(d)
+    if not a:
+        return
+    dn, src = a.get("danni") or {}, a.get("iztochnik") or "по стария план"
+    chk = " – да се провери на място" if a.get("star") else ""
+    form = d.setdefault("formulyar", {})
+    blds = main_buildings(d)
+    if blds and dn.get("ogneustoychivost") and not blds[0].get("ogneustoychivost"):
+        blds[0]["ogneustoychivost"] = dn["ogneustoychivost"]
+        prieto.append(f"{dn['ogneustoychivost']} ст. огнеустойчивост – {src}{chk}")
+    if blds and dn.get("etazhi") and not form.get("etazhi"):
+        kb = kais_building(kais, blds[0].get("kais_id"))
+        nad = kb.get("etazhi") or int((re.findall(r"\+(\d+)", str(blds[0].get("etazhnost") or "")) or [0])[-1])
+        if nad and dn["etazhi"] > nad:
+            form["etazhi"] = "сутерен или тавански етаж"
+            prieto.append(f"етажи – {dn['etazhi']} {src}, в КАИС {nad} надземни: разликата е сутерен или тавански "
+                          "етаж – да се уточни на място")
+        elif nad:
+            form["etazhi"] = "няма"
+            prieto.append(f"етажи – {dn['etazhi']} {src}, колкото и в КАИС; без сутерен и тавански етаж")
+    if dn.get("el_tablo"):
+        form.setdefault("el_tablo", dn["el_tablo"])
+        prieto.append(f"главното ел. табло – „{dn['el_tablo'].rstrip('.')}“ ({src}); на листа – откъм входа, "
+                      "приблизително{chk}".replace("{chk}", chk))
+    if dn.get("gaz") and not form.get("gaz"):
+        form["gaz"] = "не" if dn["gaz"] == "не" else "да – природен газ от улицата"
+        prieto.append(f"газ – {form['gaz']} ({src}){chk}")
+    inst = [x for x, k in (("спринклерна инсталация", "sprinkler"), ("водна завеса", "vodna_zavesa")) if dn.get(k)]
+    extra = ([f"{dn['vpk']} ВПК"] if dn.get("vpk") else []) + \
+        ([f"водоем {dn['vodoem_m3']:g} m³"] if dn.get("vodoem_m3") else [])
+    if inst or extra:
+        rows = d.setdefault("tablitsa", {}).setdefault("redove", [])
+        if not rows:
+            rows.append({})
+        pgi = str(form.get("pgi") or "")
+        if not pgi or pgi == "не знам":
+            form["pgi"] = ", ".join(inst) or "няма"
+            rows[0].setdefault("pgi_vid", ", ".join(inst + extra))
+        elif "спринклер" in pgi and not dn.get("sprinkler"):
+            ne_txt = (f"ПГИ – отговорено „{pgi}“, а {src} има " + (", ".join(inst + extra) or "друго")
+                      + " и спринклер няма; остава отговорът – провери на място")
+            prieto.append(ne_txt)
+        prieto.append(f"инсталации – {', '.join(inst + extra + (['АПИИ'] if dn.get('apii') else []))} ({src}){chk}")
+    if dn.get("vodoprovod_mm"):
+        for v in d.get("vodoprovod") or []:
+            if str(v.get("diametar")) in ("70/80", "", "None"):
+                v["diametar"] = dn["vodoprovod_mm"]
+        d["_vodoprovod_arhiv"] = f"Ø {dn['vodoprovod_mm']} mm ({src})"
+        prieto.append(f"водопровод – Ø {dn['vodoprovod_mm']} mm"
+                      + (f", {dn['hidranti']} ПХ около обекта" if dn.get("hidranti") else "") + f" ({src}){chk}")
+
+
 def fill_category(d, kais, prieto, ne):
     name = str((d.get("list") or {}).get("obekt") or "")
     own = [s for s in d.get("sgradi") or [] if isinstance(s, dict) and not s.get("sasedna") and not s.get("naves")]
@@ -279,12 +346,14 @@ def fill_tablo(d, vhod, prieto):
     x, y = p.x + (c.x - p.x) * k, p.y + (c.y - p.y) * k
     d.setdefault("obekti", []).append({"x": round(x - 1.5, 1), "y": round(y - 1, 1), "w": 3, "h": 2, "etiket": "Ел."})
     tano = (d.get("formulyar") or {}).get("el_tablo")
+    if tano and tano == ((arhiv_of(d) or {}).get("danni") or {}).get("el_tablo"):
+        return                                         # казано е при стария план
     prieto.append("главното ел. табло – " + (f"по формуляра („{tano}“), " if tano and tano != "не знам" else "")
                   + "в главната сграда откъм входа за колите; предполагаемо – провери на място")
 
 
 def fill_water(d, prieto):
-    if d.get("vodoprovod") or not d.get("vodoiztochnitsi"):
+    if d.get("vodoprovod") or not d.get("vodoiztochnitsi") or d.get("_vodoprovod_arhiv"):
         return
     prieto.append("водопровод – Ø 70/80, 3–5 bar (прието, схема от ВиК няма); трасето не е начертано: хидрантите не са "
                   "по улица от кадастъра, а хидрант извън трасето не се свързва с измислена линия")
@@ -335,6 +404,7 @@ def dopalni(d, kais=None):
     prieto, ne = [], []
     fill_gps(d, prieto, kais)
     fill_label(d, kais, prieto)
+    fill_from_archive(d, kais, prieto, ne)             # старият план – преди правилата по подразбиране
     fill_category(d, kais, prieto, ne)
     vhod = fill_entrance(d, prieto, ne)
     fill_tablo(d, vhod, prieto)

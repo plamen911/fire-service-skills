@@ -27,6 +27,7 @@ base = {
     "ulitsi": [{"kontur": [[0, 0], [60, 0], [60, 10], [0, 10]], "ime": "ул. „Примерна“"}],
     "ortofoto_tochki": [{"n": 1, "x": 10, "y": 40}, {"n": 2, "x": 30, "y": 10}],
     "formulyar": {"gaz": "не", "pgi": "няма", "vhod_kola": ["от ул. „Примерна“"]},
+    "arhiv": False,                                   # без стария план – тестът не ходи в Drive
 }
 kais = {"imot": {"sobstvenost": "Общинска публична"},
         "sgradi": [{"id": "00000.1.1.1", "predn": "Сграда за култура и изкуство", "etazhi": 3, "zastroena_m2": 1900}]}
@@ -77,6 +78,25 @@ k5 = copy.deepcopy(kais)
 k5["sgradi"][0]["predn"] = "Промишлена сграда"
 r = dopalni(d, k5)
 ok(not d["sgradi"][0].get("kategoriya") and r["ne_e_popalneno"], "Ф5 → по normativna-uredba, без гадаене")
+
+# старият план попълва липсващото без въпрос, с годината си; отговорът на потребителя не се пипа
+d = copy.deepcopy(base)
+d.pop("arhiv")
+d["formulyar"] = {"vhod_kola": ["от ул. „Примерна“"], "pgi": "спринклерна – вода"}
+d["vodoprovod"] = [{"tochki": [[0, 5], [60, 5]], "diametar": "70/80", "natisk": "3–5"}]
+d["arhiv_danni"] = {"namereno": True, "godina": 2007, "iztochnik": "по план от 2007 г.", "star": True,
+                    "danni": {"etazhi": 4, "ogneustoychivost": "I", "el_tablo": "Главното ел. табло е до портиера.",
+                              "vodoprovod_mm": 125, "hidranti": 7, "vpk": 15, "vodoem_m3": 5.0, "vodna_zavesa": True,
+                              "apii": True}}
+r = dopalni(d, kais)
+txt = " ".join(r["prieto"])
+ok(d["sgradi"][0]["ogneustoychivost"] == "I", "огнеустойчивостта – от плана, не минимумът по табл. 4")
+ok(d["formulyar"].get("etazhi") == "сутерен или тавански етаж" and "4 по план от 2007 г." in txt, "4 етажа по плана срещу 3 в КАИС")
+ok(d["formulyar"].get("el_tablo", "").startswith("Главното ел. табло"), "ел. таблото – от плана, без въпрос")
+ok(d["vodoprovod"][0]["diametar"] == 125 and "Ø 125 mm, 7 ПХ" in txt and "70/80" not in txt, "водопроводът – Ø 125 от плана")
+ok(d["formulyar"]["pgi"] == "спринклерна – вода" and "спринклер няма" in txt, "отговорът за ПГИ остава, разминаването се казва")
+ok("да се провери на място" in txt, "план отпреди 2010 г. – ориентир")
+ok(not r["ne_e_popalneno"], "нищо за питане")
 
 for e in errors:
     print("  FAIL", e)

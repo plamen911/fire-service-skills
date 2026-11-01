@@ -75,6 +75,10 @@ qd = {"ulitsi": [{"ime": "ул. „Първа“"}, {"ime": "ул. „Втора
 qs = {q["id"]: q for e in app.questions(qd) for q in e["vaprosi"]}
 ok("pgi" not in qs and "gaz" in qs and "deistvie" not in qs["gaz"], "questions: open ones, no deistvie")
 ok(qs["vhod_kola"]["opcii"] == ["от ул. „Първа“", "от ул. „Втора“", "не личи – ще кажа къде"], "vhod_kola streets")
+qa = {"ulitsi": [], "arhiv_danni": {"danni": {"etazhi": 4, "el_tablo": "до портиера", "vodna_zavesa": True}}}
+qs2 = {q["id"] for e in app.questions(qa) for q in e["vaprosi"]}
+ok(not ({"etazhi", "el_tablo", "pgi"} & qs2) and "gaz" in qs2, "what the old plan says is not asked")
+ok(app.old_plan({}, {}) == {}, "no name – no lookup in the archive")
 d = app.answers(qd, {"gaz": "не", "vhod_kola": ["от ул. „Първа“"]})
 ok(qd["formulyar"]["gaz"] == "не" and list(d["gaz"]) == ["не"], "answer → its deistvie only")
 ok("*" in d["vhod_kola"], "street answer → the template for any choice")

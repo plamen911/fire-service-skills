@@ -11,7 +11,8 @@ short answers, a preview picture and, at the end, the files in the objects regis
 Only n8n calls this service (the connector tool `shema`): it runs in n8n's Docker network with no published
 port, and every request must carry the shared token (X-Render-Token). n8n adds who is calling ("klient").
 
-    POST /shema {"action": "nachalo", "lat", "lon" | "kadastar" | "papka_id", "opcii": {…, "promyana"|"nanovo": true}}
+    POST /shema {"action": "nachalo", "lat", "lon" | "kadastar" | "papka_id", "opcii": {…, "ime": "<обектът>",
+                 "promyana"|"nanovo": true}}   – "ime": the old plan in the archive answers what it can (arhiv_danni.py)
     POST /shema {"action": "pokazhi", "sesiya", "pat": "/sgradi/0"}
     POST /shema {"action": "promeni", "sesiya", "operacii": [{"op": "set"|"add"|"remove"|"merge", "pat", "stoynost"},
                                                              {"op": "formulyar", "stoynost": {id: отговор}}, {"op": "chertai"}]}
@@ -259,7 +260,11 @@ def questions(data):
     The streets around the parcel become the options of "vhod_kola"."""
     with open(FORMULYAR, encoding="utf-8") as f:
         form = json.load(f)
-    done = data.get("formulyar") or {}
+    done = dict(data.get("formulyar") or {})
+    dn = (data.get("arhiv_danni") or {}).get("danni") or {}
+    for qid, keys in ARHIV_OTGOVARYA.items():         # what the old plan says is filled in, not asked
+        if any(dn.get(k) for k in keys):
+            done.setdefault(qid, "по стария план")
     streets = []
     for u in data.get("ulitsi") or []:
         name = isinstance(u, dict) and str(u.get("ime") or "").strip()
@@ -285,6 +290,26 @@ def questions(data):
         if qs:
             out.append({"ekran": scr["title"], "vaprosi": qs})
     return out
+
+
+def old_plan(b, opcii):
+    """The object's old operational plan in the archive (shemi/scripts/arhiv_danni.py) – by the name the model passes
+    ("ime", in the body or in "opcii"); {} when there is no name or no plan. What it says is not asked."""
+    ime = str(b.get("ime") or opcii.get("ime") or "").strip()
+    if not ime:
+        return {}
+    try:
+        out = run([os.path.join(SHEMI, "scripts", "arhiv_danni.py"), ime, "--adres",
+                   str(b.get("adres") or opcii.get("adres") or "")], cwd=DATA, timeout=200)
+        res = json.loads(out)
+        return res if res.get("namereno") else {}
+    except (Problem, ValueError, subprocess.TimeoutExpired):
+        return {}
+
+
+# form questions the old plan answers: id → the facts of arhiv_danni.py that answer it
+ARHIV_OTGOVARYA = {"etazhi": ("etazhi",), "el_tablo": ("el_tablo",), "gaz": ("gaz",),
+                   "pgi": ("sprinkler", "vodna_zavesa")}
 
 
 def answers(data, given):
@@ -416,6 +441,10 @@ def a_nachalo(b):
         args += ["--link", str(b["link"])]
     else:
         raise Problem("BAD_INPUT", "nachalo иска \"kadastar\", \"lat\"+\"lon\", \"link\" или \"papka_id\"")
+    plan = old_plan(b, opcii)
+    dn = plan.get("danni") or {}
+    if dn.get("vodoprovod_mm") and not opcii.get("vodoprovod"):   # the water main of the old plan, not 70/80
+        opcii = dict(opcii, vodoprovod=dn["vodoprovod_mm"])
     for k, v in opcii.items():
         if k not in OPCII or v in (None, False, ""):
             continue
@@ -429,7 +458,17 @@ def a_nachalo(b):
     for k in ("kais_json", "fon", "shema", "ortofoto"):
         rez.pop(k, None)
     data = load(path)
+    ime = str(b.get("ime") or opcii.get("ime") or "").strip()
+    if ime and not (data.get("list") or {}).get("obekt"):
+        data.setdefault("list", {})["obekt"] = ime       # the title block – no separate promeni for it
+    if plan:                                           # dopalni.py fills the scheme from it at chertai
+        data["arhiv_danni"] = plan
+    if ime or plan:
+        save(path, data)
     ans = {"sesiya": sid, "kais": rez, "shema": outline(data), "vaprosi": questions(data),
+           # only where it is from – the data itself stays here (dopalni.py fills it in); every word sent back costs
+           #   the free plan
+           "star_plan": f"{plan.get('papka')} ({plan.get('godina')} г.)" if plan else None,
            "za_claude": "Данните от КАИС са на сървъра. Задай vaprosi наведнъж (входовете – по номерираните точки на "
                         "ортофотото); отговорите – promeni с {\"op\": \"formulyar\"} (връща deistvie); deistvie и "
                         "антетката – второ promeni с {\"op\": \"chertai\"} накрая; после zapishi."}
