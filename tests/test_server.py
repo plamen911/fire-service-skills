@@ -262,7 +262,7 @@ def test_kais(tmp, base):
     kais.osm_paths = lambda *a: ([], "")
     Stub.plan, Stub.seen = [(200, answer)], []
     out, sh = os.path.join(tmp, "k", "kais.json"), os.path.join(tmp, "k", "shema.json")
-    code, printed, err = call(kais.main, ["obekt", "--link", "43.41,24.65", "-o", out, "--shema", sh])
+    code, printed, err = call(kais.main, ["obekt", "--link", "43.41,24.65", "-o", out, "--shema", sh, "--bez-list"])
     sent = Stub.seen[-1]
     check(code is None, "obekt answers" + (": " + err if code else ""))
     check(sent["path"] == "/kais" and sent["key"] == FAKE and sent["body"] == {"action": "obekt", "fon": False, "radius_m": 40,
@@ -277,7 +277,7 @@ def test_kais(tmp, base):
           "a street is cut to the terrain; one far away is left out")
     check(u[0]["ime"] == "бул. „Примерен“" and u[1]["ime"] == "", "the name once, on the longest piece, in „…“")
     Stub.plan = [(200, answer)]
-    code, printed, err = call(kais.main, ["obekt", "--link", "43.41,24.65", "-o", out, "--shema", sh, "--fon",
+    code, printed, err = call(kais.main, ["obekt", "--link", "43.41,24.65", "-o", out, "--shema", sh, "--bez-list", "--fon",
                                           "--granitsa"])
     check(code is None and Stub.seen[-1]["body"]["fon"] is True, "--fon asks for the picture")
     fon = os.path.join(tmp, "k", "kais_fon.png")
@@ -289,8 +289,19 @@ def test_kais(tmp, base):
           "the terrain is the parcel plus the radius, its origin kept in КС2005")
     check(d["imot"]["kontur"][0] == [40, 40] and len(d["imot"]["kontur"]) == 4 and d["imot"]["etiket"] == "ПИ 99999.10.20",
           "the parcel's outline in local metres, without the closing point")
+    # by default the terrain fills the sheet: the drawing area (257 × 180 mm) at the scale the parcel needs, and the
+    #   streets beyond the first radius come in a second query with the radius of the sheet
+    Stub.plan, Stub.seen = [(200, answer), (200, answer)], []
+    code, _, err = call(kais.main, ["obekt", "--id", "99999.10.20", "-o", out, "--shema", sh])
+    full = json.load(open(sh, encoding="utf-8"))
+    w_, h_ = full["teren"]
+    check(code is None and abs(w_ / h_ - 257 / 180) < 0.01 and w_ >= 120 and h_ >= 110,
+          "the terrain fills the sheet – the drawing area's proportions, the parcel and its radius inside")
+    check(len(Stub.seen) == 2 and Stub.seen[-1]["body"]["radius_m"] > 40, "a second query with the radius of the sheet")
+    px = [p_[0] for p_ in full["teren_tochki"]]
+    check(min(px) > 0 and max(px) < w_, "the parcel stays inside the larger terrain")
     Stub.plan = [(200, answer)]
-    call(kais.main, ["obekt", "--id", "99999.10.20", "-o", out, "--shema", sh, "--ograda", "metalna"])
+    call(kais.main, ["obekt", "--id", "99999.10.20", "-o", out, "--shema", sh, "--ograda", "metalna", "--bez-list"])
     fenced = json.load(open(sh, encoding="utf-8"))
     check("imot" not in fenced and fenced["ograda"][0] == [40, 40] and fenced["ograda_vid"] == "metalna",
           "--ograda: a fenced parcel – its boundary drawn as the fence")
@@ -314,7 +325,7 @@ def test_kais(tmp, base):
                    mesta=[{"ime": "ж.к. Примерен", "vid": "neighbourhood", "tochka": [x0 + 70, y0 - 150]},
                           {"ime": "Далечна зона", "vid": "industrial", "tochka": [x0 + 70, y0 - 2000]}])
     Stub.plan = [(200, answer2)]
-    code, _, err = call(kais.main, ["obekt", "--id", "99999.10.20", "-o", out, "--shema", sh])
+    code, _, err = call(kais.main, ["obekt", "--id", "99999.10.20", "-o", out, "--shema", sh, "--bez-list"])
     d = json.load(open(sh, encoding="utf-8"))
     area = [u for u in d["ulitsi"] if "kontur" in u]
     lines_ = [u for u in d["ulitsi"] if "tochki" in u]

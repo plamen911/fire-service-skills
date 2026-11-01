@@ -1312,9 +1312,10 @@ def render_legend(d, out_png, width_cm=WIDTH_CM, fs=7.0):
 def site_points(data, streets=True):
     """The points of everything drawn on the site – to keep the sheet's fields clear of it."""
     pts = []
-    for b in data["sgradi"]:
+    own = [b for b in data["sgradi"] if streets or not b.get("sasedna")]   # the neighbours are background too: on a
+    for b in own:                                      #   full sheet the title block may cover one of them
         pts += densify(b["kontur"] + b["kontur"][:1]) if b["kontur"] else []
-    for b in data["sgradi"] + data["obekti"] + data["pozhar"] + data["zadimyavane"] + data["bez_parkirane"]:
+    for b in own + data["obekti"] + data["pozhar"] + data["zadimyavane"] + data["bez_parkirane"]:
         pts += [(b["x"], b["y"]), (b["x"] + b["w"], b["y"]), (b["x"], b["y"] + b["h"]), (b["x"] + b["w"], b["y"] + b["h"])]
     for coll in (data["avtomobili"], data["vodoiztochnitsi"], data["vhodove"], data["razklonitel"], data["gaz_armatura"]):
         pts += [(o["x"], o["y"]) for o in coll]

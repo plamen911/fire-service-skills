@@ -670,6 +670,35 @@ def water(lat, lon, radius_m):
         return None, ["voda.py върна неочакван отговор"]
 
 
+# ── The terrain that fills the sheet of a situational scheme (Приложение № 2а, scripts/shema.py) ────────────────
+# The drawing area of the A4 sheet (the frame minus 5 mm), mm, and what the drawing must keep clear of there – the
+# title block (lower right), the field for the number (upper right) and the compass (upper left), in area mm.
+LIST_AW, LIST_AH = 257.0, 180.0
+LIST_PAZI = ((108.0, 0.0, 257.0, 29.0), (236.0, 164.0, 257.0, 180.0), (0.0, 159.0, 14.0, 180.0))
+LIST_MASHTABI = (200, 250, 500, 750, 1000, 1250, 1500, 2000, 2500, 5000)   # as in shema.SCALES
+
+
+def list_ramka(core, tight):
+    """(x0, y0, x1, y1, n): the terrain at the largest scale 1:n at which `core` (the parcel with its margin and the
+    water) fits on the sheet and none of `tight` (the parcel, the buildings, the hydrants) falls under a field – the
+    whole drawing area at that scale, so the sheet is full (more streets and neighbours, the same scale). None when
+    nothing fits (then the old terrain stays)."""
+    cx0, cy0, cx1, cy1 = core
+    for n in LIST_MASHTABI:
+        w, h = LIST_AW * n / 1000 * 0.998, LIST_AH * n / 1000 * 0.998
+        if cx1 - cx0 > w or cy1 - cy0 > h:
+            continue
+        k = n / 1000
+        mid_x, mid_y = (cx0 + cx1 - w) / 2, (cy0 + cy1 - h) / 2           # the core in the middle
+        xs = sorted({cx1 - w + (cx0 - (cx1 - w)) * i / 8 for i in range(9)}, key=lambda v: abs(v - mid_x))
+        ys = sorted({cy1 - h + (cy0 - (cy1 - h)) * j / 8 for j in range(9)}, key=lambda v: abs(v - mid_y))
+        for fx0, fy0 in sorted(((x, y) for x in xs for y in ys), key=lambda q: math.hypot(q[0] - mid_x, q[1] - mid_y)):
+            if not any(a - 2 <= (px - fx0) / k <= c + 2 and b - 2 <= (py - fy0) / k <= d + 2
+                       for px, py in tight for a, b, c, d in LIST_PAZI):
+                return math.floor(fx0), math.floor(fy0), math.floor(fx0) + w, math.floor(fy0) + h, n
+    return None
+
+
 def cmd_obekt(a):
     body = {"action": "obekt", "fon": bool(a.fon), "radius_m": a.radius}
     p = point_of(a)
@@ -748,7 +777,28 @@ def cmd_obekt(a):
                 elif not inside:
                     notes.append(f"В имота и около него няма хидрант – начертан е най-близкият ({round(exact[0][2].get('razstoyanie_m', 0))} m "
                                  "по права линия), теренът е разширен до него.")
-        w, h = bx1 - bx0, by1 - by0
+        if not a.bez_list and ring:                    # the sheet full: the terrain grows to the drawing area
+            tight = [tuple(p_) for p_ in densify(ring + ring[:1], 2.0)]
+            for s_ in sgradi:
+                tight += [tuple(p_) for p_ in (s_.get("kontur") or [])]
+            tight += [(x, y) for x, y, _ in hydrants]
+            fr = list_ramka((bx0, by0, bx1, by1), tight)
+            if fr:
+                nx0, ny0, nx1, ny1, n_ = fr
+                px0, py0 = min(p_[0] for p_ in ring), min(p_[1] for p_ in ring)
+                px1, py1 = max(p_[0] for p_ in ring), max(p_[1] for p_ in ring)
+                need = math.ceil(max(px0 - nx0, py0 - ny0, nx1 - px1, ny1 - py1, 0)) + 5
+                if need > r:                           # the streets and the places beyond the first query – once more,
+                    more = call(dict(body, radius_m=min(300, need), fon=False))   #   with the radius of the sheet
+                    for k_ in ("ulitsi_kais", "ulitsi", "mesta"):
+                        if k_ in more:
+                            res[k_] = more[k_]
+                    with open(out, "w", encoding="utf-8") as f:
+                        json.dump(res, f, ensure_ascii=False, indent=1)
+                bx0, by0, bx1, by1 = nx0, ny0, nx1, ny1
+                notes.append(f"Теренът запълва листа при М 1:{n_} – разширен до цялото поле за чертеж "
+                             "(`--bez-list` – само имотът с радиуса).")
+        w, h = round(bx1 - bx0, 2), round(by1 - by0, 2)
         sh = {
             "teren": [w, h],
             "kais": {"x0": bx0, "y0": by0, "imot": imot["id"], "data": res["data_na_spravkata"]},
@@ -1233,6 +1283,8 @@ def main():
     o.add_argument("--lon", type=float)
     o.add_argument("--link", help="линк от Google Maps (и кратък) или „ширина,дължина“")
     o.add_argument("--radius", type=int, default=40, help="метри около имота (30–300, по подразбиране 40)")
+    o.add_argument("--bez-list", action="store_true",
+                   help="теренът – само имотът с радиуса, без разширяване до целия лист на ситуационната схема")
     o.add_argument("--fon", action="store_true",
                    help="и картинката на кадастралната карта като блед фон (не по Приложение № 2а – за работа и сверка)")
     o.add_argument("--granitsa", action="store_true",

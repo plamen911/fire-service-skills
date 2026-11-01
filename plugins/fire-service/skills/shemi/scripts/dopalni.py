@@ -143,6 +143,20 @@ def fill_gps(d, prieto, kais):
                   "1 km/min и 1 min излизане)")
 
 
+def fill_label(d, kais, prieto):
+    """Надписът на главната сграда – по дейността (името на обекта), не общото предназначение от КАИС."""
+    blds, name = main_buildings(d), str((d.get("list") or {}).get("obekt") or "")
+    if not blds or not name:
+        return
+    s = blds[0]
+    kb = kais_building(kais, s.get("kais_id"))
+    if str(s.get("etiket") or "").strip() not in ("", str(kb.get("predn") or "").strip()):
+        return                                         # вече е по дейността – не се пипа
+    short = re.split(r"\s*[„\"(,]", name)[0].strip() or name
+    s["etiket"] = short
+    prieto.append(f"надписът на главната сграда – „{short}“ (по името на обекта; в КАИС – „{kb.get('predn') or '–'}“)")
+
+
 def fill_category(d, kais, prieto, ne):
     name = str((d.get("list") or {}).get("obekt") or "")
     own = [s for s in d.get("sgradi") or [] if isinstance(s, dict) and not s.get("sasedna") and not s.get("naves")]
@@ -320,6 +334,7 @@ def fill_table(d, prieto):
 def dopalni(d, kais=None):
     prieto, ne = [], []
     fill_gps(d, prieto, kais)
+    fill_label(d, kais, prieto)
     fill_category(d, kais, prieto, ne)
     vhod = fill_entrance(d, prieto, ne)
     fill_tablo(d, vhod, prieto)

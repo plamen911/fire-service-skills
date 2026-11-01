@@ -73,7 +73,7 @@ python3 -c "import glob,os;print('\n'.join(glob.glob(os.path.expanduser('~/.clau
    променят), съседните сгради, улиците с имената от OpenStreetMap, тревните площи и хидрантът (границата на
    имота – само при `--granitsa`; ограден имот – `--ograda [вид]`):
    ```bash
-   python3 _shared/scripts/kais.py obekt --link "<линк или 43.41257,24.65047>" -o kais.json --shema shema.json --voda --pateki --ortofoto --trevni-ortofoto
+   python3 _shared/scripts/kais.py obekt --link "<линк или 43.41257,24.65047>" -o kais.json --shema shema.json --voda --pateki --ortofoto --trevni-ortofoto --bez-list
    ```
    Правилата са тези от `../shemi/references/kais.md`: всичко от КАИС, OSM само
    допълва; етажите по чл. 8 от Указанията – „+2“; без своя рамка около чертежа. Кажи в чата „по кадастралната карта
