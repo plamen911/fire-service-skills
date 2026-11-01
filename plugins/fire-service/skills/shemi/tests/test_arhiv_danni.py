@@ -5,7 +5,7 @@ import sys
 
 SKILL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(SKILL, "scripts"))
-from arhiv_danni import extract, keywords  # noqa: E402
+from arhiv_danni import extract, keywords, variants  # noqa: E402
 
 errors = []
 
@@ -30,6 +30,18 @@ ok(d.get("apii") is True and d.get("gaz") == "не", "АПИИ; „не е га�
 ok("sprinkler" not in d and "vodna_zavesa" not in d, "което не е казано – липсва")
 ok(extract("")[0] == {}, "празен текст – нищо")
 ok(keywords("Театър „Примерно Име“") == ["Име"], "търси се по последната дума от името в кавичките")
+
+RAZ = ("Разчет на силите и средствата за гасене на пожар в Читалище “Примерно” – сцена\n\n*V<sub>л</sub> = 1 м/мин*\n\n"
+       "*Секторна форма на развитие*\n\n*Приемам, че гори цялата сцена*\n\n*Гасене по периметър*\n\n"
+       "*J<sub>н</sub><sup>г</sup> = 0,2 л/с.м<sup>2</sup>*\n\n"
+       "\\(Q = 2\\text{.}5\\text{.}(\\text{20},5 + \\text{10},5 - 2\\text{.}5)\\text{.}0,2\\)\n\n"
+       "Разчет на силите и средствата за гасене на пожар в Читалище “Примерно” – зала\n\n*Гасене по фронт*\n")
+v = variants(RAZ)
+ok([x["ime"] for x in v] == ["сцена", "зала"], "вариантите – по помещението след „–“")
+ok(v[0].get("vl_m_min") == 1 and v[0].get("i_l_s_m2") == 0.2 and v[0].get("forma") == "sektor"
+   and v[0].get("ataka") == "perimetar" and (v[0].get("a_m"), v[0].get("b_m"), v[0].get("h_m")) == (20.5, 10.5, 5),
+   "Vл, Iн, форма, атака и размерите от формулата")
+ok(v[0].get("priemam") == "Приемам, че гори цялата сцена" and v[1].get("ataka") == "front", "какво се приема; по фронт")
 
 for e in errors:
     print("  FAIL", e)

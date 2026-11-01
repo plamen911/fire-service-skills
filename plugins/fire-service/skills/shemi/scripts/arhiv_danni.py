@@ -102,6 +102,44 @@ def extract(text):
     return {k: v for k, v in out.items() if v is not None}, why
 
 
+FORMI = (("секторн", "sektor"), ("кръгов", "kragova"), ("правоъгълн", "pravoagalnik"), ("ъглов", "aglova"))
+
+
+def num(v):
+    return float(v.replace(",", ".")) if v else None
+
+
+def variants(text):
+    """Вариантите от разчета на стария план: [{"ime", "priemam", "vl_m_min", "i_l_s_m2", "forma", "ataka",
+    "a_m", "b_m", "h_m"}] – по един за всеки „Разчет на силите … – <помещение>“; каквото не е казано – липсва."""
+    t = clean(re.sub(r"\\text\{([^}]*)\}", r"\1", text))   # LaTeX от формулите – само числата
+    parts = re.split(r"(?=Разчет на силите)", t)
+    out = []
+    for p_ in parts:
+        m = re.match(r"Разчет на силите[^\n]*?–\s*([^\n–]+?)\s*$", p_.split("\n")[0].strip())
+        if not m:
+            continue
+        v = {"ime": m.group(1).strip(" ”\"")}
+        low = p_.lower()
+        if (m2 := re.search(r"(Приемам[^.\n]*)", p_)):
+            v["priemam"] = m2.group(1).strip(" *")
+        if (m2 := re.search(r"V\s*(?:<sub>)?\s*л\s*(?:</sub>)?\s*=\s*(\d+(?:[.,]\d+)?)", p_)):
+            v["vl_m_min"] = num(m2.group(1))
+        if (m2 := re.search(r"J\s*(?:<sub>)?\s*н\s*(?:</sub>)?.{0,30}?=\s*(\d+(?:[.,]\d+)?)\s*л", p_)):
+            v["i_l_s_m2"] = num(m2.group(1))
+        v["forma"] = next((f for k, f in FORMI if k in low), None)
+        v["ataka"] = "perimetar" if "по периметър" in low else "front" if "по фронт" in low else None
+        if (m2 := re.search(r"2\s*\.\s*(\d+(?:,\d+)?)\s*\.\s*\(\s*(\d+(?:,\d+)?)\s*\+\s*(\d+(?:,\d+)?)\s*-\s*2", p_)):
+            v["h_m"], v["a_m"], v["b_m"] = num(m2.group(1)), num(m2.group(2)), num(m2.group(3))
+        out.append({k: x for k, x in v.items() if x is not None})
+    # един вариант, казан в няколко файла (стара и нова редакция) – веднъж, последната дума
+    seen = {}
+    for v in out:
+        key = v["ime"].split("–")[-1].strip().lower()
+        seen[key] = {**seen.get(key, {}), **v}
+    return list(seen.values())
+
+
 def keywords(name):
     """Думите, по които се търси в индекса: името в кавичките („Иван Радоев“), иначе нетипичните думи."""
     q = re.findall(r"[„\"“]([^“”\"]+)[“”\"]", name or "")
@@ -126,7 +164,14 @@ def lookup(name, adres=""):
     texts = [f["name"] for f in listing.get("failove") or [] if f["name"].lower().endswith(".md")]
     texts.sort(key=lambda n: (0 if "harak" in n.lower() else 1 if "main" in n.lower() or "pz" in n.lower() else 2))
     danni, izr = {}, {}
-    for name_ in texts[:3]:
+    varianti = []
+    for name_ in [n_ for n_ in texts if re.search(r"raz[4c]h?et", n_, re.I)][:3]:
+        r = run_obekti("arhiv", "--papka", row["papka"], "--chete", name_) or {}
+        for v in variants(r.get("tekst") or ""):
+            if not any(v["ime"].lower() == w["ime"].lower() for w in varianti):
+                varianti.append(v)
+    pdfs = [f["name"] for f in listing.get("failove") or [] if f["name"].lower().endswith(".pdf")]
+    for name_ in [n_ for n_ in texts if not re.search(r"raz[4c]h?et", n_, re.I)][:3]:
         r = run_obekti("arhiv", "--papka", row["papka"], "--chete", name_) or {}
         d_, w_ = extract(r.get("tekst") or "")
         for k, v in d_.items():
@@ -137,9 +182,10 @@ def lookup(name, adres=""):
             break
     god = re.search(r"\d{4}", str(row.get("godina") or ""))
     godina = int(god.group(0)) if god else None
-    return {"namereno": bool(danni), "papka": row["papka"], "obekt": row.get("obekt"), "godina": godina,
+    return {"namereno": bool(danni or varianti), "papka": row["papka"], "obekt": row.get("obekt"), "godina": godina,
             "iztochnik": f"по план от {godina} г." if godina else "по стария план",
-            "star": bool(godina and godina < 2010), "danni": danni, "izrecheniya": izr}
+            "star": bool(godina and godina < 2010), "danni": danni, "izrecheniya": izr,
+            "varianti": varianti, "skhemi_pdf": pdfs}
 
 
 def main():

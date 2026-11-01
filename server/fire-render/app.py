@@ -423,6 +423,11 @@ def a_nachalo(b):
                                  "nachalo отново с opcii.promyana; изцяло нова от КАИС: opcii.nanovo."}
         if fs and opcii.get("promyana"):
             papka = found.get("papka_id") or ""
+    if not found and not papka and not str(b.get("ime") or opcii.get("ime") or "").strip():
+        # without the name the old plan cannot be found – and then the form asks what the plan already says
+        raise Problem("BAD_INPUT", "nachalo иска името на обекта: opcii.ime (напр. „Драматично-куклен театър "
+                                   "„Иван Радоев““) – по него се взима старият му план от архива и не се питат "
+                                   "етажите, таблото, газът и инсталациите")
     sid, path = session(None, new=True)
     if found:
         meta(path, obekt=found["id"])
@@ -745,13 +750,31 @@ def a_plan_nachalo(b):
     meta(path, obekt=oid, papka=papka, novi_podlozhki=[])
     sit = jload(path, "situacionna.json")
     hydr = [{"voda_id": v.get("voda_id"), "etiket": v.get("etiket")} for v in sit.get("vodoiztochnitsi") or []]
-    return {"sesiya": sid, "obekt": oid, "ime": found.get("ime"), "etazhi": {str(n): rooms(jload(path, f"podlozhka_et{n}.json"))
-                                                                            for n in floors(path)},
-            "hidranti": hydr, "plan": {"danni": [r[0] for r in plan.get("danni") or []],
-                                        "varianti": [v.get("ime") for v in plan.get("varianti") or []]},
-            "za_claude": "Етажите (подложките от одобрените чертежи) и хидрантите са на сървъра. Липсващ етаж – "
-                         "plan_podlozhka с .cdr-а; после за всеки вариант plan_variant; данните по чл. 6, ал. 1 – "
-                         "plan_promeni на /danni; накрая plan_sglobi и plan_zapishi."}
+    # the old operational plan in the archive: its variants and facts are the defaults – not questions
+    old = sit.get("arhiv_danni") or {}
+    if not old.get("namereno") or not old.get("varianti"):
+        old = old_plan({"ime": found.get("ime") or ""}, {}) or old
+    et = {str(n): rooms(jload(path, f"podlozhka_et{n}.json")) for n in floors(path)}
+    ans = {"sesiya": sid, "obekt": oid, "ime": found.get("ime"), "etazhi": et,
+           "hidranti": hydr, "plan": {"danni": [r[0] for r in plan.get("danni") or []],
+                                      "varianti": [v.get("ime") for v in plan.get("varianti") or []]}}
+    say = ["Етажите (подложките от одобрените чертежи) и хидрантите са на сървъра."]
+    if old.get("namereno"):
+        ans["star_plan"] = {"iztochnik": old.get("iztochnik"), "danni": old.get("danni") or {},
+                            "varianti": old.get("varianti") or []}
+        say.append(f"star_plan ({old.get('iztochnik')}): вариантите му са вариантите на плана – направи ги с "
+                   "plan_variant без да питаш (помещението по името, Vл, Iн, формата и атаката от варианта); данните му "
+                   "(етажи, огнеустойчивост, табло, инсталации, водопровод) влизат в /danni и в вариантите с годината "
+                   "на плана. Питай само за това, което нито той, нито регистърът дава.")
+    if not et:
+        say.append("Етажи няма – без одобрения чертеж на етажа (.cdr) конкретна схема не се прави: поискай го с едно "
+                   "изречение (plan_podlozhka) – това е единственият въпрос.")
+    else:
+        say.append("Липсващ етаж – plan_podlozhka с .cdr-а.")
+    say.append("После за всеки вариант plan_variant; данните по чл. 6, ал. 1 – plan_promeni на /danni; накрая "
+               "plan_sglobi (сглобява .docx тук, на сървъра) и plan_zapishi.")
+    ans["za_claude"] = " ".join(say)
+    return ans
 
 
 def a_plan_podlozhka(b):

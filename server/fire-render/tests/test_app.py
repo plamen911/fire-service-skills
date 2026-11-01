@@ -79,6 +79,13 @@ qa = {"ulitsi": [], "arhiv_danni": {"danni": {"etazhi": 4, "el_tablo": "до п�
 qs2 = {q["id"] for e in app.questions(qa) for q in e["vaprosi"]}
 ok(not ({"etazhi", "el_tablo", "pgi"} & qs2) and "gaz" in qs2, "what the old plan says is not asked")
 ok(app.old_plan({}, {}) == {}, "no name – no lookup in the archive")
+app_in_register, app.in_register = app.in_register, lambda b: None
+try:
+    app.a_nachalo({"lat": 43.4, "lon": 24.6})
+    ok(False, "nachalo without a name accepted")
+except app.Problem as e:
+    ok("opcii.ime" in str(e), "a new object without its name – refused, with what to add")
+app.in_register = app_in_register
 d = app.answers(qd, {"gaz": "не", "vhod_kola": ["от ул. „Първа“"]})
 ok(qd["formulyar"]["gaz"] == "не" and list(d["gaz"]) == ["не"], "answer → its deistvie only")
 ok("*" in d["vhod_kola"], "street answer → the template for any choice")
