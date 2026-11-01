@@ -363,15 +363,17 @@ def write(data, d, out, s, sheet=None):
         text(g["x"], g["y"] + 0.6 * s, g["etiket"], layer="GAZ")
 
     # fire, trucks and the rest of the forces
+    def outline(f):                                    # the room's outline when the fire has one, else its box
+        if f.get("kontur"):
+            return [tuple(q) for q in f["kontur"]]
+        return [(f["x"], f["y"]), (f["x"] + f["w"], f["y"]), (f["x"] + f["w"], f["y"] + f["h"]), (f["x"], f["y"] + f["h"])]
     for f in data["pozhar"] + data["zadimyavane"]:
-        poly([(f["x"], f["y"]), (f["x"] + f["w"], f["y"]), (f["x"] + f["w"], f["y"] + f["h"]), (f["x"], f["y"] + f["h"])],
-             "POZHAR", closed=True)
+        poly(outline(f), "POZHAR", closed=True)
     for f in data["pozhar"]:
         hatch = msp.add_hatch(color=1, dxfattribs={"layer": "POZHAR"})
         hatch.set_pattern_fill("ANSI31" if f.get("zashtita") else "ANSI37",    # protected – single hatching
                                scale=max(s / (2 if f.get("zashtita") else 4), 0.2))
-        hatch.paths.add_polyline_path([P((f["x"], f["y"])), P((f["x"] + f["w"], f["y"])), P((f["x"] + f["w"], f["y"] + f["h"])),
-                                       P((f["x"], f["y"] + f["h"]))], is_closed=True)
+        hatch.paths.add_polyline_path([P(q) for q in outline(f)], is_closed=True)
         text(f["x"] + f["w"] / 2, f["y"] + f["h"] / 2, f["etiket"], layer="POZHAR")
     for t in data["avtomobili"]:
         L, W, a = 1.7 * s, 0.75 * s, math.radians(t["ugal"])

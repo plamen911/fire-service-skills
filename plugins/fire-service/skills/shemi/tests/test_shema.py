@@ -471,7 +471,42 @@ def test_dxf_hoses():
     check(len(pts) > 4, "\"gladka\": false no longer turns the smoothing off")
 
 
+def test_outline_fire_and_protection():
+    print("shema.py – a fire by the room's outline; a protected area does not push its nozzle out")
+    import ezdxf
+    # an L-shaped room (a bedroom along the north wall and a play hall along the east one, no wall between them)
+    room = [[48, 20], [55, 20], [55, 40], [40, 40], [40, 35], [48, 35]]
+    data = {"teren": [80, 60],
+            "sgradi": [{"x": 38, "y": 10, "w": 19, "h": 32, "etiket": ""}],
+            "pozhar": [{"kontur": room},
+                       {"x": 40, "y": 12, "w": 6, "h": 6, "zashtita": True}],
+            "avtomobili": [{"id": "I ПА", "x": 10, "y": 30, "ugal": 0}],
+            "linii": [{"tochki": [[11, 30], [25, 25], [43, 15]], "vid": "malka", "struinik": "malak"},
+                      {"tochki": [[11, 30], [25, 24], [44, 22], [44, 30]], "vid": "malka", "struinik": "malak"}]}
+    loaded, _ = shema.load(data)
+    prot = loaded["linii"][0]
+    pts = shema.hose_points(prot, loaded, loaded["s"])
+    check(abs(pts[-1][0] - 43) < 0.5 and abs(pts[-1][1] - 15) < 0.5,
+          f"the protection nozzle stays in the protected area, not cut back: {pts[-1]}")
+    f0 = loaded["pozhar"][0]
+    check(shema._fire_has(f0, (51, 30)) and not shema._fire_has(f0, (44, 30)),
+          "the fire is the room's outline – the corner beside the L (44, 30) is not fire")
+    att = shema.hose_points(loaded["linii"][1], loaded, loaded["s"])
+    check(not shema._fire_has(f0, att[-1]), f"the attack nozzle stays in front of the fire: {att[-1]}")
+    r, out = run(data)
+    check(r.returncode == 0, f"renders: {r.stderr[-200:]}")
+    doc = ezdxf.readfile(os.path.splitext(out)[0] + ".dxf")
+    hatches = list(doc.modelspace().query("HATCH[layer=='POZHAR']"))
+    nverts = max(len(list(h.paths[0].vertices)) for h in hatches)
+    check(nverts == 6, f"the DXF hatches the fire by its 6-point outline ({nverts})")
+    rot = shema._zavarti({**data, "zavartane": 30, "pole_m": 2})
+    k = rot["pozhar"][0]["kontur"]
+    check(len(k) == 6 and all(0 <= p[0] <= rot["teren"][0] + 1e-6 and 0 <= p[1] <= rot["teren"][1] + 1e-6 for p in k),
+          "a turned drawing turns and moves the outline with the rest")
+
+
 if __name__ == "__main__":
+    test_outline_fire_and_protection()
     test_naves()
     test_street_names_inside()
     test_water_signs()

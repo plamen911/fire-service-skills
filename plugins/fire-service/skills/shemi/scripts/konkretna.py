@@ -134,7 +134,8 @@ def main():
     except (ValueError, IndexError):
         a_front = 0.0
     fw, fh = w, h
-    if a_front and fp_ and fp_ < 0.97 * big_ * small_:
+    room_area = float(room.get("plosht_m2") or 0) or big_ * small_     # the room's own area (an L-shaped room
+    if a_front and fp_ and fp_ < 0.97 * room_area:                      #   is less than its box)
         along_long = abs(a_front - big_) <= abs(a_front - small_)          # the front runs along the long side
         other = small_ if along_long else big_
         frac = min(1.0, (fp_ / a_front) / other)
@@ -143,6 +144,10 @@ def main():
         else:
             fw = w * frac
     pozhar = [{"x": cx - fw / 2, "y": cy - fh / 2, "w": round(fw, 2), "h": round(fh, 2), "etiket": ""}]
+    if (fw, fh) == (w, h) and not_box(room["kontur"], w, h):
+        # the whole room, and the room is not a rectangle (an L-shaped bedroom with its play hall …): the fire is
+        #   hatched by the room's outline, so the rooms beside it stay clear and the nozzle can stand at the door
+        pozhar[0]["kontur"] = [[round(p[0], 3), round(p[1], 3)] for p in room["kontur"]]
 
     # the door to the fire – an inner opening of the room, the one nearest the way in
     doors = merge([o for o in room["otvori"] if not o["vanshen"]])
@@ -260,6 +265,8 @@ def main():
         pcx, pcy = prot["tsentar"]
         pozhar.append({"x": pcx - pw / 2, "y": pcy - ph / 2, "w": round(pw, 2), "h": round(ph, 2), "etiket": "",
                        "zashtita": True})
+        if not_box(prot["kontur"], pw, ph):
+            pozhar[-1]["kontur"] = [[round(p[0], 3), round(p[1], 3)] for p in prot["kontur"]]
         if not n_z:
             n_z = 0
     for i in range(n_z):                                # protection – beside, along the corridor (or into the room)
@@ -388,6 +395,17 @@ def main():
     print(json.dumps({"output": a.out, "pomeshtenie": d["_pomeshtenie"], "vrata": d["_vrata"],
                       "do_hidranta_m": round(d_true, 1), "linii": [ln.get("etiket") for ln in lines if ln.get("etiket")],
                       "struinitsi": n_g + n_z}, ensure_ascii=False))
+
+
+def not_box(kontur, w, h):
+    """A room whose outline fills less than 92 % of its box (in the axes of the sheet) is not a rectangle."""
+    pts = [tuple(p) for p in kontur]
+    if len(pts) > 1 and pts[0] == pts[-1]:
+        pts = pts[:-1]
+    if len(pts) < 3 or w <= 0 or h <= 0:
+        return False
+    area = abs(sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(pts, pts[1:] + pts[:1]))) / 2
+    return area < 0.92 * w * h
 
 
 def tablitsa_3b(a, sili):

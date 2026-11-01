@@ -48,6 +48,8 @@ shema.py — чертае СХЕМА за разполагане на силит
   "obekti": [{"x": 3, "y": 58, "w": 4, "h": 3, "etiket": "Ел."}],   // малки обекти в рамка; „Ел.“ влиза в
                                                 //   легендата като „Електрическо табло“; "legenda": "…" – друг текст
   "pozhar": [{"x": 34, "y": 60, "w": 12, "h": 12, "etiket": "≈ 140 m²", "na_otkrito": false}],
+  //   "kontur": [[x, y], …] – пожарът по контура на помещението (Г-образно и др.), вместо правоъгълника;
+  //   "zashtita": true – защитавана площ: рядка щриховка; струйникът за защита може да стои в нея
                                                 //   "zashtita": true – площ, която се защитава (чл. 7, ал. 4, т. 1,
                                                 //   б. „л“): рядка единична щриховка и прекъснат контур, не кръстосана
   "zadimyavane": [{"x": 10, "y": 55, "w": 24, "h": 22}],            // зона на задимяване
@@ -417,8 +419,13 @@ def _zavarti(d, cyali_ulitsi=True):
             b["kontur"] = RL([(x, y), (x + w, y), (x + w, y + h), (x, y + h)])
         for k in ("x", "y", "w", "h"):
             b.pop(k, None)
+    for o in items(d, "pozhar"):                         # a fire given by its outline turns with the drawing
+        if o.get("kontur"):
+            o["kontur"] = RL(o["kontur"])
     for key in ("obekti", "pozhar", "zadimyavane", "bez_parkirane"):   # small boxes: the centre turns, the box stays
         for o in items(d, key):
+            if key == "pozhar" and o.get("kontur"):
+                continue
             w, h = num(o.get("w", 5), f"{key}.w"), num(o.get("h", 3), f"{key}.h")
             cx, cy = R((num(o.get("x"), f"{key}.x") + w / 2, num(o.get("y"), f"{key}.y") + h / 2))
             o["x"], o["y"] = cx - w / 2, cy - h / 2
@@ -481,7 +488,9 @@ def _zavarti(d, cyali_ulitsi=True):
     if isinstance(d.get("imot"), dict) and d["imot"].get("kontur"):
         core += d["imot"]["kontur"]
     for key in ("vodoiztochnitsi", "avtomobili", "obekti", "pozhar", "vhodove", "razklonitel", "podstapi", "mostove"):
-        core += [(o["x"], o["y"]) for o in items(d, key)]
+        core += [(o["x"], o["y"]) for o in items(d, key) if not o.get("kontur")]
+    for o in items(d, "pozhar"):                         # a fire by its outline – the outline, not a box
+        core += o.get("kontur") or []
     for key in ("razstoyaniya", "posoka", "napravlenie", "stalbi"):
         for o in items(d, key):
             core += [o["ot"], o["do"]]
@@ -505,6 +514,9 @@ def _zavarti(d, cyali_ulitsi=True):
         for key in ("obekti", "pozhar", "zadimyavane", "bez_parkirane", "avtomobili", "vodoiztochnitsi", "vhodove",
                     "razklonitel", "gaz_armatura", "shtab", "pbt", "tekst", "prohodi"):
             for o in items(d, key):
+                if key == "pozhar" and o.get("kontur"):   # its box is made from the outline on loading
+                    o["kontur"] = [S(p) for p in o["kontur"]]
+                    continue
                 o["x"], o["y"] = S((o["x"], o["y"]))
         d["ognishte"] = [dict(o, **dict(zip(("x", "y"), S((o["x"], o["y"]))))) if isinstance(o, dict) else S(o)
                          for o in d["ognishte"]]
@@ -663,7 +675,15 @@ def load(d):
         out["obekti"].append({**rect(b, f"obekti[{i}]", 5, 3), "etiket": str(b.get("etiket") or ""),
                               "legenda": str(b.get("legenda") or "")})
     for i, f in enumerate(items(d, "pozhar")):
-        out["pozhar"].append({**rect(f, f"pozhar[{i}]"), "etiket": str(f.get("etiket") or ""),
+        kontur = [pt(q, f"pozhar[{i}].kontur") for q in (f.get("kontur") or [])]
+        if kontur and len(kontur) < 3:
+            bad(f"pozhar[{i}].kontur: поне 3 точки")
+        if kontur:                                     # the outline of the room – its box is kept for the extent
+            xs_, ys_ = [q[0] for q in kontur], [q[1] for q in kontur]
+            box = {"x": min(xs_), "y": min(ys_), "w": max(xs_) - min(xs_), "h": max(ys_) - min(ys_)}
+        else:
+            box = rect(f, f"pozhar[{i}]")
+        out["pozhar"].append({**box, "kontur": kontur, "etiket": str(f.get("etiket") or ""),
                               "na_otkrito": bool(f.get("na_otkrito", False)),
                               "zashtita": bool(f.get("zashtita", False))})
     for i, z in enumerate(items(d, "zadimyavane")):
@@ -1618,15 +1638,25 @@ def hose_points(ln, data, s, i=0):
 
 
 def _in_fire(p, fires):
-    return any(f["x"] < p[0] < f["x"] + f["w"] and f["y"] < p[1] < f["y"] + f["h"] for f in fires)
+    return any(_fire_has(f, p) for f in fires if not f.get("zashtita"))
+
+
+def _fire_has(f, p, pad=0.0):
+    """Is the point in the fire area – in its outline when it has one, otherwise in its box (pad m around it)."""
+    if f.get("kontur"):
+        from matplotlib.path import Path as _P
+        return _P(f["kontur"]).contains_point(p, radius=pad) or _P(f["kontur"]).contains_point(p, radius=-pad)
+    return f["x"] - pad <= p[0] <= f["x"] + f["w"] + pad and f["y"] - pad <= p[1] <= f["y"] + f["h"] + pad
 
 
 def nozzle_before_fire(pts, fires, reach):
     """Cuts a hose line back until the nozzle at its end – `reach` long along the last stretch – stays outside every
-    hatched fire area: the forces work from in front of the fire (the approved schemes; Приложение № 3а)."""
+    hatched fire area: the forces work from in front of the fire (the approved schemes; Приложение № 3а). A protected
+    area („zashtita“) is not fire – the protection nozzle works in it or at it, so it does not push a nozzle out."""
+    fires = [f for f in fires if not f.get("zashtita")]
+
     def inside(p):
-        return any(f["x"] - 0.1 <= p[0] <= f["x"] + f["w"] + 0.1 and f["y"] - 0.1 <= p[1] <= f["y"] + f["h"] + 0.1
-                   for f in fires)
+        return any(_fire_has(f, p, 0.1) for f in fires)
     if not fires or len(pts) < 2:
         return pts
     pts = list(pts)

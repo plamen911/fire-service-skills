@@ -286,15 +286,20 @@ def draw_dimension(ax, a, b, text, off, fs):
 def draw_fire(ax, f, pal):
     """Fire in a building – crossed hatching; on an open area – a denser hatching in a frame; an area that is
     protected (not put out) – a sparse single hatching in a dashed frame, so that one sees which is which (б. „л“)."""
+    from matplotlib.patches import Polygon as _Poly
+
+    def shape(**kw):                                   # the room's outline (an L-shaped room …) or the box
+        if f.get("kontur"):
+            return _Poly(f["kontur"], closed=True, **kw)
+        return Rectangle((f["x"], f["y"]), f["w"], f["h"], **kw)
     if f.get("zashtita"):
-        ax.add_patch(Rectangle((f["x"], f["y"]), f["w"], f["h"], fill=False, hatch="///", ec=pal.fire, lw=0, zorder=3))
-        ax.add_patch(Rectangle((f["x"], f["y"]), f["w"], f["h"], fill=False, ec=pal.fire, lw=0.8, ls=(0, (4, 2)),
-                               zorder=3.1))
-    elif f["na_otkrito"]:
-        ax.add_patch(Rectangle((f["x"], f["y"]), f["w"], f["h"], fill=False, hatch="xxxxxx", ec=pal.fire, lw=0, zorder=3))
-        ax.add_patch(Rectangle((f["x"], f["y"]), f["w"], f["h"], fill=False, ec=INK, lw=0.9, zorder=3.1))
+        ax.add_patch(shape(fill=False, hatch="///", ec=pal.fire, lw=0, zorder=3))
+        ax.add_patch(shape(fill=False, ec=pal.fire, lw=0.8, ls=(0, (4, 2)), zorder=3.1))
+    elif f.get("na_otkrito"):
+        ax.add_patch(shape(fill=False, hatch="xxxxxx", ec=pal.fire, lw=0, zorder=3))
+        ax.add_patch(shape(fill=False, ec=INK, lw=0.9, zorder=3.1))
     else:
-        ax.add_patch(Rectangle((f["x"], f["y"]), f["w"], f["h"], fill=False, hatch="xxxx", ec=pal.fire, lw=0.6, zorder=3))
+        ax.add_patch(shape(fill=False, hatch="xxxx", ec=pal.fire, lw=0.6, zorder=3))
 
 def draw_seat(ax, x, y, s, pal):
     """The seat of the fire: a filled flag on a pole (red in colour)."""
