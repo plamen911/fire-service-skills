@@ -309,6 +309,13 @@ def test_kais(tmp, base):
           "clipping keeps the inside part of a bent line")
     check(kais.street_name("ул. Васил Левски") == "ул. „Васил Левски“" and kais.street_name("Северна промишлена зона") ==
           "Северна промишлена зона", "street names get „…“, other names stay")
+    check(kais.street_name("площад Възраждане") == "пл. „Възраждане“", "„площад …“ → „пл. „…““")
+    sq = [[0, 0], [40, 0], [40, 40], [0, 40], [0, 0]]
+    ways = [{"ime": "Васил Левски", "tochki": [[-20, 20], [60, 20]]},       # a pedestrian street through the parcel
+            {"ime": "Друга", "tochki": [[100, 100], [140, 100]]}]
+    hit = kais.name_parcel(sq, ways)
+    check(hit and hit[0] == "Васил Левски" and abs(hit[1][1] - 20) < 1, "an unnamed street parcel takes the way through it")
+    check(kais.name_parcel(sq, ways, lambda p_: p_[0] > 100) is None, "… but not where a name may not stand")
     check(d["fon"]["ramka"] == [-10, -10, 130, 120], "the picture is placed by its own frame")
     b1, b2 = d["sgradi"]
     check(b1["etiket"] == "Промишлена сграда" and b1["etazhnost"] == "+3" and b1["kontur"][0] == [45, 45],

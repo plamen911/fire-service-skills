@@ -621,6 +621,8 @@ def street_name(name, ulitsa=True):
     name = name.strip()
     if not name:
         return name
+    name = re.sub(r"^(площад|улица|булевард)\s+", lambda m_: {"площад": "пл. ", "улица": "ул. ",
+                  "булевард": "бул. "}[m_.group(1).lower()], name, flags=re.I)   # „площад Възраждане“ → „пл. „Възраждане““
     m = re.match(r"^(ул\.|бул\.|пл\.|ж\.к\.|кв\.)\s*(.+)$", name)
     if not m:
         if not ulitsa or re.match(r"^(ул|бул|пл|площад|улица|булевард|път|шосе|АМ|автомагистрала)\b", name, re.I) \
@@ -697,6 +699,63 @@ def list_ramka(core, tight):
                        for px, py in tight for a, b, c, d in LIST_PAZI):
                 return math.floor(fx0), math.floor(fy0), math.floor(fx0) + w, math.floor(fy0) + h, n
     return None
+
+
+def osm_named(x0, y0, x1, y1):
+    """The named ways and squares of the frame that the street query leaves out – pedestrian streets (a city centre's
+    „ул. Васил Левски“), living streets and squares (place=square, highway=pedestrian areas): ([{"ime", "tochki",
+    "plosht"}], "") in КС2005; "plosht" – a closed area, not a line."""
+    root, err = osm_map(x0, y0, x1, y1)
+    if root is None:
+        return [], err
+    nodes = {n.get("id"): (float(n.get("lat")), float(n.get("lon"))) for n in root.iter("node")}
+    out = []
+    for w in root.iter("way"):
+        tags = {t.get("k"): t.get("v") for t in w.iter("tag")}
+        name = (tags.get("name") or "").strip()
+        refs = [nd.get("ref") for nd in w.iter("nd")]
+        if not name or len(refs) < 2 or not all(r_ in nodes for r_ in refs):
+            continue
+        square = tags.get("place") == "square" or (tags.get("highway") == "pedestrian" and tags.get("area") == "yes")
+        if not square and tags.get("highway") not in ("pedestrian", "living_street", "footway", "residential",
+                                                      "tertiary", "secondary", "primary", "unclassified"):
+            continue
+        out.append({"ime": name, "tochki": [list(wgs_to_kc(*nodes[r_])) for r_ in refs],
+                    "plosht": square and refs[0] == refs[-1]})
+    return out, ""
+
+
+def name_parcel(ring, ways, box=None):
+    # box – a test whether a name may stand at a point (on the sheet, off its fields)
+    """(name, middle, angle) of the named way or square that lies most inside the street parcel `ring` (КС2005),
+    or None – for a parcel the street query did not name (a pedestrian street or a square)."""
+    best = None
+    for u in ways:
+        pts = u["tochki"]
+        if u.get("plosht"):
+            inside = [p_ for p_ in pts if point_in(p_, ring)]
+            cx, cy = sum(p_[0] for p_ in pts) / len(pts), sum(p_[1] for p_ in pts) / len(pts)
+            if point_in((cx, cy), ring) or len(inside) >= max(3, len(pts) // 3):
+                score = 1000.0 + len(inside)          # a square over the parcel names it before any line
+                if best is None or score > best[0]:
+                    best = (score, u["ime"], (cx, cy), 0.0)
+            continue
+        dense = densify(pts, 2.0)
+        run_, longest = [], (0.0, None)
+        for a_, b_ in zip(dense, dense[1:]):
+            m_ = ((a_[0] + b_[0]) / 2, (a_[1] + b_[1]) / 2)
+            if point_in(m_, ring) and (box is None or box(m_)):
+                run_ = run_ + [b_] if run_ else [a_, b_]
+                if length(run_) > longest[0]:
+                    longest = (length(run_), list(run_))
+            else:
+                run_ = []
+        if longest[1] and longest[0] >= 10 and (best is None or longest[0] > best[0]):
+            r_ = longest[1]
+            a_, b_ = r_[len(r_) // 2 - 1], r_[len(r_) // 2]
+            best = (longest[0], u["ime"], ((a_[0] + b_[0]) / 2, (a_[1] + b_[1]) / 2),
+                    math.degrees(math.atan2(b_[1] - a_[1], b_[0] - a_[0])))
+    return best[1:] if best else None
 
 
 def cmd_obekt(a):
@@ -777,6 +836,7 @@ def cmd_obekt(a):
                 elif not inside:
                     notes.append(f"В имота и около него няма хидрант – начертан е най-близкият ({round(exact[0][2].get('razstoyanie_m', 0))} m "
                                  "по права линия), теренът е разширен до него.")
+        sheet_n = None                                 # the scale of a full sheet – its fields then keep names off
         if not a.bez_list and ring:                    # the sheet full: the terrain grows to the drawing area
             tight = [tuple(p_) for p_ in densify(ring + ring[:1], 2.0)]
             for s_ in sgradi:
@@ -796,6 +856,7 @@ def cmd_obekt(a):
                     with open(out, "w", encoding="utf-8") as f:
                         json.dump(res, f, ensure_ascii=False, indent=1)
                 bx0, by0, bx1, by1 = nx0, ny0, nx1, ny1
+                sheet_n = n_
                 notes.append(f"Теренът запълва листа при М 1:{n_} – разширен до цялото поле за чертеж "
                              "(`--bez-list` – само имотът с радиуса).")
         w, h = round(bx1 - bx0, 2), round(by1 - by0, 2)
@@ -864,20 +925,43 @@ def cmd_obekt(a):
         osm = res.get("ulitsi") or []
         streets, names_used = [], set()
 
+        def clear(p_):
+            """A street name may stand here: 12 m from the terrain's edge and, on a full sheet, off its fields."""
+            if not (bx0 + 12 <= p_[0] <= bx1 - 12 and by0 + 12 <= p_[1] <= by1 - 12):
+                return False
+            if sheet_n:
+                mx, my = (p_[0] - bx0) * 1000 / sheet_n, (p_[1] - by0) * 1000 / sheet_n
+                return not any(a1 <= mx <= c1 and b1 <= my <= d1 for a1, b1, c1, d1 in LIST_PAZI)
+            return True
+
         def named_piece(ways):
-            """(name, middle, angle) of the longest piece inside the terrain of the named ways given."""
-            best = None
+            """(name, middle, angle) of the longest stretch of the named ways given that lies in the terrain, clear of
+            its edges and of the sheet's fields; without a full sheet – else the longest piece, as before."""
+            best, old = None, None
             for u in ways:
                 if not u.get("ime"):
                     continue
                 for piece in clip_polyline(u.get("tochki") or [], bx0, by0, bx1, by1):
                     for a_, b_ in zip(piece, piece[1:]):
                         d = math.dist(a_, b_)
-                        if best is None or d > best[0]:
-                            best = (d, u["ime"], a_, b_)
-            if not best:
+                        if old is None or d > old[0]:
+                            old = (d, u["ime"], a_, b_)
+                    run_ = []
+                    for a_, b_ in zip(densify(piece, 4.0), densify(piece, 4.0)[1:]):
+                        if clear(((a_[0] + b_[0]) / 2, (a_[1] + b_[1]) / 2)):
+                            run_ = run_ + [b_] if run_ else [a_, b_]
+                            if best is None or length(run_) > best[0]:
+                                best = (length(run_), u["ime"], list(run_))
+                        else:
+                            run_ = []
+            if best and best[0] >= 8:
+                _, name, r_ = best
+                a_, b_ = r_[len(r_) // 2 - 1], r_[len(r_) // 2]
+            elif old and not sheet_n:
+                _, name, a_, b_ = old                  # (on a full sheet a name that does not fit is left out –
+                                                       #   a name cut by the frame or the compass is worse than none)
+            else:
                 return None
-            _, name, a_, b_ = best
             return (street_name(name), [round((a_[0] + b_[0]) / 2 - bx0, 1), round((a_[1] + b_[1]) / 2 - by0, 1)],
                     round(math.degrees(math.atan2(b_[1] - a_[1], b_[0] - a_[0])), 1))
 
@@ -891,6 +975,28 @@ def cmd_obekt(a):
             elif tag:
                 st["ime_ulitsa"] = tag[0]              # the same street – its name may go here if it fits better
             streets.append(st)
+        linked = {u.get("kais") for u in osm if u.get("kais") and u.get("ime")}
+        # only the parcels OpenStreetMap names nowhere – a parcel whose own street does not fit stays without a name
+        unnamed = [(st, r) for st, r in zip(streets, roads)
+                   if not st["ime"] and not st.get("ime_ulitsa") and r["id"] not in linked]
+        if unnamed:                                    # the pedestrian streets and squares the street query leaves out
+            extra, err = osm_named(bx0, by0, bx1, by1)
+            ways = [u for u in osm if u.get("ime")] + extra
+            for st, r in unnamed:
+                # the name on the part of the street that is on the sheet, clear of its edges (12 m)
+                hit = name_parcel(r["kontur"], ways, clear)
+                if not hit:
+                    continue
+                nm, (mx, my), ang = street_name(hit[0]), hit[1], hit[2]
+                if ang > 90 or ang < -90:              # the name reads left to right
+                    ang = ang - 180 if ang > 0 else ang + 180
+                if nm in names_used:
+                    st["ime_ulitsa"] = nm
+                else:
+                    st["ime"], st["ime_pos"], st["ime_ugal"] = nm, [round(mx - bx0, 1), round(my - by0, 1)], round(ang, 1)
+                    names_used.add(nm)
+            if err and any(not st["ime"] for st, _ in unnamed):
+                notes.append("Имената на пешеходните улици и площадите не се взеха от OpenStreetMap: " + err)
         rings = [r["kontur"] for r in roads]
         complement = []
         for u in osm:
