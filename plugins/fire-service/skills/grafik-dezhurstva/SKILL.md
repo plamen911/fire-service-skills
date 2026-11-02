@@ -66,7 +66,7 @@ python3 -c "import glob,os;print('\n'.join(glob.glob(os.path.expanduser('~/.clau
 | Въпрос | Команда |
 |---|---|
 | Кога съм дежурен? | `python3 _shared/scripts/grafik.py sluzhitel --az --mesec 2026-10` |
-| С кои служители съм дежурен? | `sluzhitel --az` за датите, после `na-data` **само за следващото дежурство**; останалите дати – при поискване (всяка е отделна заявка) |
+| С кои колеги съм дежурен? | `sluzhitel --az` за датите, после `na-data` **само за следващото дежурство**; останалите дати – при поискване (всяка е отделна заявка) |
 | Кога е на смяна Иван Петров? | `python3 _shared/scripts/grafik.py sluzhitel "Иван Петров" --mesec 2026-10` |
 | Кои са дежурни на 04.10.2026? | `python3 _shared/scripts/grafik.py na-data 2026-10-04` |
 | Кой е на смяна в 03:30 ч. на 4-ти? | `python3 _shared/scripts/grafik.py na-data 2026-10-04 --chas 03:30` |
