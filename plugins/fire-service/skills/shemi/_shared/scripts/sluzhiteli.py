@@ -4,7 +4,7 @@ sluzhiteli.py — служителите на РДПБЗН – Плевен по
 (датата е в първия ред на таблицата).
 
 Таблицата е в n8n (`staff_url` в `_shared/incident_api.json`) и се чете с личния ключ – така
-промените стигат до всички без нова инсталация. В пакета няма копие. Без ключ (колега с
+промените стигат до всички без нова инсталация. В пакета няма копие. Без ключ (потребител с
 конектора Fire Service) скриптът спира с `NO_KEY` – тогава служителите се търсят с
 инструмента `staff`, а за изчисленията тук се подава файл: `--csv ФАЙЛ` (редовете от
 `staff` с `csv: true`) или `--zapis '{…}'` (един ред от `staff` / `whoami`).
@@ -61,7 +61,7 @@ import api_config  # noqa: E402  (addresses of n8n and the personal key)
 
 CACHE = os.path.join(tempfile.gettempdir(), "fire_service_staff.csv")
 CACHE_SECONDS = 600
-# A CSV to read instead of asking n8n: tests, and a colleague's rows saved from the connector tool `staff`.
+# A CSV to read instead of asking n8n: tests, and a user's rows saved from the connector tool `staff`.
 STAFF_FILE = os.environ.get("FIRE_SERVICE_STAFF_CSV") or None
 COLUMNS = ["zveno", "uchastak", "podrazdelenie", "nomer", "dlazhnost_po_shtat", "zaemana_dlazhnost", "zvanie",
            "ime", "ime_kratko", "status", "belezhka", "email"]

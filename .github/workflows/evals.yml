@@ -2,7 +2,7 @@ name: evals
 # Регресия на evals (виж plugins/fire-service/evals/README.md): пуска случаите с таг `regresiya`
 # и ги сравнява с evals/baseline.json. Струва пари (~12 USD на пускане: 28 случая по 3 опита, ~5 мин), затова
 # върви САМО РЪЧНО (Actions → evals → Run workflow, или `gh workflow run evals.yml`) – след промени в описанията
-# или в SKILL.md и преди нова версия за колегите. Без секрета ANTHROPIC_API_KEY работата се пропуска.
+# или в SKILL.md и преди нова версия за потребителите. Без секрета ANTHROPIC_API_KEY работата се пропуска.
 on:
   workflow_dispatch:
 jobs:

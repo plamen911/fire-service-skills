@@ -35,7 +35,7 @@ A Claude plugin skill that turns phone photos of the case file into a finished r
 
 **Stack:** Claude (skills, subagents), Python (python-docx, openpyxl), n8n as the API layer,
 Google Drive (templates, approved reports, normative base), Firebase (incident database), MCP
-connector for colleagues on the free Claude plan.
+connector for users on the free Claude plan.
 
 ## Results
 
@@ -56,7 +56,7 @@ cases run against the real model with graders, including an LLM judge:
 - In the latest run, **8/8** judge checks passed on full reports: no invented facts, and every
   rejected cause backed by a concrete fact from the case.
 - The suite found real defects that unit tests had missed and that have since been fixed:
-  - a crash that blocked colleagues without a personal API key;
+  - a crash that blocked users without a personal API key;
   - conclusions stated as facts;
   - a review step the model skipped in 3 of 4 runs.
 
@@ -71,7 +71,7 @@ data in one place, the expert's own Claude conversation, and enforces the rest i
   keys and the name of any real staff member.
 - **Templates are checked before sharing.** A past report becomes a shared template only if a
   personal-data check passes, and only the administrator can save one.
-- **Each colleague has their own key.** n8n stores only a hash of it, and one key can be revoked
+- **Each user has their own key.** n8n stores only a hash of it, and one key can be revoked
   without affecting anyone else.
 - **The AI provider is configured for case work.** Model training is turned off and chats are
   deleted after delivery, which keeps Anthropic's retention at 30 days. For institutional use, a
@@ -89,6 +89,6 @@ Details, including what remains the expert's responsibility: [data-protection.md
   prompt asked for it. Once the review script itself announced the next step, the review ran far
   more reliably.
 - **Privacy by design.** The repository is public; case data, staff lists and approved reports sit
-  behind n8n with per-person API keys, so each colleague can be revoked individually.
+  behind n8n with per-person API keys, so each user can be revoked individually.
 
 All examples in this repository are fictional; no real case material is published.

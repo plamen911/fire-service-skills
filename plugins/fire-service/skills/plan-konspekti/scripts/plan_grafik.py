@@ -6,7 +6,7 @@ plan_grafik.py — годишният план-график за занятия�
 
 План-графикът е справочен файл в нормативната база (Google Drive, папка tier-c):
 `RDPBZN-Pleven_Plan_Plan-Grafik-Zanyatiya-Inspektori-OC_<година>.md`. Чете се през n8n с личния ключ
-(`regs_url` в `_shared/incident_api.json`). Без ключ (колега с конектора Fire Service) файлът се
+(`regs_url` в `_shared/incident_api.json`). Без ключ (потребител с конектора Fire Service) файлът се
 взима с инструментите `regs_list` (name: "Plan-Grafik") и `regs_read`, записва се и се подава с --file.
 
     python3 scripts/plan_grafik.py mesec 2026-10                    # занятията през месеца

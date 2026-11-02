@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-fire-render – the situational scheme (ситуационна схема) made on the server, for colleagues on the free plan.
+fire-render – the situational scheme (ситуационна схема) made on the server, for users on the free plan.
 
 Why: without a personal key the model used to carry the cadastre data (~77 000 characters) and the scheme
 JSON (~55 000) through the chat, copying them into files by hand – one scheme used up the whole free limit.
@@ -25,7 +25,7 @@ only the form questions that apply (formulyar.json stays here); promeni records 
 "deistvie" of the chosen options, and draws in the same call with {"op": "chertai"}; zapishi remembers the object
 found by nachalo and returns the download links itself.
     POST /vreme {"data": "2026-10-26", "mesto": "Плевен" | "lat", "lon" | "stantsiya": "15528"|"LBPL",
-                 "ot": "15:00", "do": "16:00", "do_data": "2026-10-28"}   – времето (vreme.py) за колегите,
+                 "ot": "15:00", "do": "16:00", "do_data": "2026-10-28"}   – времето (vreme.py) за потребителите,
                                                                      чиято среда не стига до архивите
     POST /shema {"action": "plan_nachalo", "obekt": "OB-0010" | "lat", "lon" | "kadastar"}  – ПЛАНЪТ ЗА ПОЖАРОГАСЕНЕ:
                  върху ситуационната схема и етажите от регистъра; plan_podlozhka (етаж от .cdr, base64),

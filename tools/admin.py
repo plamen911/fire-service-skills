@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-admin.py — действията на администратора: ключове на колеги, списъкът на служителите и
+admin.py — действията на администратора: ключове на потребители, списъкът на служителите и
 файловете зад n8n. Иска администраторски личен ключ (виж
 plugins/fire-service/shared/scripts/api_config.py). Същото може и от телефона, през конектора
 Fire Service: инструментите `keys`, `staff_update` и `samples_save`.
 
-Ключове на колеги
+Ключове на потребители
     python3 tools/admin.py key add "Име Фамилия"            # нов ключ + готовият адрес за конектора (показва се веднъж)
     python3 tools/admin.py key add "Име Фамилия" --replace  # спира старите му ключове и дава нов
     python3 tools/admin.py key list                         # кой има ключ
@@ -42,7 +42,7 @@ Fire Service: инструментите `keys`, `staff_update` и `samples_save
     # n8n_fire-service-api.workflow.json + последните 2 с дата в _admin; на ръка, ако трябва:
     python3 tools/admin.py files put admin backup.json --name n8n_fire-service-api.workflow.json
 
-Как се добавя колега: 1) има ли го в списъка на служителите (`staff get`) – ако не, `staff add`;
+Как се добавя потребител: 1) има ли го в списъка на служителите (`staff get`) – ако не, `staff add`;
 2) `key add "Име Фамилия"` – името точно както е в колоната ime_kratko; 3) дай му адреса от
 отговора – той го слага в Customize → Connectors → Add custom connector („No sign-in“) и
 добавя плъгина от Customize → Plugins → Add marketplace.

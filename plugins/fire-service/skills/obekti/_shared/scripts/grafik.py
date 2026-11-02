@@ -289,7 +289,7 @@ def schedule_person(row):
 
 
 def roster(store=None):
-    """The staff list. Without it (a colleague with the connector and no --roster file) a question
+    """The staff list. Without it (a user with the connector and no --roster file) a question
     about duties still works: the people are then the names written in the stored schedules.
     An import needs the real list – pass store=None to insist on it."""
     try:
@@ -479,7 +479,7 @@ def cmd_import(a, store):
     by_full = {norm(r["ime"]): r for r in people}
     new_rows, notes = canonical_rows(reading, people, kind, last_day_of(month))
 
-    # Read – merge – write. Somebody else may save the same month in between (a colleague uploading the other
+    # Read – merge – write. Somebody else may save the same month in between (a user uploading the other
     # half of the roster): just before writing the month is read again and, if it has changed, the merge is
     # redone over the fresh copy, so the other person's rows are not lost. Through n8n the write itself is
     # conditional as well (RemoteStore.put → Conflict): the month that was merged must still be the stored one.

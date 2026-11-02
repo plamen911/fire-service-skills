@@ -213,7 +213,7 @@ def test_queries(tmp, store):
 
 
 def test_without_roster(tmp, store):
-    """A colleague with the connector has no staff list at hand: questions still work, an import asks for it."""
+    """A user with the connector has no staff list at hand: questions still work, an import asks for it."""
     code, r = js(store, "sluzhitel", "Иван Дъбов", "--mesec", "2026-10", env=NO_ROSTER)
     assert code == 0 and r["sluzhitel"] == "Иван Дъбов" and r["grafici"][0]["broi_dezhurstva"] == 7, r
     # what the schedule itself says: the position and rank kept in the month when it was saved
@@ -340,7 +340,7 @@ def test_concurrent_save(tmp):
     half_a = reading(tmp, "a.json", dict(doc, redove=rows[:3]))
     half_b = reading(tmp, "b.json", dict(doc, redove=rows[3:]))
     store_dir = os.path.join(tmp, "race")
-    code, r = js(store_dir, "import", half_a)          # the colleague's half is already saved …
+    code, r = js(store_dir, "import", half_a)          # the other user's half is already saved …
     assert code == 0 and len(r["added"]) == 3, r
 
     class Stale(grafik.LocalStore):                    # … but our first read happened before that
@@ -356,7 +356,7 @@ def test_concurrent_save(tmp):
     saved = json.load(open(os.path.join(store_dir, "oc", "2026-10.json"), encoding="utf-8"))
     assert len(saved["sluzhiteli"]) == 6, [x["ime"] for x in saved["sluzhiteli"]]   # nobody's rows are lost
     assert Stale.calls >= 3, Stale.calls                # read, read again before writing, read after the change
-    print("  ok  concurrent save: the colleague's rows survive")
+    print("  ok  concurrent save: the other user's rows survive")
 
 
 def test_former_employee(tmp):
@@ -526,10 +526,10 @@ def test_conditional_save(tmp):
     rows = [dict(r, nomer=i) for i, r in enumerate(doc["redove"], 1)]
     half_a = reading(tmp, "ca.json", dict(doc, redove=rows[:3]))
     half_b = reading(tmp, "cb.json", dict(doc, redove=rows[3:]))
-    other = os.path.join(tmp, "other")                 # the colleague's half, as it will be stored
+    other = os.path.join(tmp, "other")                 # the other user's half, as it will be stored
     code, r = js(other, "import", half_a)
     assert code == 0, r
-    colleague = open(os.path.join(other, "oc", "2026-10.json"), encoding="utf-8").read()
+    other_user = open(os.path.join(other, "oc", "2026-10.json"), encoding="utf-8").read()
 
     server = {"text": None}                            # the month file "in Drive"
     puts = []
@@ -543,9 +543,9 @@ def test_conditional_save(tmp):
                 raise urllib.error.HTTPError("u", 404, "x", {}, io.BytesIO(b'{"error":"NOT_FOUND: no schedule"}'))
             return {"text": server["text"], "md5": now}
         puts.append(body.get("if_md5"))
-        if len(puts) == 1:                             # the colleague saves between our last read and our write
-            server["text"] = colleague
-            now = md5(colleague)
+        if len(puts) == 1:                             # the other user saves between our last read and our write
+            server["text"] = other_user
+            now = md5(other_user)
         if body.get("if_md5") != now:
             raise urllib.error.HTTPError("u", 409, "x", {}, io.BytesIO(b'{"error":"CONFLICT: changed"}'))
         server["text"] = body["text"]
@@ -560,7 +560,7 @@ def test_conditional_save(tmp):
     finally:
         grafik.api_config.post = real
     saved = json.loads(server["text"])
-    assert puts == ["new", md5(colleague)], puts       # first "there was no file", then the fresh fingerprint
+    assert puts == ["new", md5(other_user)], puts       # first "there was no file", then the fresh fingerprint
     assert len(saved["sluzhiteli"]) == 6, [x["ime"] for x in saved["sluzhiteli"]]
     print("  ok  conditional save: if_md5 is sent, a conflict is merged and saved again")
 

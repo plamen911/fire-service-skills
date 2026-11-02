@@ -301,7 +301,7 @@ def _chochev_tekst():
             return _chochev["text"]
         sys.path.insert(0, HERE)
         import api_config
-        if not api_config.has_key():  # a colleague with the connector only: api_config would sys.exit(NO_KEY)
+        if not api_config.has_key():  # a user with the connector only: api_config would sys.exit(NO_KEY)
             return None
         files = api_config.post("regs_url", {"action": "list"})["files"]
         f = next(x for x in files if CHOCHEV_FILE in (x.get("path") or "") and x["path"].endswith(".md"))

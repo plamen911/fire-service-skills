@@ -55,7 +55,7 @@ python3 evals/regresiya.py evals/results/posledno.json --obnovi   # приема
 Първата база (2.27.0, 19.10.2026): 25 случая, 75 от 75 опита успешни, 8,92 USD, ~5 мин.
 Базата се вдига само съзнателно (`--obnovi`) – след поправка, пусната отново с `--runs 6`.
 В CI (`.github/workflows/evals.yml`) същото върви **само ръчно** (Actions → evals → Run workflow или
-`gh workflow run evals.yml`) – след промени в описанията или в SKILL.md и преди нова версия за колегите. Ключът
+`gh workflow run evals.yml`) – след промени в описанията или в SKILL.md и преди нова версия за потребителите. Ключът
 `ANTHROPIC_API_KEY` е секрет в хранилището (~12 USD на пускане: 28 случая по 3 опита, ~5 мин). Базата на
 31.10.2026 г. е допълнена с `marshrut-obekti`, `marshrut-plan-pozharogasene` и `marshrut-situacionna-shema`
 (версия 2.83.4, по 3 от 3).

@@ -39,7 +39,7 @@ history.md с промените. Индексът obekti.csv в корена н
     python3 _shared/scripts/obekti.py arhiv --papka "ПТЗ/Pleven"               # файловете с линкове
     python3 _shared/scripts/obekti.py arhiv --papka "Оперативни планове/Kirov" --chete Harakteristika.md
 
-Режим „конектор“ (колега без личен ключ): прочети с инструмента `obekti` (get root/obekti.csv и
+Режим „конектор“ (потребител без личен ключ): прочети с инструмента `obekti` (get root/obekti.csv и
 нужните файлове) в папка ПАПКА – `ПАПКА/root/obekti.csv`, `ПАПКА/<papka_id>/history.md` – и пусни
 скрипта с `--store ПАПКА --avtor "Име Фамилия"`. Четенето работи направо; при запис скриптът не пише
 никъде, а дава списък `kachi` – стъпките за `obekti_save` по ред (виж _shared/connector.md).
@@ -95,7 +95,7 @@ class Remote:
     def __init__(self):
         if not api_config.has_key():
             raise Problem(api_config.NO_KEY + " – инструментите obekti и obekti_save; пусни скрипта с --store")
-        # On the server (fire-render) the key is the service's; the history must name the colleague who asked.
+        # On the server (fire-render) the key is the service's; the history must name the user who asked.
         self.avtor = os.environ.get("FIRE_SERVICE_AVTOR", "").strip()
         self.by = self.avtor or None
 

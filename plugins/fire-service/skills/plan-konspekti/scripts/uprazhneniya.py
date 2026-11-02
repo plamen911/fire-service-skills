@@ -14,7 +14,7 @@ uprazhneniya.py — упражненията по пожаро-строева п
     python3 scripts/uprazhneniya.py get "1.9 Б"            # едно упражнение (JSON)
     python3 scripts/uprazhneniya.py get 1.1 --file f.json   # от записан файл (тестове)
 
-Без ключ (колега с конектора Fire Service) скриптът спира с NO_KEY. Тогава упражнението се взима с
+Без ключ (потребител с конектора Fire Service) скриптът спира с NO_KEY. Тогава упражнението се взима с
 `regs_list` (name: "Spetsializirana-Metodika", файлът …_Appendices.md) и `regs_read` с
 match: "Упражнение № 1.9 Б", и се подава на build_konspekt.py като свой текст в "tema2"
 ("tekst", "tsel_uvod", "tsel", "materialno", "opisanie"), а на build_otchet.py – с "tochki".

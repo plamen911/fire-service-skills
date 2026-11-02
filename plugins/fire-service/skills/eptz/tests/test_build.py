@@ -304,7 +304,7 @@ def test_nachalo():
 
 
 def test_bez_klyuch():
-    """A colleague with the connector only (no personal key, no test switch): the Чочев check is
+    """A user with the connector only (no personal key, no test switch): the Чочев check is
     skipped, the build does not stop with NO_KEY. Found by evals/eptz – api_config sys.exit()s and
     `except Exception` does not catch SystemExit."""
     code = (

@@ -250,7 +250,7 @@ def test_greshki():
 
 
 def test_chochev_fail():
-    print("Чочев от файл (колега с конектора)")
+    print("Чочев от файл (потребител с конектора)")
     import tempfile
     os.environ["FIRE_SERVICE_NO_KEY"] = "1"
     old = dict(s._chochev)
