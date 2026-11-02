@@ -1,13 +1,13 @@
 # fire-service-skills
 
-> **About (EN).** A Claude plugin with 16 skills that automates the paperwork of a regional fire
-> service. Examples are forensic fire reports, incident certificates, duty schedules from photos,
-> regulations lookup and hazardous-materials response. The flagship skill drafts court-grade forensic fire
-> reports from phone photos of the case file: **5–6 hours → 10–15 minutes per report**, with an
-> automated eval suite (LLM judge catches 6/6 planted fabrications; 18/18 behaviour runs pass).
-> Case data never leaves the expert's own conversation. The public repo is scanned for personal data
-> on every push, and shared templates must pass a personal-data check before saving. Each colleague
-> has a revocable API key ([data protection](docs/data-protection.md)).
+> **About (EN).** A Claude plugin of 16 reusable skills, built with Claude Code, that turns domain
+> knowledge and phone photos into finished, court-grade documents. The flagship skill drafts forensic fire
+> reports from photos of the case file: **5–6 hours → 10–15 minutes per report**, with an automated eval
+> suite (LLM judge catches 6/6 planted fabrications; 18/18 behaviour runs pass). Other skills cover
+> regulations lookup with exact citations, certificates and hazardous-materials response.
+> Case data never leaves the user's own conversation. The public repo is scanned for personal data on
+> every push, shared templates must pass a personal-data check before saving, and each user has a
+> revocable API key ([data protection](docs/data-protection.md)).
 > Python · n8n · Google Drive · Firebase · MCP. Case study:
 > [docs/case-study-eptz.md](docs/case-study-eptz.md) · Author: Plamen Markov.
 
