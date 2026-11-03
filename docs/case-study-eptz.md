@@ -10,8 +10,10 @@ When a fire becomes a criminal case, the investigator appoints a fire expert. Th
 the investigator's questions in a formal expert report (ЕПТЗ), which is then used in court. Each one
 means:
 
-- reading the whole case file: the appointment order, the fire brigade's call log, the scene
-  inspection report, witness statements and photos;
+- reading a case file of 45–70 pages: the appointment order with the questions (1 page), the
+  scene inspection report (3–4), the photo album (10–15), witness statements (3–4 pages each,
+  usually 5–6 witnesses), the fire brigade's call log, the police patrol report and other expert
+  reports (10–20);
 - working through every standard cause in turn – arson, short circuit, natural causes,
   spontaneous combustion, negligence – and accepting or rejecting each with facts from the case;
 - citing every reference value (ignition temperatures, flash points) to an authoritative source;
@@ -24,7 +26,8 @@ invented detail or overstated conclusion weakens the report in court.
 
 A Claude plugin skill that turns phone photos of the case file into a finished report:
 
-1. The expert takes 15–20 phone photos of the case file and uploads them in the Claude mobile app.
+1. The expert photographs the 15–20 key pages of the case file and uploads them in the Claude
+   mobile app.
 2. The skill reads the pages and asks only for what is missing. It then analyses the causes using
    approved past reports and a catalogue of sourced reference values (ILO/WHO ICSC cards, CHRIS,
    GESTIS-STAUB-EX, Babrauskas, METAR weather archives).
