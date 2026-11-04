@@ -96,7 +96,13 @@ def check_versions():
     for p in mk.get("plugins", []):
         if p.get("name") == pl.get("name"):
             found["marketplace.json plugins[]"] = p.get("version")
-    top = re.search(r"^## (\S+) – (\d{4}-\d{2}-\d{2})\s*$", log, re.M)
+    # The separator may be "-", "–" or "—": the dash rule for documents must not break this check.
+    # Read the FIRST "## " heading only, so a malformed new entry fails loudly instead of being
+    # skipped and reported as the previous version.
+    first = re.search(r"^## .*$", log, re.M)
+    top = re.fullmatch(r"## (\d+\.\d+\.\d+) [-–—] (\d{4}-\d{2}-\d{2})\s*", first.group(0)) if first else None
+    if first and not top:
+        return err(f"CHANGELOG.md: the top heading '{first.group(0)}' is not '## X.Y.Z - YYYY-MM-DD'")
     found["CHANGELOG.md (най-горният запис)"] = top.group(1) if top else None
     version = pl.get("version")
     if not version or not re.fullmatch(r"\d+\.\d+\.\d+", str(version)):
@@ -104,7 +110,7 @@ def check_versions():
     wrong = {k: v for k, v in found.items() if v != version}
     if wrong:
         return err(f"version {version} in plugin.json, but: " + "; ".join(f"{k} = {v}" for k, v in wrong.items()))
-    entries = re.findall(r"^## (\d+\.\d+\.\d+) – ", log, re.M)
+    entries = re.findall(r"^## (\d+\.\d+\.\d+) [-–—] ", log, re.M)
     if len(entries) != len(set(entries)):
         err("CHANGELOG.md: a version is listed twice")
     if not log.split(top.group(0), 1)[1].split("\n## ", 1)[0].strip():
