@@ -49,7 +49,7 @@ def build(content, meta, out, final=False):
     if final:
         cmd.append("--final")
     r = subprocess.run(cmd, check=True, capture_output=True, text=True)
-    check("DOC_CHECK" not in r.stderr, "the finished ЕПТЗ keeps the common rules (no bold, letterhead, „–“, „№ “)"
+    check("DOC_CHECK" not in r.stderr, "the finished ЕПТЗ keeps the common rules (no bold, letterhead, „-“, „№ “)"
           + (": " + r.stderr.strip()[:200] if "DOC_CHECK" in r.stderr else ""))
 
 
@@ -58,12 +58,12 @@ def test_eptz():
     tmp = tempfile.mkdtemp()
     content = FIXTURE
     meta = {
-        "zm_no": "123/2025", "zm_opis": "Първо РУ – Плевен", "dp_no": "1234/2025",
-        "rp_grad": "Плевен", "prokuratura": "ОП – Плевен",
+        "zm_no": "123/2025", "zm_opis": "Първо РУ - Плевен", "dp_no": "1234/2025",
+        "rp_grad": "Плевен", "prokuratura": "ОП - Плевен",
         "postanovlenie_no": "1234р-56789", "postanovlenie_date": "03.09.2026 г.",
         "naznachil": "разследващ полицай Тест Тестов", "expert_name": "Иван Дъбов", "expert_rank": "инспектор", "izgotvil_position": "инспектор IV ст.",
-        "expert_position": "инспектор IV ст. в група ОЦ към РДПБЗН – Плевен",
-        "izgotvil_date": "21.09.2026 г.", "copies": ["деловодство", "Първо РУ – Плевен"],
+        "expert_position": "инспектор IV ст. в група ОЦ към РДПБЗН - Плевен",
+        "izgotvil_date": "21.09.2026 г.", "copies": ["деловодство", "Първо РУ - Плевен"],
     }
     mp = os.path.join(tmp, "meta.json")
     json.dump(meta, open(mp, "w", encoding="utf-8"), ensure_ascii=False)
@@ -84,35 +84,35 @@ def test_eptz():
     check("ЧЕРНОВА" not in t_d, "no ЧЕРНОВА notice without --final")
     check("ЧЕРНОВА" not in t_f, "no ЧЕРНОВА notice with --final")
     check(t_d == t_f, "--final changes nothing")
-    check("ОП – Плевен" in t_f, "prokuratura override used")
+    check("ОП - Плевен" in t_f, "prokuratura override used")
     check("по описа на РП -" not in t_f, "no hardcoded РП when prokuratura is set")
     check("**" not in t_f, "no markdown bold left")
     check("[Източник" not in t_f, "citation markers stripped")
     check("1234/2025" in t_f and "123/2025" in t_f, "ДП/ЗМ numbers filled")
-    check("Екз. № 2 – Първо РУ – Плевен" in t_f, "copies filled")
+    check("Екз. № 2 - Първо РУ - Плевен" in t_f, "copies filled")
 
-    # without prokuratura → РП – Плевен
+    # without prokuratura → РП - Плевен
     meta.pop("prokuratura")
     json.dump(meta, open(mp, "w", encoding="utf-8"), ensure_ascii=False)
     out = os.path.join(tmp, "rp.docx")
     build(content, mp, out, final=True)
-    check("по описа на РП – Плевен" in doc_text(out), "default РП – {rp_grad}")
+    check("по описа на РП - Плевен" in doc_text(out), "default РП - {rp_grad}")
     nc = os.path.join(tmp, "no.md")
     open(nc, "w", encoding="utf-8").write(open(FIXTURE, encoding="utf-8").read().replace(
         "## I. Обстоятелства по делото.\n", "## I. Обстоятелства по делото.\n\nКонтейнерът е на ул. „Климент Охридски“ №4.\n", 1))
     build(nc, mp, out)
     t_no = doc_text(out)
     check("Охридски“ № 4." in t_no and "№4" not in t_no, "№ followed by a space")
-    check("—" not in t_no and " - " not in t_no, "only en dash as a dash")
+    check("—" not in t_no and "–" not in t_no.split("ПЛЕВЕН", 1)[-1], "only the hyphen as a dash (the letterhead keeps its own)")
     check_literatura(tmp, mp)
 
     # a court case (гражданско дело) instead of ЗМ/ДП with a постановление
     sad = {k: v for k, v in meta.items() if k not in ("zm_no", "zm_opis", "dp_no", "rp_grad", "postanovlenie_no",
                                                       "postanovlenie_date", "naznachil")}
-    sad.update({"delo_vid": "гражданско дело", "delo_no": "1111/2026", "sad": "Районен съд – Плевен",
+    sad.update({"delo_vid": "гражданско дело", "delo_no": "1111/2026", "sad": "Районен съд - Плевен",
                 "sastav": "III граждански състав",
                 "akt": "определение от открито съдебно заседание на 01.10.2026 г. (протокол рег. № 22/02.10.2026 г.)",
-                "pismo": "писмо изх. № 333/05.10.2026 г. на Районен съд – Плевен", "vazlozheno_na": "РСПБЗН – Плевен",
+                "pismo": "писмо изх. № 333/05.10.2026 г. на Районен съд - Плевен", "vazlozheno_na": "РСПБЗН - Плевен",
                 "predstaven_material": ["Препис от искова молба"]})
     sp = os.path.join(tmp, "sad.json")
     json.dump(sad, open(sp, "w", encoding="utf-8"), ensure_ascii=False)
@@ -120,9 +120,9 @@ def test_eptz():
     build(content, sp, out, final=True)
     t_s = doc_text(out)
     check("Определение от открито съдебно заседание на 01.10.2026 г. (протокол рег. № 22/02.10.2026 г.) по гражданско дело "
-          "№ 1111/2026 г. по описа на Районен съд – Плевен, III граждански състав" in t_s, "court case: основание")
-    check("възложено на РСПБЗН – Плевен, и писмо изх. № 333/05.10.2026 г." in t_s, "court case: възложено на + писмо")
-    check("Материали по гражданско дело № 1111/2026 г. по описа на Районен съд – Плевен, както следва:" in t_s,
+          "№ 1111/2026 г. по описа на Районен съд - Плевен, III граждански състав" in t_s, "court case: основание")
+    check("възложено на РСПБЗН - Плевен, и писмо изх. № 333/05.10.2026 г." in t_s, "court case: възложено на + писмо")
+    check("Материали по гражданско дело № 1111/2026 г. по описа на Районен съд - Плевен, както следва:" in t_s,
           "court case: материали")
     check("ЗМ №" not in t_s and "постановление" not in t_s.lower() and "[...]" not in t_s and "досъдебното" not in t_s, "court case: no ЗМ/ДП/постановление")
     check("назначена с определение от открито съдебно заседание" in t_s and "г.." not in t_s, "court case: title sentence")
@@ -241,9 +241,9 @@ def test_smetka():
     check(re.fullmatch(r"[0-9.*/ ]+", formula) and abs(eval(formula) - build_smetka.RATE) < 1e-9,  # noqa: S307
           "the hourly rate in the script equals the formula in the template (E11)")
     tmp = tempfile.mkdtemp()
-    data = dict(d, naznachil="разследващ полицай Тест", pri="Първо РУ – Плевен",
-                delo_no="1234/2025", po_opisa_na="РП – Плевен", izvarshena_ot="Иван Дъбов", expert_title="инспектор", izgotvil_short="И. Дъбов",
-                expert_position="инспектор IV ст. в група ОЦ към РДПБЗН – Плевен",
+    data = dict(d, naznachil="разследващ полицай Тест", pri="Първо РУ - Плевен",
+                delo_no="1234/2025", po_opisa_na="РП - Плевен", izvarshena_ot="Иван Дъбов", expert_title="инспектор", izgotvil_short="И. Дъбов",
+                expert_position="инспектор IV ст. в група ОЦ към РДПБЗН - Плевен",
                 date="21.09.2026")
     dp = os.path.join(tmp, "s.json")
     json.dump(data, open(dp, "w", encoding="utf-8"), ensure_ascii=False)
@@ -251,13 +251,13 @@ def test_smetka():
     subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "build_smetka.py"), dp, "-o", out],
                    check=True, capture_output=True)
     ws = openpyxl.load_workbook(out).active
-    check("1234/2025" in ws["A7"].value and "Първо РУ – Плевен" in ws["A7"].value, "A7 filled")
+    check("1234/2025" in ws["A7"].value and "Първо РУ - Плевен" in ws["A7"].value, "A7 filled")
     check(ws["D11"].value == 4 and ws["D16"].value == 6 and ws["D19"].value == 0, "quantities filled")
     check("Деветдесет и седем евро" in ws["A30"].value, "total in words written")
     yellow = [c.coordinate for r in ws.iter_rows() for c in r
               if c.fill is not None and c.fill.fill_type and str(c.fill.fgColor.rgb).upper() == "FFFFFF00"]
     check(not yellow, f"yellow fill cleared {yellow}")
-    check("извършена от инспектор Иван Дъбов – инспектор IV ст. в група ОЦ" in ws["A7"].value,
+    check("извършена от инспектор Иван Дъбов - инспектор IV ст. в група ОЦ" in ws["A7"].value,
           "expert title and position from the profile")
     check(ws["A43"].value == "/ инспектор И. Дъбов /", "„Изготвил“")
     check(ws["D44"].value == "КОМИСАР" and ws["D45"].value.strip() == "Стоян Кестенов", "director from the staff list")
@@ -268,7 +268,7 @@ def test_smetka():
                    "РЕГИОНАЛНА ДИРЕКЦИЯ „ПОЖАРНА БЕЗОПАСНОСТ И ЗАЩИТА НА НАСЕЛЕНИЕТО” – ПЛЕВЕН"],
           "the header is text in A2 as in the original form, three lines")
     check(not wr._images, "no header picture")
-    check(build_smetka.natural_height(ws) <= 842 - 20, f"one A4 page at 100 % too – without „fit to page“ "
+    check(build_smetka.natural_height(ws) <= 842 - 20, f"one A4 page at 100 % too - without „fit to page“ "
           f"(Google Sheets, Numbers): {build_smetka.natural_height(ws):.0f} pt of 842")
     check(ws.sheet_properties.pageSetUpPr.fitToPage and ws.page_setup.fitToHeight == 1, "„fit to one page“ kept")
     bold = {c.coordinate for r in wr.iter_rows() for c in r if c.font is not None and c.font.b}
@@ -277,20 +277,20 @@ def test_smetka():
     check(iban and iban[0].font.b, "IBAN in bold as in the original form")
 
     other = dict(data, izvarshena_ot="Георги Малинов", expert_title="старши пожарникар",
-                 expert_position="старши пожарникар в РСПБЗН – Левски", izgotvil_short="Г. Малинов")
+                 expert_position="старши пожарникар в РСПБЗН - Левски", izgotvil_short="Г. Малинов")
     json.dump(other, open(dp, "w", encoding="utf-8"), ensure_ascii=False)
     subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "build_smetka.py"), dp, "-o", out],
                    check=True, capture_output=True)
     ws = openpyxl.load_workbook(out).active
-    check("извършена от старши пожарникар Георги Малинов – старши пожарникар в РСПБЗН – Левски"
+    check("извършена от старши пожарникар Георги Малинов - старши пожарникар в РСПБЗН - Левски"
           in ws["A7"].value, "another expert's title and position in A7")
-    check("РДПБЗН – Плевен" not in ws["A7"].value and "инспектор IV" not in ws["A7"].value,
+    check("РДПБЗН - Плевен" not in ws["A7"].value and "инспектор IV" not in ws["A7"].value,
           "no default position left for another expert")
     check(ws["A43"].value == "/ старши пожарникар Г. Малинов /", "another expert under „Изготвил“")
 
 
 def test_nachalo():
-    print("nachalo.py – една команда в началото")
+    print("nachalo.py - една команда в началото")
     r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "nachalo.py"), "--data", "2026-07-11",
                         "--mesto", "Луковит"], capture_output=True, text=True, cwd=tempfile.gettempdir())
     check(r.returncode == 0, "runs from any folder")
@@ -305,7 +305,7 @@ def test_nachalo():
 
 def test_bez_klyuch():
     """A user with the connector only (no personal key, no test switch): the Чочев check is
-    skipped, the build does not stop with NO_KEY. Found by evals/eptz – api_config sys.exit()s and
+    skipped, the build does not stop with NO_KEY. Found by evals/eptz - api_config sys.exit()s and
     `except Exception` does not catch SystemExit."""
     code = (
         "import sys; sys.path.insert(0, 'scripts'); sys.path.insert(0, '_shared/scripts')\n"
@@ -318,7 +318,7 @@ def test_bez_klyuch():
     env["TMPDIR"] = tempfile.mkdtemp()   # no cached Чочев from an earlier run
     r = subprocess.run([sys.executable, "-c", code], cwd=SKILL, env=env, capture_output=True, text=True)
     check(r.returncode == 0 and r.stdout.strip() == "OK", "no key: the Чочев check is skipped, no NO_KEY exit"
-          + ("" if r.returncode == 0 else " – " + (r.stderr.strip().splitlines() or [""])[-1]))
+          + ("" if r.returncode == 0 else " - " + (r.stderr.strip().splitlines() or [""])[-1]))
 
 
 if __name__ == "__main__":

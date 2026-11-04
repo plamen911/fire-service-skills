@@ -245,7 +245,7 @@ def build(d, out, base):
     hod = d.get("hod")
     if not unit:
         bad('липсва "zveno" (РСПБЗН – … или УПБЗН – …)')
-    if not re.match(r"^(РСПБЗН|УПБЗН) – \S", unit):
+    if not re.match(r"^(РСПБЗН|УПБЗН) [–-] \S", unit):
         bad(f'"zveno" трябва да е „РСПБЗН – …“ или „УПБЗН – …“, а е „{unit}“')
     if not obekt and not d.get("tema"):
         bad('липсва "obekt" (или своя "tema")')

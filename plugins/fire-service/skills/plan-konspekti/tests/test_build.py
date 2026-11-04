@@ -17,7 +17,7 @@ from docx import Document  # noqa: E402
 from PIL import Image  # noqa: E402
 
 failures = []
-APPROVER = {"lines": ["ДИРЕКТОР НА", "РДПБЗН – ПЛЕВЕН:", "КОМИСАР"], "name": "Георги Дъбов"}
+APPROVER = {"lines": ["ДИРЕКТОР НА", "РДПБЗН - ПЛЕВЕН:", "КОМИСАР"], "name": "Георги Дъбов"}
 SIGN = {"date": "20.10.2026 г.", "name": "инспектор Иван Петров", "position": "Инспектор IV ст. в група ОЦ"}
 
 
@@ -63,7 +63,7 @@ def test_oc():
     Image.new("RGB", (200, 100), "white").save(os.path.join(tmp, "f.png"))
     data = {"kind": "oc", "data": "27.10.2026 г.", "plan_grafik": "рег. № 947р-0000/15.12.2025 г.",
             "approver": APPROVER, "izgotvil": SIGN, "tema": "Гасене на пожари в житни масиви",
-            "tsel": "Опресняване на знанията на служителите.", "zvena": ["РСПБЗН – Левски", "РСПБЗН – Белене"],
+            "tsel": "Опресняване на знанията на служителите.", "zvena": ["РСПБЗН - Левски", "РСПБЗН - Белене"],
             "materialno": ["Правила №1", "Наредба №2"],
             "izlozhenie": ["## 1. Увод", "Текст - с **получер**.", "> Чл. 42. Цитат.", "- точка",
                            {"fig": "f.png", "caption": "Фиг. 1. Проба", "height_cm": 3}],
@@ -74,7 +74,7 @@ def test_oc():
         return
     info = json.loads(r.stdout)
     text, d = doc_text(out)
-    check("П Л А Н – К О Н С П Е К Т" in text, "spaced title")
+    check("П Л А Н - К О Н С П Е К Т" in text, "spaced title")
     check(text.index("МАТЕРИАЛНО ОСИГУРЯВАНЕ") < text.index("ХОД НА ЗАНЯТИЕТО:") < text.index("1. Увод"),
           "the heading that opens the exposition")
     check("РЕГИОНАЛНА ДИРЕКЦИЯ „ПОЖАРНА БЕЗОПАСНОСТ И ЗАЩИТА НА НАСЕЛЕНИЕТО” – ПЛЕВЕН" in text
@@ -84,12 +84,12 @@ def test_oc():
     check(sizes == [14, 14, 12] and head.xpath("./w:tblPr/w:tblBorders/w:bottom[@w:val='single']")
           and head.xpath("./w:tblPr/w:tblW/@w:w") == ["10188"], "letterhead: 14/14/12 pt over a rule, 10188 dxa wide")
     check("рег. № 947р-0000/15.12.2025 г." in text and "през 2026 г." in text, "plan-grafik and year in the subtitle")
-    check("Сградите на РСПБЗН – Левски и РСПБЗН – Белене" in text, "place from the units")
+    check("Сградите на РСПБЗН - Левски и РСПБЗН - Белене" in text, "place from the units")
     check("Вдигане в контролна тревога" in text and "№ 8121з-1702/09.12.2022 г." in text, "exercise 1.1 from the data file")
     r2 = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "build_konspekt.py"), os.path.join(tmp, "d.json"),
                          "-o", os.path.join(tmp, "x.docx")], capture_output=True, text=True)
     check(r2.returncode != 0 and "NO_KEY" in r2.stderr, "without a key and without a file the exercises are not read → NO_KEY")
-    check("Правила № 1" in text and "Текст – с получер." in text, "typography: „№ 1“ and the dash")
+    check("Правила № 1" in text and "Текст - с получер." in text, "typography: „№ 1“ and the dash")
     check("Георги Дъбов" in text and "инспектор Иван Петров" in text, "approver and author")
     check(len(d.inline_shapes) == 1 and info["figuri"] == 1 and "Фиг. 1. Проба" in text, "one figure with a caption")
     check(info["preduprezhdeniya"] == [], "no warnings")
@@ -115,7 +115,7 @@ def test_seminar():
     if r.returncode:
         return
     text, _ = doc_text(out)
-    check("I. Тема: Спасителни въжета." in text and "VI. Материално осигуряване: Правила" in text, "fields I–VI")
+    check("I. Тема: Спасителни въжета." in text and "VI. Материално осигуряване: Правила" in text, "fields I-VI")
     check("Рег. №" in text and "ТЕМА 2" not in text, "registration lines, no second topic")
     check("VII. Ход на занятието:" in text, "the exposition is the next numbered point")
     check("1 учебен час на" in text, "time without a date keeps a blank")
@@ -127,15 +127,15 @@ def test_seminar():
 def test_psp():
     print("build_konspekt: psp")
     tmp = tempfile.mkdtemp()
-    data = {"kind": "psp", "year": "2026", "zveno": "РСПБЗН – Левски", "uprazhnenie": "1.9 Б",
-            "approver": {"lines": ["НАЧАЛНИК НА", "РСПБЗН – ЛЕВСКИ:", "ГЛАВЕН ИНСПЕКТОР"], "name": "Георги Дъбов"},
+    data = {"kind": "psp", "year": "2026", "zveno": "РСПБЗН - Левски", "uprazhnenie": "1.9 Б",
+            "approver": {"lines": ["НАЧАЛНИК НА", "РСПБЗН - ЛЕВСКИ:", "ГЛАВЕН ИНСПЕКТОР"], "name": "Георги Дъбов"},
             "izgotvil": SIGN, "merki": ["Облекло и оборудване по Вариант № 2."], "minuti": {"osnovna": 30}}
     r, out = run("build_konspekt.py", data, tmp)
     check(r.returncode == 0, "builds" + ("" if r.returncode == 0 else ": " + r.stderr[-300:]))
     if r.returncode:
         return
     text, d = doc_text(out)
-    check("за провеждане на занятие по ПСП със служителите от РСПБЗН – Левски" in text, "subtitle of Приложение № 4")
+    check("за провеждане на занятие по ПСП със служителите от РСПБЗН - Левски" in text, "subtitle of Приложение № 4")
     check("ТЕМА: Упражнение № 1.9 Б" in text and "МЕРКИ ЗА БЕЗОПАСНОСТ И ЗДРАВЕ: Облекло" in text, "topic from the exercise, safety measures")
     check("Подготвителна част" in text and "до 10 минути" in text and "30 минути" in text and "до 5 минути" in text, "three parts with minutes")
     check("Резултат: 6 точки ≤ 45 секунди" in text, "main part: the exercise with its scale")
@@ -151,16 +151,16 @@ def test_otchet():
     tmp = tempfile.mkdtemp()
     data = {"data": "27.10.2026 г.", "tema1": "Гасене на пожари в житни масиви", "tema2": {"uprazhnenie": "1.1"},
             "izgotvil": SIGN,
-            "zvena": [{"zveno": "РСПБЗН – Левски", "prisastvali": 3, "sekundi": 72, "tochki": 4},
-                      {"zveno": "РСПБЗН – Белене", "prisastvali": 1, "rezultat": "Без грешки."}]}
+            "zvena": [{"zveno": "РСПБЗН - Левски", "prisastvali": 3, "sekundi": 72, "tochki": 4},
+                      {"zveno": "РСПБЗН - Белене", "prisastvali": 1, "rezultat": "Без грешки."}]}
     r, out = run("build_otchet.py", data, tmp)
     check(r.returncode == 0, "builds" + ("" if r.returncode == 0 else ": " + r.stderr[-300:]))
     if r.returncode == 0:
         text, _ = doc_text(out)
-        check("О Т Ч Е Т" in text and "РСПБЗН – Левски и РСПБЗН – Белене" in text, "title and units")
+        check("О Т Ч Е Т" in text and "РСПБЗН - Левски и РСПБЗН - Белене" in text, "title and units")
         check("е 72 сек., което е за 4 точки." in text and "Без грешки." in text, "results")
         check("3 служители от състава" in text and "1 служител от състава" in text, "attendance")
-        check("Екз. № 1 – деловодство" in text and "Инспектор IV ст. в група ОЦ" in text, "footer block")
+        check("Екз. № 1 - деловодство" in text and "Инспектор IV ст. в група ОЦ" in text, "footer block")
         check(no_bold(out), "no bold anywhere in the document")
     del data["zvena"][0]["tochki"]
     r, out = run("build_otchet.py", data, tmp)
@@ -171,11 +171,11 @@ def test_otchet():
     data["tema2"] = {"uprazhnenie": "2.8"}
     r, _ = run("build_otchet.py", data, tmp)
     check(r.returncode != 0 and "NO_NORM" in r.stderr, "seconds for an exercise without a time norm → NO_NORM")
-    data["zvena"][0] = {"zveno": "РСПБЗН – Левски", "prisastvali": 3, "tochki": 7}
+    data["zvena"][0] = {"zveno": "РСПБЗН - Левски", "prisastvali": 3, "tochki": 7}
     r, _ = run("build_otchet.py", data, tmp)
     check(r.returncode != 0 and "BAD_INPUT" in r.stderr, "more points than the card allows are refused")
     data["tema2"] = {"uprazhnenie": "1.1"}
-    data["zvena"] = [{"zveno": "РСПБЗН – Плевен"}, {"zveno": "РСПБЗН – Кнежа"}]
+    data["zvena"] = [{"zveno": "РСПБЗН - Плевен"}, {"zveno": "РСПБЗН - Кнежа"}]
     r, out = run("build_otchet.py", data, tmp)
     text = doc_text(out)[0] if r.returncode == 0 else ""
     import re
@@ -190,16 +190,16 @@ def test_otchet():
     r, out = run("build_otchet.py", data, tmp)
     check(r.returncode == 0 and "ПРИСЪСТВАЛИ СЛУЖИТЕЛИ: ……… служители" in doc_text(out)[0]
           and "е ……… сек., което е за ……… точки." in doc_text(out)[0], "popalni: false leaves dots to fill in by hand")
-    # the connector (no key): the exercise as its own text, with its norm – the points still come out
+    # the connector (no key): the exercise as its own text, with its norm - the points still come out
     data.pop("popalni")
     data["tema2"] = {"tekst": "Проиграване на упражнение № 1.1", "normativ": [{"do_sek": 65, "tochki": 6},
                                                                          {"do_sek": 70, "tochki": 5}]}
-    data["zvena"] = [{"zveno": "РСПБЗН – Левски", "prisastvali": 3, "sekundi": 68}, {"zveno": "РСПБЗН – Кнежа"}]
+    data["zvena"] = [{"zveno": "РСПБЗН - Левски", "prisastvali": 3, "sekundi": 68}, {"zveno": "РСПБЗН - Кнежа"}]
     r, out = run("build_otchet.py", data, tmp)
     text = doc_text(out)[0] if r.returncode == 0 else r.stderr
     check("е 68 сек., което е за 5 точки." in text and "………" not in text, f"own text with a norm → points, filled in: {text[-200:]}")
     data["tema2"] = {"tekst": "Проиграване на упражнение"}
-    data["zvena"] = [{"zveno": "РСПБЗН – Левски", "prisastvali": 3}]
+    data["zvena"] = [{"zveno": "РСПБЗН - Левски", "prisastvali": 3}]
     r, out = run("build_otchet.py", data, tmp)
     text = doc_text(out)[0] if r.returncode == 0 else ""
     check(r.returncode == 0 and "………" not in text and "без грешки" in text, "own text, no norm, no result → still filled in")

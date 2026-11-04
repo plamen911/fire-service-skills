@@ -180,7 +180,8 @@ def title_lower(title):
     outside = re.sub(r"[„“\"][^„“”\"]*[”“\"]", "", title)
     if outside != outside.upper():
         return title
-    head, dash, place = title.partition(" – ")
+    m = re.search(r" [–-] ", title)
+    head, dash, place = (title[:m.start()], m.group(0), title[m.end():]) if m else (title, "", "")
     parts = re.split(r"([„“\"][^„“”\"]*[”“\"])", head)
     for i in range(0, len(parts), 2):
         parts[i] = " ".join(w if w in ABBR or ROMAN_RE.match(w) else w.lower()

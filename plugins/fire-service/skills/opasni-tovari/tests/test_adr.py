@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for adr.py and karta_docx.py – the bundled dangerous-goods data and the answers built from it.
+"""Tests for adr.py and karta_docx.py - the bundled dangerous-goods data and the answers built from it.
 Everything is offline; the data files are checked for integrity as well as the logic."""
 import csv
 import json
@@ -163,7 +163,7 @@ def test_docx():
     try:
         import docx  # noqa: F401
     except ImportError:
-        print("  (python-docx not installed – karta_docx.py not tested)")
+        print("  (python-docx not installed - karta_docx.py not tested)")
         return
     with tempfile.TemporaryDirectory() as d:
         f = os.path.join(d, "k.docx")
@@ -187,7 +187,7 @@ def main():
     for t in (test_data, test_known_values, test_search, test_incident, test_docx):
         t()
         print(f"✓ {t.__name__}")
-    print(f"OK – {checks} checks")
+    print(f"OK - {checks} checks")
 
 
 if __name__ == "__main__":

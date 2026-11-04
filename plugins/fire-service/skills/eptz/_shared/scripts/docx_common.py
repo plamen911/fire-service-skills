@@ -2,11 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 docx_common.py — the typography rules and the final check shared by every script that builds a document
-(_shared/conventions.md, т. 2): „№ 4“, the dash „–“, no bold, one letterhead.
+(_shared/conventions.md, т. 2): „№ 4“, the dash „-“ (not „–“ or „—“; the letterhead keeps its own), no bold, one letterhead.
 
     from docx_common import typo, typo_all, check_document, report
 
-    typo("ул. Иван Вазов №4 - Плевен")        →  "ул. Иван Вазов № 4 – Плевен"
+    typo("ул. Иван Вазов №4 – Плевен")        →  "ул. Иван Вазов № 4 - Плевен"
     typo_all(doc)                              applies typo() to the body, the headers and the footers
     check_document("out.docx")                 →  [] or a list of what breaks the rules
     report("out.docx")                         prints the problems to stderr (the builders call it after saving)
@@ -18,7 +18,8 @@ import sys
 import zipfile
 
 NO_RE = re.compile(r"№\s*(?=\S)")          # „№4“ → „№ 4“
-DASH_RE = re.compile(r"(^|\s)-(?=\s)")     # a lone „-“ between spaces → „–“
+DASH_RE = re.compile(r"[–—]")              # „–“ and „—“ → „-“ (since 04.11.2026)
+LETTERHEAD_MARK = "ПОЖАРНА БЕЗОПАСНОСТ И ЗАЩИТА НА НАСЕЛЕНИЕТО"   # the letterhead keeps its dash
 BOLD_RE = re.compile(r"<w:b(Cs)?[ /]|<b/>|<b val=\"(1|true)\"")
 TAG_RE = re.compile(r"<[^>]+>")
 LETTERHEAD = ("МИНИСТЕРСТВО НА ВЪТРЕШНИТЕ РАБОТИ",
@@ -27,12 +28,15 @@ THIRD_LINE = re.compile(r"(РЕГИОНАЛНА ДИРЕКЦИЯ|РАЙОННА 
 
 
 def typo(text, quotes=False):
-    """„№ 4“; the dash is „–“ (never „-“ between spaces and never „—“). A hyphen inside words and numbers
-    („1234р-56789“, „Бала-баир“) is left alone. With quotes=True the closing quote „”“ becomes „“ “."""
-    text = NO_RE.sub("№ ", str(text)).replace("—", "–")
+    """„№ 4“; the dash is „-“: „–“ and „—“ become „-“ (the user's rule since 04.11.2026). The letterhead lines
+    („… ПОЖАРНА БЕЗОПАСНОСТ И ЗАЩИТА НА НАСЕЛЕНИЕТО” – ПЛЕВЕН“) keep their dash as in the model.
+    With quotes=True the closing quote „”“ becomes „“ “."""
+    text = NO_RE.sub("№ ", str(text))
     if quotes:
         text = text.replace("”", "“")
-    return DASH_RE.sub(lambda m: m.group(1) + "–", text)
+    if LETTERHEAD_MARK in text.upper():
+        return text
+    return DASH_RE.sub("-", text)
 
 
 def typo_all(doc, tag=None, quotes=False):
@@ -71,10 +75,9 @@ def check_document(path, letterhead=True):
         if BOLD_RE.search(xml):
             problems.append(f"получер шрифт в {name}")
         for p in paras:
-            if "—" in p:
-                problems.append(f"дълго тире „—“: …{p[max(0, p.find('—') - 20):p.find('—') + 20]}…")
-            if DASH_RE.search(p) and p.strip() != "-":
-                problems.append(f"„-“ между интервали вместо „–“: …{p.strip()[:50]}…")
+            m = DASH_RE.search(p)
+            if m and LETTERHEAD_MARK not in p.upper():
+                problems.append(f"тире „{m.group(0)}“ вместо „-“: …{p[max(0, m.start() - 20):m.start() + 20]}…")
             if re.search(r"№\S", p):
                 problems.append(f"„№“ без интервал: …{p[max(0, p.find('№') - 15):p.find('№') + 15]}…")
             m = re.search(r"\{\{\w+\}\}", p)

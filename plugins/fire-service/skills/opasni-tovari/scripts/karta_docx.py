@@ -226,6 +226,10 @@ def build(r, lines, out, title):
     try:                                               # the common check: letterhead, no bold, „–“, „№ “
         sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_shared", "scripts"))
         import docx_common
+        from docx import Document as _D
+        d2 = _D(out)
+        docx_common.typo_all(d2)
+        d2.save(out)
         docx_common.report(out)
     except ImportError:
         pass
