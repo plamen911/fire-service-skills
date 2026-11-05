@@ -237,6 +237,23 @@ ok(any("веществени доказателства" in g for g in r["greshk
 r = check(ogled.replace("разследващ полицай.", "разследващ полицай. Събрани и иззети веществени доказателства от местопроизшествието – няма."), META)
 ok(not any("веществени доказателства" in g for g in r["greshki"]), "with „– няма.“ it passes")
 
+# ── neutral language (references/pregled.md, т. 9) – only za_proverka, never greshki ──
+r = check(GOOD, META)
+ok(not any("оценъчна" in z or "емоционален" in z or "безлично" in z or "неопределено" in z or "избухнал" in z
+           for z in r["za_proverka"]), "the clean report has no language findings")
+for phrase, key in (("Очевидно огнището е в южния ъгъл.", "оценъчна"),
+                    ("Пламъците са били огромни.", "емоционален"),
+                    ("Установено е, че вратата е заключена.", "безлично"),
+                    ("Пожарът се е разпространил много бързо.", "неопределено"),
+                    ("Пожарът е избухнал в 14:10 ч.", "избухнал")):
+    r = check(GOOD + "\n" + phrase + "\n", META)
+    ok(any(key in z for z in r["za_proverka"]), f"language: „{phrase}“ is flagged")
+    ok(not any(key in g for g in r["greshki"]), f"language: „{phrase}“ is not an error")
+r = check(GOOD + "\nСвидетелят Иван Петров казва: „огромни пламъци излизаха от покрива“ (протокол от 02.10.2026 г.).\n", META)
+ok(not any("емоционален" in z for z in r["za_proverka"]), "a witness's own words in „…“ are not flagged")
+r = check(GOOD + "\nНай-вероятно огнището е в южния ъгъл.\n", META)
+ok(not any("оценъчна" in z for z in r["za_proverka"]), "„най-вероятно“ for a conclusion is correct, not flagged")
+
 if failures:
     print(f"\n{len(failures)} FAILED")
     sys.exit(1)
