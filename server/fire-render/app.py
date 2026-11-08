@@ -105,7 +105,11 @@ def pull():
     with _pull_lock:
         if time.time() - _last_pull[0] < PULL_EVERY:
             return
-        subprocess.run(["git", "-C", REPO, "pull", "--ff-only", "-q"], capture_output=True, timeout=120)
+        # fetch + reset, not pull: a rewritten history of the public repository must not stop the updates
+        subprocess.run(["git", "-C", REPO, "fetch", "-q", "--depth", "1", "origin", "main"], capture_output=True,
+                       timeout=120, check=True)
+        subprocess.run(["git", "-C", REPO, "reset", "-q", "--hard", "FETCH_HEAD"], capture_output=True, timeout=60,
+                       check=True)
         _last_pull[0] = time.time()
         if APP.startswith(REPO) and _app_text() not in (b"", _app_loaded[0]):
             threading.Thread(target=_restart, daemon=True).start()
