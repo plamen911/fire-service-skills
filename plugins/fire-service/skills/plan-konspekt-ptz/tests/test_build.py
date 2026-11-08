@@ -65,7 +65,7 @@ def test_full():
     check(res["preduprezhdeniya"] == [], f"no warnings for a complete plan: {res['preduprezhdeniya']}")
     check(res["obshto_minuti"] == 77, f"the total time is the sum of the rows, 45″ rounded up ({res['obshto_minuti']})")
     text, doc = text_of(out)
-    for want in ("УТВЪРЖДАВАМ:", "П Л А Н - К О Н С П Е К Т", "за провеждане на пожаро-тактическо занятие",
+    for want in ("УТВЪРЖДАВАМ:", "П Л А Н — К О Н С П Е К Т", "за провеждане на пожаро-тактическо занятие",
                  "със състава на II дежурна смяна при РСПБЗН - Левски",
                  "I. Тема: Гасене на пожар в склад за дървен материал", "Трениране на КЕ за ръководство на екипите",
                  "III. Метод: Практически.", "V. Време: от 09:00 ч. до 10:20 ч. на 28.10.2026 г.",

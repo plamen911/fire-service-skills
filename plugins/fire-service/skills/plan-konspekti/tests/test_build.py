@@ -74,7 +74,7 @@ def test_oc():
         return
     info = json.loads(r.stdout)
     text, d = doc_text(out)
-    check("П Л А Н - К О Н С П Е К Т" in text, "spaced title")
+    check("П Л А Н — К О Н С П Е К Т" in text, "spaced title")
     check(text.index("МАТЕРИАЛНО ОСИГУРЯВАНЕ") < text.index("ХОД НА ЗАНЯТИЕТО:") < text.index("1. Увод"),
           "the heading that opens the exposition")
     check("РЕГИОНАЛНА ДИРЕКЦИЯ „ПОЖАРНА БЕЗОПАСНОСТ И ЗАЩИТА НА НАСЕЛЕНИЕТО” – ПЛЕВЕН" in text
