@@ -42,15 +42,21 @@ import os
 import re
 import secrets
 import shutil
+import socket
 import subprocess
 import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit
 
 REPO = os.environ.get("REPO_DIR", "/srv/repo")
 DATA = os.environ.get("DATA_DIR", "/data/sesii")
 TOKEN = os.environ.get("RENDER_TOKEN", "")
+# The plugin's scripts reach n8n over the Docker network the two share: a container often cannot open the server's
+# own public address (each attempt then hangs for over two minutes). api_config.py reads this from the environment.
+N8N_BASE = os.environ.setdefault("FIRE_SERVICE_N8N_BASE", "http://n8n:5678")
+N8N_FREE = ("pokazhi",)   # the actions that stay inside the session and never call n8n
 PULL_EVERY = 300
 SESSION_TTL = 3 * 24 * 3600
 SHEMI = os.path.join(REPO, "plugins", "fire-service", "skills", "shemi")
@@ -118,6 +124,17 @@ def _puller():
             pull()
         except Exception:  # noqa: BLE001 – the next round tries again
             pass
+
+
+def n8n_up():
+    """Fails at once when n8n cannot be reached – otherwise every script waits for its own timeout, the steps add up
+    past the time the connector allows and the caller only sees that the answer never came."""
+    u = urlsplit(N8N_BASE)
+    try:
+        socket.create_connection((u.hostname, u.port or (443 if u.scheme == "https" else 80)), timeout=5).close()
+    except OSError as e:
+        raise Problem("N8N_UNAVAILABLE", f"fire-render не стига до n8n ({N8N_BASE}): {e}. Не опитвай пак – "
+                                         "кажи на администратора.", 503) from None
 
 
 def cleanup():
@@ -1008,6 +1025,8 @@ class Handler(BaseHTTPRequestHandler):
             action = str(b.get("action", ""))
             if action not in HANDLERS:
                 raise Problem("BAD_INPUT", "action е " + ", ".join(ACTIONS))
+            if action not in N8N_FREE:
+                n8n_up()
             self.send(200, HANDLERS[action](b))
         except Problem as e:
             self.send(e.status, {"error": f"{e.code}: {e}"})

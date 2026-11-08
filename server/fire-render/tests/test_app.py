@@ -172,4 +172,25 @@ for bad, why in (({"data": "x"}, "date"), ({"data": "2026-10-26", "mesto": "--rm
     except app.Problem as e:
         ok(e.code == "BAD_INPUT", f"vreme rejects a bad {why}")
 
+# n8n out of reach – the answer comes at once, with the reason
+app.N8N_BASE = "http://127.0.0.1:9"
+try:
+    app.n8n_up()
+    ok(False, "n8n_up passes with n8n down")
+except app.Problem as e:
+    ok(e.code == "N8N_UNAVAILABLE" and e.status == 503, "n8n_up refuses")
+
+# the plugin's scripts follow FIRE_SERVICE_N8N_BASE – only on the server
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(HERE))), "plugins", "fire-service",
+                                "shared", "scripts"))
+import api_config  # noqa: E402
+
+os.environ["FIRE_SERVICE_NO_KEY"] = "1"
+os.environ["FIRE_SERVICE_N8N_BASE"] = "http://n8n:5678/"
+api_config._cache.clear()
+ok(api_config.load()["obekti_url"] == "http://n8n:5678/webhook/fire-obekti", "internal address")
+del os.environ["FIRE_SERVICE_N8N_BASE"]
+api_config._cache.clear()
+ok(api_config.load()["obekti_url"].startswith("https://n8n."), "public address elsewhere")
+
 print(f"OK – {checks} проверки")

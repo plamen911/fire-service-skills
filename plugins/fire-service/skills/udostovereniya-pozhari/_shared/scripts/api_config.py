@@ -80,6 +80,11 @@ def load():
     if "cfg" not in _cache:
         with open(CONFIG, encoding="utf-8") as f:
             cfg = json.load(f)
+        base = os.environ.get("FIRE_SERVICE_N8N_BASE", "").strip().rstrip("/")
+        if base:  # fire-render, next to n8n: its internal address instead of the server's own public one
+            for name, url in cfg.items():
+                if name.endswith("_url") and isinstance(url, str):
+                    cfg[name] = re.sub(r"^https?://[^/]+", base, url)
         key, source = os.environ.get("FIRE_SERVICE_KEY", "").strip(), "FIRE_SERVICE_KEY"
         if os.environ.get("FIRE_SERVICE_NO_KEY"):  # tests: never touch the network
             key = ""
