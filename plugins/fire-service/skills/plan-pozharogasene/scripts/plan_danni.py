@@ -121,7 +121,7 @@ def situacionna(a, out, warn):
     dop, err = call(DOPALNI, ["situacionna.json", "--kais", "kais.json"], cwd=out, timeout=120)
     if err:
         warn.append(err)
-    sit, err = call(SITUACIONNA, ["situacionna.json", "-o", "Situacionna_shema"], cwd=out, timeout=120)
+    sit, err = call(SITUACIONNA, ["situacionna.json", "-o", "Situacionna_shema.docx"], cwd=out, timeout=120)
     if err:
         warn.append(err)
     return dop or {}, sit or {}

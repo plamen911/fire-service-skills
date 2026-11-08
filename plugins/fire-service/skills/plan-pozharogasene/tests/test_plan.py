@@ -49,6 +49,35 @@ def uslovni_test():
     print("  ok  uslovni etazhi")
 
 
+def shema_parva_test():
+    """No saved situational scheme: it goes into the register first, the object is created when missing."""
+    import argparse
+    sys.path.insert(0, os.path.join(SKILL, "scripts"))
+    import plan_avto as A
+    import plan_danni as P
+    calls = []
+
+    def fake(script, args, cwd=None, timeout=240):
+        calls.append(args)
+        return ({"nov": {"id": "OB-0099"}} if "nov" in args else {}), None
+    real, P.call = P.call, fake
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            for n in ("Situacionna_shema.docx", "Situacionna_shema.dxf", "situacionna.json"):
+                open(os.path.join(d, n), "w").close()
+            a = argparse.Namespace(ime="Обект", masto="Плевен", adres="", kadastar="1.2.3", lat=None, lon=None)
+            res = {"v_registara": False, "obekt": {}}
+            assert A.save_scheme(a, res, d) == "OB-0099" and res["v_registara"]
+            z = [c for c in calls if "zapishi" in c][0]
+            assert z[z.index("--vid") + 1] == "situacionna_shema" and z.index("zapishi") > 0
+            assert [i for i, c in enumerate(calls) if "nov" in c] == [0], "created first, once"
+            A.save_scheme(a, res, d)
+            assert sum("nov" in c for c in calls) == 1, "not created twice"
+    finally:
+        P.call = real
+    print("  ok  situacionna shema first")
+
+
 def plan_danni_test():
     """plan_danni.py with the scripts replaced: all sources at once, no second call for what the register has."""
     sys.path.insert(0, os.path.join(SKILL, "scripts"))
@@ -126,6 +155,7 @@ def main():
         print("  ok  plan, the sheets on their own and the gaps")
     plan_danni_test()
     uslovni_test()
+    shema_parva_test()
     print("OK plan-pozharogasene")
 
 

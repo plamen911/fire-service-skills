@@ -744,12 +744,13 @@ def a_plan_nachalo(b):
     else:
         found = in_register(b)
     if not found:
-        raise Problem("NOT_FOUND", "обектът не е в регистъра – първо ситуационната схема (shema nachalo … zapishi)", 404)
+        raise Problem("NOT_FOUND", "обектът не е в регистъра: направи сега ситуационната схема, без да питаш (shema nachalo … "
+                                   "zapishi с nov), и пусни отново plan_nachalo", 404)
     oid = found["id"]
     docs = (obekti("pokazhi", oid).get("dokumenti") or {})
     names = {f.get("name") for d in docs.values() for f in d.get("failove") or []}
     if VID + ".json" not in names:
-        raise Problem("NOT_FOUND", f"{oid} няма ситуационна схема – първо shema nachalo … zapishi; планът се строи върху нея", 404)
+        raise Problem("NOT_FOUND", f"{oid} няма запазена ситуационна схема: направи я сега, без да питаш (shema nachalo … zapishi), и пусни отново plan_nachalo", 404)
     papka = found.get("papka_id") or ""
     sid, path = session(None, new=True)
     fetch(papka, VID + ".json", os.path.join(path, "situacionna.json"))

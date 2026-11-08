@@ -4,6 +4,7 @@
 plan_avto.py — целият план за пожарогасене с една команда: данните (plan_danni.py), етажите (одобрените от регистъра,
 иначе условни - shemi/scripts/uslovni_etazhi.py), разчетите, конкретните схеми, plan.json и сглобяването. Около 2 минути.
 С условни етажи планът е РАБОТНА ЧЕРНОВА: така пише в документа и на схемите.
+Правило: ако обектът няма запазена ситуационна схема, първо тя се прави и записва в регистъра (обектът се създава при нужда).
 
     python3 scripts/plan_avto.py --ime "…" --masto Плевен --adres "ул. … № 1" --kadastar 56722.1.2 -d /mnt/user-data/outputs
     python3 scripts/plan_avto.py --ime "…" --id OB-0014 --varianti varianti.json --danni danni.json --zapishi-chernova -d …
@@ -160,19 +161,44 @@ def reshenie(v, vname, r, tvr, res_k, sili, usl):
             ["Защита на служителите.", "ВДА и лични предпазни средства; пост по безопасност при входа."]]
 
 
+def object_id(a, res):
+    """The object in the register, created when it is not there yet → (id, error)."""
+    if res.get("v_registara"):
+        return res["obekt"]["id"], None
+    args = ["--json", "nov", "--ime", a.ime, "--masto", a.masto or "-", "--adres", a.adres]
+    if a.kadastar:
+        args += ["--kadastar", a.kadastar]
+    if a.lat is not None and a.lon is not None:
+        args += ["--lat", str(a.lat), "--lon", str(a.lon)]
+    created, err = plan_danni.call(plan_danni.OBEKTI, args, timeout=120)
+    if err:
+        return None, err
+    row = created.get("nov") or {}
+    res["obekt"], res["v_registara"] = row, bool(row.get("id"))
+    return row.get("id"), None
+
+
+def save_scheme(a, res, work):
+    """The rule: the plan stands on a situational scheme kept in the register - when there is none, it is saved first."""
+    oid, err = object_id(a, res)
+    if err:
+        bad("ситуационната схема не е записана, планът спира: " + err)
+    base = os.path.join(work, "Situacionna_shema")
+    files = [base + x for x in (".docx", ".dxf", "_grafichna.png") if os.path.isfile(base + x)] + [os.path.join(work, "situacionna.json")]
+    if len(files) < 2:
+        bad("ситуационната схема не е начертана, планът спира: " + "; ".join(res.get("preduprezhdeniya") or []))
+    _, err = plan_danni.call(plan_danni.OBEKTI, ["--json", "zapishi", oid, "--vid", "situacionna_shema", "--belezhka",
+                                                 "Направена автоматично преди плана за пожарогасене; да се провери при огледа.", *files], timeout=180)
+    if err:
+        bad("ситуационната схема не е записана, планът спира: " + err)
+    return oid
+
+
 def save_draft(a, res, sit, plan, built, out, work):
-    row = res["obekt"] if res.get("v_registara") else None
     obekti = plan_danni.OBEKTI
-    if row:
-        oid = row["id"]
-    else:
-        args = ["--json", "nov", "--ime", a.ime, "--masto", a.masto or "-", "--adres", a.adres]
-        if a.kadastar:
-            args += ["--kadastar", a.kadastar]
-        created, err = plan_danni.call(obekti, args, timeout=120)
-        if err:
-            return None, [err]
-        oid = (created.get("nov") or {}).get("id")
+    oid, err = object_id(a, res)
+    if err:
+        return None, [err]
     note = "РАБОТНА ЧЕРНОВА - вътрешното разпределение е условно; да не се утвърждава."
     errors = []
     def put(vid, files):
@@ -241,6 +267,9 @@ def main():
         b["kategoriya"] = b["kategoriya"] or klas
         b["ogneustoychivost"] = b.get("ogneustoychivost") or "да се уточни"
     jsave(site, sit)
+    shema_zapisana = None
+    if not res.get("ima_situacionna_shema"):        # first the situational scheme, then the plan
+        shema_zapisana = save_scheme(a, res, work)
     t1 = time.time()
     real = {}
     for f in res.get("failove") or []:
@@ -355,7 +384,7 @@ def main():
         times["zapis"] = round(time.time() - t3, 1)
     times["obshto"] = round(time.time() - t0, 1)
     print(json.dumps({"plan": built.get("plan"), "failove": built.get("failove"), "uslovni_etazhi": usl,
-                      "varianti": [v["ime"] for v in plan_v], "chernova_v_registara": draft,
+                      "varianti": [v["ime"] for v in plan_v], "chernova_v_registara": draft, "situacionna_shema_zapisana_v": shema_zapisana,
                       "da_se_utochni": [d[0] for d in danni if UT in str(d[1])], "prieto": res.get("prieto") or [],
                       "preduprezhdeniya": (built.get("preduprezhdeniya") or []) + (res.get("preduprezhdeniya") or []) + errors,
                       "vreme_s": times}, ensure_ascii=False, indent=1))
