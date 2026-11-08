@@ -669,6 +669,10 @@ PLAN = os.path.join(PLUGIN, "plan-pozharogasene", "scripts", "build_plan.py")
 SILI = os.path.join(PLUGIN, "sili-i-sredstva", "scripts", "sili.py")
 KONKRETNA = os.path.join(SHEMI, "scripts", "konkretna.py")
 CDR = os.path.join(SHEMI, "scripts", "cdr_import.py")
+USLOVNI = os.path.join(SHEMI, "scripts", "uslovni_etazhi.py")
+CHERNOVA_BELEZHKA = ("РАБОТНА ЧЕРНОВА. Няма одобрени етажни чертежи: контурите, площите и етажността са от КАИС, а вътрешното "
+                     "разпределение (помещения, врати, стълбище, вход) е условно. Числата в разчетите важат само за условните "
+                     "размери. Да не се утвърждава в този вид.")
 PLAN_VID = "plan_za_pozharogasene"
 PODLOZHKA_RE = r"shema_podlozhka_et(\d+)"
 SILI_OPCII = {"vl": "--vl", "vl_red": "--vl-red", "i": "--i", "i_red": "--i-red", "struinik": "--struinik",
@@ -775,6 +779,26 @@ def a_plan_nachalo(b):
     old = sit.get("arhiv_danni") or {}
     if not old.get("namereno") or not old.get("varianti"):
         old = old_plan({"ime": found.get("ime") or ""}, {}) or old
+    uslovni = False
+    if not floors(path):            # no approved drawings: conditional floors on the КАИС outline – the plan is a draft
+        args = [USLOVNI, "situacionna.json", "-d", "."]
+        o_ = b.get("opcii") or {}
+        if o_.get("sgrada"):
+            args += ["--sgrada", str(o_["sgrada"])]
+        if o_.get("zala"):
+            args += ["--zala", str(int(o_["zala"]))]
+        try:
+            run(args, cwd=path)
+            uslovni = bool(floors(path))
+        except (Problem, ValueError, subprocess.TimeoutExpired):
+            uslovni = False
+    if uslovni:
+        if not any(str((r or [""])[0]).startswith("Забележка") for r in plan.get("danni") or []):
+            plan["danni"] = [["Забележка.", CHERNOVA_BELEZHKA]] + list(plan.get("danni") or [])
+        if not plan["fail"].endswith("_CHERNOVA"):
+            plan["fail"] += "_CHERNOVA"
+        jsave(path, "plan.json", plan)
+        meta(path, uslovni=True)
     et = {str(n): rooms(jload(path, f"podlozhka_et{n}.json")) for n in floors(path)}
     ans = {"sesiya": sid, "obekt": oid, "ime": found.get("ime"), "etazhi": et,
            "hidranti": hydr, "plan": {"danni": [r[0] for r in plan.get("danni") or []],
@@ -787,9 +811,15 @@ def a_plan_nachalo(b):
                    "plan_variant без да питаш (помещението по името, Vл, Iн, формата и атаката от варианта); данните му "
                    "(етажи, огнеустойчивост, табло, инсталации, водопровод) влизат в /danni и в вариантите с годината "
                    "на плана. Питай само за това, което нито той, нито регистърът дава.")
-    if not et:
-        say.append("Етажи няма – без одобрения чертеж на етажа (.cdr) конкретна схема не се прави: поискай го с едно "
-                   "изречение (plan_podlozhka) – това е единственият въпрос.")
+    if uslovni:
+        ans["uslovni_etazhi"] = True
+        say.append("Одобрени чертежи няма, затова етажите са УСЛОВНИ – по контура от КАИС: Фоайе, Стълбище, Коридор и Помещение "
+                   "<етаж>.<номер>. Планът е РАБОТНА ЧЕРНОВА и се записва като такава – кажи го на потребителя с едно изречение, "
+                   "без да питаш за чертеж. Ако даде .cdr – plan_podlozhka заменя условните. За варианта: vhod „Фоайе“, pat "
+                   "„Стълбище,Коридор“ (на 1 етаж – „Коридор“), над партера sili.n_zashtita 1.")
+    elif not et:
+        say.append("Етажи няма и контурът на сградата не стига за условни – поискай одобрения чертеж (.cdr) с едно "
+                   "изречение (plan_podlozhka).")
     else:
         say.append("Липсващ етаж – plan_podlozhka с .cdr-а.")
     say.append("После за всеки вариант plan_variant; данните по чл. 6, ал. 1 – plan_promeni на /danni; накрая "
@@ -811,6 +841,14 @@ def a_plan_podlozhka(b):
         raise Problem("BAD_INPUT", "\"cdr_base64\" – .cdr файлът, base64") from None
     if len(blob) < 100:
         raise Problem("BAD_INPUT", "\"cdr_base64\" – .cdr файлът, base64")
+    if meta(path).get("uslovni"):      # a real drawing replaces the conditional floors, all of them
+        for k in floors(path):
+            os.remove(os.path.join(path, f"podlozhka_et{k}.json"))
+        meta(path, uslovni=False)
+        plan_ = jload(path, "plan.json")
+        plan_["danni"] = [r for r in plan_.get("danni") or [] if not str((r or [""])[0]).startswith("Забележка")]
+        plan_["fail"] = re.sub(r"_CHERNOVA$", "", plan_["fail"])
+        jsave(path, "plan.json", plan_)
     cdr = os.path.join(path, f"et{n}.cdr")
     with open(cdr, "wb") as f:
         f.write(blob)
@@ -965,10 +1003,13 @@ def a_plan_zapishi(b):
     whole = dict(plan)
     whole["situacionna"] = jload(path, "situacionna.json")
     jsave(out, plan["fail"] + ".json", whole)        # the whole input – the plan is rebuilt from it
-    saved = [obekti("zapishi", oid, "--vid", PLAN_VID, main, os.path.join(out, plan["fail"] + ".json"), cwd=path, env=env)]
+    chernova = bool(m.get("uslovni"))             # a draft on conditional floors is never filed as the approved plan
+    plan_vid = "shema_chernova_plan" if chernova else PLAN_VID
+    prefix = "shema_chernova_" if chernova else "shema_"
+    saved = [obekti("zapishi", oid, "--vid", plan_vid, main, os.path.join(out, plan["fail"] + ".json"), cwd=path, env=env)]
     for v in plan.get("varianti") or []:
         f = v["fail"]
-        vid = "shema_" + slug(re.sub(r"^Konkretna_shema_?", "", f, flags=re.I))
+        vid = prefix + slug(re.sub(r"^Konkretna_shema_?", "", f, flags=re.I))
         kj = os.path.join(out, f + ".json")
         jsave(out, f + ".json", v.get("konkretna") or {})
         files = [os.path.join(out, x) for x in (f + ".docx", f + ".dxf", f + "_grafichna.png", "Razchet_" + f + ".docx")]
@@ -982,7 +1023,7 @@ def a_plan_zapishi(b):
         docs = obekti("pokazhi", oid).get("dokumenti") or {}
     except (Problem, ValueError):
         docs = {}
-    want = {PLAN_VID} | {"shema_" + slug(re.sub(r"^Konkretna_shema_?", "", v["fail"], flags=re.I)) for v in plan.get("varianti") or []}
+    want = {plan_vid} | {prefix + slug(re.sub(r"^Konkretna_shema_?", "", v["fail"], flags=re.I)) for v in plan.get("varianti") or []}
     fs = [{"ime": f.get("name"), "link": f.get("link")} for k, d in docs.items() if k in want
           for f in d.get("failove") or [] if not str(f.get("name", "")).endswith(".json")]
     return {"zapisano": True, "obekt": oid, "otgovori": len(saved), "failove": fs,

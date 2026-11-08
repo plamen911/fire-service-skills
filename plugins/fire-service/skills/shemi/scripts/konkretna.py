@@ -96,6 +96,13 @@ def main():
         dx, dy = o_k["x0"] - o_p["x0"], o_k["y0"] - o_p["y0"]
         if abs(dx) > 1e-6 or abs(dy) > 1e-6:
             kais = _move(kais, dx, dy)
+    if pod.get("_uslovna"):       # no approved drawing to keep the scale: only what is around the building, 1:500
+        from shapely.geometry import Point as _Pn, Polygon as _Plg
+        pts_all = [p for r in pod["pomeshtenia"] for p in r["kontur"]]
+        here = _Pn(sum(p[0] for p in pts_all) / len(pts_all), sum(p[1] for p in pts_all) / len(pts_all))
+        near_ = lambda c: _Plg(c).buffer(0).centroid.distance(here) < 42                 # noqa: E731
+        kais["sgradi"] = [b for b in kais["sgradi"] if len(b.get("kontur") or []) >= 3 and near_(b["kontur"])]
+        kais["trevni"] = [t for t in kais.get("trevni", []) if len(t.get("kontur") or []) >= 3 and near_(t["kontur"])]
     sili = json.load(open(a.sili))
     if not sili.get("ok"):
         bad("разчетът (sili.py) не е успешен")
@@ -163,8 +170,12 @@ def main():
     hyd = next((v for v in kais.get("vodoiztochnitsi", []) if v.get("voda_id") == a.hidrant), None)
     if not hyd:
         bad(f"водоизточникът {a.hidrant} го няма в {a.kais} (kais.py … --voda)")
-    outline = next((b["kontur"] for b in kais["sgradi"] if not b.get("sasedna")), None)
     vc = rooms[a.vhod]["tsentar"]
+    from shapely.geometry import Point as _P0, Polygon as _Pl0
+    # the building the entrance is in – with several on the parcel it need not be the first one
+    outline = next((b["kontur"] for b in kais["sgradi"] if len(b.get("kontur") or []) >= 3
+                    and _Pl0(b["kontur"]).buffer(0.5).contains(_P0(vc))), None) \
+        or next((b["kontur"] for b in kais["sgradi"] if not b.get("sasedna")), None)
     bc0 = (sum(p[0] for p in outline) / len(outline), sum(p[1] for p in outline) / len(outline))
     face = unit((vc[0] - bc0[0], vc[1] - bc0[1]))        # the entrance room faces out of the building
     foot = vc
@@ -300,7 +311,12 @@ def main():
     if q_z > 0:                                          # the protection, when the calculation has it (б. „н“)
         lab.append((f"Qз = {num_bg(round(q_z, 1))} l/s", None))
     tekst = [t for t in pod["tekst"] if not _inside(room["kontur"], (t["x"], t["y"]))]
-    tekst.append({"x": round(cx, 2), "y": round(cy, 2), "tekst": "\n".join(t_ for t_, _ in lab), "kray": "sreda",
+    lx, ly = cx, cy
+    if pod.get("_uslovna") and room_area < 100:          # a small conditional room: its label would hide the fire
+        to_c = (bc0[0] - cx) * page_x[0] + (bc0[1] - cy) * page_x[1]      # towards the middle of the building: stays on the sheet
+        k_ = (w / 2 + 7.5) * (1 if to_c >= 0 else -1)
+        lx, ly = cx + page_x[0] * k_, cy + page_x[1] * k_
+    tekst.append({"x": round(lx, 2), "y": round(ly, 2), "tekst": "\n".join(t_ for t_, _ in lab), "kray": "sreda",
                   "fon": True, "razmer": fs_room})
     hl = add(add(hp, page_x, -4.0), page_y, 3.4)        # beside the hydrant, inside the drawing
     tekst.append({"x": round(hl[0], 2), "y": round(hl[1], 2), "tekst": a.hidrant_etiket or hyd.get("etiket", ""),
@@ -388,7 +404,8 @@ def main():
                     if nb] if names else [],                                               #   and the neighbours
          "zavartane": ang, "pole_m": 2, "cvetna": True, "legenda": False, "shlang_m": 20,
          "list": {"nomer": "", "obekt": a.obekt, "sobstvenik": a.sobstvenik, "izgotvil": a.izgotvil, "data": a.data,
-                  "fail": a.fail, "naslov": f"Конкретна схема за гасене на пожар в {ime.lower()} на {a.etazh} ет."},
+                  "fail": a.fail, "naslov": f"Конкретна схема за гасене на пожар в {ime.lower()} на {a.etazh} ет."
+                  + (" (чернова, разпределението е условно)" if pod.get("_uslovna") else "")},
          "tablitsa_3b": tablitsa_3b(a, sili),
          "_vrata": [round(dpt[0], 2), round(dpt[1], 2)], "_pomeshtenie": {k: room[k] for k in ("ime", "plosht_m2", "razmeri_m")}}
     json.dump(d, open(a.out, "w"), ensure_ascii=False, indent=1)

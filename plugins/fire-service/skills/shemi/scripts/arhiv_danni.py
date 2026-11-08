@@ -150,7 +150,8 @@ def keywords(name):
 
 def lookup(name, adres=""):
     """Папката на обекта в архива и данните от характеристиката му; {"namereno": False} – нищо сигурно."""
-    for words in (keywords(name), keywords(adres)):
+    # only by the name: an address finds other objects on a street of the same name, and takes minutes
+    for words in (keywords(name),):
         if not words:
             continue
         found = run_obekti("arhiv", " ".join(words))
