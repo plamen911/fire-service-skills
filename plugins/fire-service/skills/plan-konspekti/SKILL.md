@@ -119,11 +119,16 @@ python3 -c "import glob,os;print('\n'.join(glob.glob(os.path.expanduser('~/.clau
 ## Изход
 
 ```bash
-python3 scripts/build_konspekt.py data.json -o "/mnt/user-data/outputs/Plan-konspekt_<Тема>_<Дата>.docx"
-python3 scripts/build_otchet.py otchet.json -o "/mnt/user-data/outputs/Otchet_<Звена>_<Дата>.docx"
+python3 scripts/build_konspekt.py data.json -o "/mnt/user-data/outputs/16.11.26_Nikopol_Gulyantsi_Pl_Markov.docx"
+python3 scripts/build_otchet.py otchet.json -o "/mnt/user-data/outputs/16.11.26_Nikopol_Gulyantsi_Pl_Markov_Otchet.docx"
 ```
 
-- Име на файла – латиница: `Plan-konspekt_{Тема}_{ГГГГ-ММ-ДД}.docx`, `Otchet_{Звена}_{ГГГГ-ММ-ДД}.docx`.
+- Име на файла при `oc` – латиница: `{ДД.ММ.ГГ}_{Звено1}_{Звено2}_{Провеждащ}.docx`, а за отчета същото с
+  `_Otchet` накрая. Датата е на занятието (16.11.26); звената са само с името на мястото, без
+  „РСПБЗН“/„УПБЗН“ (Nikopol, Gulyantsi, Cherven_bryag, D_Mitropoliya); провеждащият е както в колоната
+  на план-графика, с инициала му (Пл.Марков → Pl_Markov, Б.Василев → B_Vasilev). Без дата на занятието –
+  датата на изготвяне. Така иска потребителят (08.11.2026 г.).
+- При `seminar` и `psp`: `Plan-konspekt_{Тема}_{ГГГГ-ММ-ДД}.docx`.
 - Предай файла със `SendUserFile` (или `present_files`). В чата кажи накратко: по кои актове е изложението,
   какво не е покрито и кои актове са с непроверена актуалност (⚠).
 
