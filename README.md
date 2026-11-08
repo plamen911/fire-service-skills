@@ -9,7 +9,7 @@
 > every push, shared templates must pass a personal-data check before saving, and each user has a
 > revocable API key ([data protection](docs/data-protection.md)).
 > Python · n8n · Google Drive · Firebase · MCP. Case study:
-> [docs/case-study-eptz.md](docs/case-study-eptz.md) · Author: Plamen Markov.
+> [docs/case-study-eptz.md](docs/case-study-eptz.md) · Author: [Plamen Markov](https://plamen.lynxlake.org/), Senior Backend & AI Engineer.
 
 Плъгин за Claude, разработен за РДПБЗН – Плевен: справки за причината за пожар, експертизи,
 удостоверения, графици за дежурства, нормативна уредба, райони на действие, търсене на
