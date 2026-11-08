@@ -50,32 +50,29 @@ def uslovni_test():
 
 
 def shema_parva_test():
-    """No saved situational scheme: it goes into the register first, the object is created when missing."""
-    import argparse
+    """No saved situational scheme: the plan stops and sends to the form - nothing is written or drawn."""
+    import contextlib
+    import io
     sys.path.insert(0, os.path.join(SKILL, "scripts"))
     import plan_avto as A
-    import plan_danni as P
-    calls = []
+    seen = {}
 
-    def fake(script, args, cwd=None, timeout=240):
-        calls.append(args)
-        return ({"nov": {"id": "OB-0099"}} if "nov" in args else {}), None
-    real, P.call = P.call, fake
+    def fake(a):
+        seen["bez_kais"] = a.bez_kais
+        return {"obekt": {"ime": "Обект"}, "ima_situacionna_shema": False, "failove": [], "kandidati": []}
+    real, A.plan_danni.collect = A.plan_danni.collect, fake
+    argv, out = sys.argv, io.StringIO()
     try:
         with tempfile.TemporaryDirectory() as d:
-            for n in ("Situacionna_shema.docx", "Situacionna_shema.dxf", "situacionna.json"):
-                open(os.path.join(d, n), "w").close()
-            a = argparse.Namespace(ime="Обект", masto="Плевен", adres="", kadastar="1.2.3", lat=None, lon=None)
-            res = {"v_registara": False, "obekt": {}}
-            assert A.save_scheme(a, res, d) == "OB-0099" and res["v_registara"]
-            z = [c for c in calls if "zapishi" in c][0]
-            assert z[z.index("--vid") + 1] == "situacionna_shema" and z.index("zapishi") > 0
-            assert [i for i, c in enumerate(calls) if "nov" in c] == [0], "created first, once"
-            A.save_scheme(a, res, d)
-            assert sum("nov" in c for c in calls) == 1, "not created twice"
+            sys.argv = ["plan_avto.py", "--ime", "Обект", "--kadastar", "1.2.3", "-d", d]
+            with contextlib.redirect_stdout(out):
+                A.main()
+            assert not [f for f in os.listdir(d) if f.endswith(".docx")]
     finally:
-        P.call = real
-    print("  ok  situacionna shema first")
+        A.plan_danni.collect, sys.argv = real, argv
+    r = json.loads(out.getvalue())
+    assert r["trebva_situacionna_shema"] and "формуляра" in r["za_claude"] and seen["bez_kais"], r
+    print("  ok  situacionna shema first, by the form")
 
 
 def plan_danni_test():

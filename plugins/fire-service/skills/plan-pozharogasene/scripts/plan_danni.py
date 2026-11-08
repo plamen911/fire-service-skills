@@ -136,7 +136,7 @@ def collect(a):
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
         # by the name only: the fallback by address is slow and matches other objects on a street of the same name
         f_arhiv = ex.submit(timed, call, ARHIV, [a.ime], None, 200)
-        f_kais = None if ima_shema else ex.submit(timed, kais, a, row, out, warn)
+        f_kais = None if ima_shema or getattr(a, "bez_kais", False) else ex.submit(timed, kais, a, row, out, warn)
         (arhiv, err), times["arhiv"] = f_arhiv.result()
         if err:
             warn.append(err)
