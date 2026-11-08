@@ -234,10 +234,14 @@ def approval(doc, approver, year, reg=False, width_cm=16.5):
     blank(doc, 2)
 
 
+TITLE_SIZE = 20          # the user's choice (08.11.2026): „П Л А Н — К О Н С П Е К Т“ at 20 pt
+
+
 def title(doc, text, subtitle_lines):
-    spaced = " ".join(text) if " " not in text.strip() else text   # „П Л А Н – К О Н С П Е К Т“
+    text = re.sub(r"[-–—]", "—", text)                              # the title keeps the long dash
+    spaced = " ".join(text) if " " not in text.strip() else text   # „П Л А Н — К О Н С П Е К Т“
     p = fmt(doc.add_paragraph(), CENTER, line=None)
-    run(p, spaced, size=16)
+    run(p, spaced, size=TITLE_SIZE)
     blank(doc)
     for line in subtitle_lines:
         para(doc, line, align=CENTER, indent=False)

@@ -20,6 +20,12 @@ import zipfile
 NO_RE = re.compile(r"№\s*(?=\S)")          # „№4“ → „№ 4“
 DASH_RE = re.compile(r"[–—]")              # „–“ and „—“ → „-“ (since 04.11.2026)
 LETTERHEAD_MARK = "ПОЖАРНА БЕЗОПАСНОСТ И ЗАЩИТА НА НАСЕЛЕНИЕТО"   # the letterhead keeps its dash
+SPACED_TITLE_RE = re.compile(r"^\s*(\S )+— (\S ?)+$")   # „П Л А Н — К О Н С П Е К Т“ keeps its long dash (08.11.2026)
+
+
+def keeps_dash(text):
+    """The letterhead lines and a spaced-letter title keep their dash; everything else gets „-“."""
+    return LETTERHEAD_MARK in text.upper() or bool(SPACED_TITLE_RE.match(text))
 BOLD_RE = re.compile(r"<w:b(Cs)?[ /]|<b/>|<b val=\"(1|true)\"")
 TAG_RE = re.compile(r"<[^>]+>")
 LETTERHEAD = ("МИНИСТЕРСТВО НА ВЪТРЕШНИТЕ РАБОТИ",
@@ -34,7 +40,7 @@ def typo(text, quotes=False):
     text = NO_RE.sub("№ ", str(text))
     if quotes:
         text = text.replace("”", "“")
-    if LETTERHEAD_MARK in text.upper():
+    if keeps_dash(text):
         return text
     return DASH_RE.sub("-", text)
 
@@ -76,7 +82,7 @@ def check_document(path, letterhead=True):
             problems.append(f"получер шрифт в {name}")
         for p in paras:
             m = DASH_RE.search(p)
-            if m and LETTERHEAD_MARK not in p.upper():
+            if m and not keeps_dash(p):
                 problems.append(f"тире „{m.group(0)}“ вместо „-“: …{p[max(0, m.start() - 20):m.start() + 20]}…")
             if re.search(r"№\S", p):
                 problems.append(f"„№“ без интервал: …{p[max(0, p.find('№') - 15):p.find('№') + 15]}…")
