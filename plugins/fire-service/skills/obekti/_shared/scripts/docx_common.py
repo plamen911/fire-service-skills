@@ -20,7 +20,7 @@ import zipfile
 NO_RE = re.compile(r"№\s*(?=\S)")          # „№4“ → „№ 4“
 DASH_RE = re.compile(r"[–—]")              # „–“ and „—“ → „-“ (since 04.11.2026)
 LETTERHEAD_MARK = "ПОЖАРНА БЕЗОПАСНОСТ И ЗАЩИТА НА НАСЕЛЕНИЕТО"   # the letterhead keeps its dash
-SPACED_TITLE_RE = re.compile(r"^\s*(\S )+— (\S ?)+$")   # „П Л А Н — К О Н С П Е К Т“ keeps its long dash (08.11.2026)
+SPACED_TITLE_RE = re.compile(r"^\s*(\S )+– (\S ?)+$")   # „П Л А Н – К О Н С П Е К Т“ keeps its dash „–“ (08.11.2026)
 
 
 def keeps_dash(text):
