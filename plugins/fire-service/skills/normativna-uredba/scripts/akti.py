@@ -24,6 +24,7 @@ data.json:
   "tier": "c",                         // c (по подразбиране: вътрешни заповеди, правила, писма) | a (действащ акт от ДВ)
   "in_force": "непроверен",            // да | не | отменен | остарял | непроверен | неприложимо
   "in_force_note": "вътрешен акт от 2010 г. …",
+  "superseded_by": "tier-c/ИМЕ.md",    // само при заменена редакция (in_force: не) - пътят на меродавния файл
   "subject": "Безопасност и здраве при работа на служителите от ПБС – …",
   "keywords": ["ЗБУТ", "лостове за спускане"],
   "iztochnik": "OCR на скан (снимки с телефон), сверен с изображенията на страниците",
@@ -41,7 +42,8 @@ data.json:
 
 Всяка команда отпечатва JSON. proveri връща "greshki" (файлът не се записва, докато ги има) и
 "preduprezhdeniya" (да се кажат на потребителя). sravni връща "reshenie": "dublikat" (вече е в базата),
-"prodalzhenie" (новото продължава записания файл – dopalni), "nova_redaktsiya" (същият акт, друга дата),
+"prodalzhenie" (новото продължава записания файл – dopalni), "nova_redaktsiya" (същият акт, друга дата -
+същият номер или почти същият текст с друга дата и номер),
 "chast" (новото е част от записания – нищо ново), "razlichen".
 """
 import argparse
@@ -179,6 +181,8 @@ def cmd_podgotvi(a):
           f"in_force: {in_force}"]
     if d.get("in_force_note"):
         fm.append(f"in_force_note: {yaml_str(typo(d['in_force_note']))}")
+    if d.get("superseded_by"):
+        fm.append(f"superseded_by: {yaml_str(d['superseded_by'])}")
     if tier == "A":
         fm.append(f"in_force_source: {yaml_str(d.get('in_force_source') or 'не е проверен – ' + datetime.date.today().strftime('%d.%m.%Y'))}")
     fm += [f"text_source: {yaml_str(typo(d['iztochnik']) + ' – въведен ' + datetime.date.today().strftime('%d.%m.%Y') + ' г.')}",
@@ -218,6 +222,11 @@ def check(text, name):
             err.append("keywords е празно (задължително за tier A)")
     if fm.get("in_force") and fm["in_force"] not in IN_FORCE:
         err.append(f"in_force „{fm['in_force']}“ не е позволена стойност")
+    sup = fm.get("superseded_by")
+    if fm.get("in_force") == "не" and not sup:
+        (err if tier == "A" else warn).append("заменена редакция без superseded_by")
+    if sup and not re.fullmatch(r"tier-[a-z-]+/.+\.md", str(sup)):
+        err.append(f"superseded_by „{sup}“ – трябва да е пътят на файл в базата (tier-…/ИМЕ.md)")
     if len(str(fm.get("title", ""))) > 300:
         err.append("title е над 300 знака")
     if not re.fullmatch(r"[A-Za-z0-9-]+(_[A-Za-z0-9-]+)+\.md", name):
@@ -319,6 +328,8 @@ def cmd_sravni(a):
     sim = difflib.SequenceMatcher(None, plain(new_body)[:20000], plain(old_body)[:20000]).ratio()
     if same_num and nd and od and nd[:10] != od[:10]:
         r, why = "nova_redaktsiya", f"същият номер, друга дата ({od} → {nd})"
+    elif nd and od and nd[:10] != od[:10] and sim >= 0.85:
+        r, why = "nova_redaktsiya", f"текстът съвпада на {sim:.0%}, но датата е друга ({od} → {nd})"
     elif new_set and old_set and min(new_set) > max(old_set) - 1 and min(new_set) <= max(old_set) + 1:
         r, why = "prodalzhenie", f"записаният свършва с чл. {max(old_set)}, новото започва от чл. {min(new_set)}"
     elif new_set and old_set and new_set <= old_set:
@@ -334,7 +345,7 @@ def cmd_sravni(a):
          "sledva": {"dublikat": "вече е в базата – не записвай, кажи кой файл е",
                     "chast": "нищо ново – не записвай",
                     "prodalzhenie": "dopalni ЗАПИСАНИЯ НОВОТО -o akt, после proveri и zapis",
-                    "nova_redaktsiya": "покажи двете дати и питай: нов файл с _edГГГГ-ММ-ДД или замяна",
+                    "nova_redaktsiya": "покажи двете дати и питай: нов файл с _edГГГГ-ММ-ДД или замяна; по-старата редакция е с in_force: не и superseded_by",
                     "razlichen": "друг документ – zapis"}[r]})
     return 0
 

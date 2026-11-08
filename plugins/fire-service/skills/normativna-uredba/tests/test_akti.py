@@ -99,6 +99,22 @@ ok(r["reshenie"] == "prodalzhenie", f"articles 7–9 continue 1–6: {r.get('res
 r = run("sravni", os.path.join(d, "p2.md"), f1)
 ok(r["reshenie"] in ("chast", "dublikat"), f"a part already in the base: {r.get('reshenie')}")
 
+new_ed = write(os.path.join(d, "MVR_Order_Iz-5678_Test_2024.md"), text.replace("act_number: \"Iз-1234\"", "act_number: \"Iз-5678\"").replace("edition_date: '2010-08-05'", "edition_date: '2024-03-01'"))
+r = run("sravni", new_ed, f1)
+ok(r["reshenie"] == "nova_redaktsiya", f"nearly the same text, other number and date: {r.get('reshenie')}")
+
+print("superseded_by")
+old = dict(DATA, in_force="не", superseded_by="tier-c/MVR_Order_Iz-5678_Test_2024.md")
+r = run("podgotvi", write(os.path.join(d, "data_old.json"), json.dumps(old, ensure_ascii=False)), "-o", os.path.join(d, "akt_old"))
+ok(not r["greshki"] and 'superseded_by: "tier-c/MVR_Order_Iz-5678_Test_2024.md"' in open(r["file"], encoding="utf-8").read(), "written to the front matter")
+ok(not any("superseded_by" in w for w in r["preduprezhdeniya"]), "no warning when it is given")
+no_sup = dict(DATA, in_force="не")
+r = run("podgotvi", write(os.path.join(d, "data_nosup.json"), json.dumps(no_sup, ensure_ascii=False)), "-o", os.path.join(d, "akt_nosup"))
+ok(not r["greshki"] and any("без superseded_by" in w for w in r["preduprezhdeniya"]), "tier C without it is a warning")
+bad_sup = dict(DATA, in_force="не", superseded_by="Iз-5678")
+r = run("podgotvi", write(os.path.join(d, "data_badsup.json"), json.dumps(bad_sup, ensure_ascii=False)), "-o", os.path.join(d, "akt_badsup"))
+ok(any("superseded_by" in e for e in r["greshki"]), "not a path in the base is an error")
+
 print("dopalni")
 r = run("dopalni", f1, p3, "-o", os.path.join(d, "out"), "--palen")
 ok(r["ok"] and r["chlenove"]["do"] == 9 and not r["greshki"], "articles 1–9 after appending")

@@ -151,7 +151,7 @@ python3 -c "import glob,os;print('\n'.join(glob.glob(os.path.expanduser('~/.clau
    - `prodalzhenie` – новите страници продължават записания файл:
      `python3 scripts/akti.py dopalni regs/… akt/<ИМЕ>.md -o akt` (`--palen`, когато документът вече е
      пълен) и запиши него – същото име, заменя се на място;
-   - `nova_redaktsiya` – покажи двете дати и питай;
+   - `nova_redaktsiya` – покажи двете дати и питай; по-старата редакция се записва с `in_force: не` и `superseded_by`;
    - `razlichen` – запиши.
 5. `python3 scripts/akti.py zapis akt/<ИМЕ>.md` (с конектора – `samples_save` с `kind: "regs-c"`).
 6. В чата: какво е записано (пътят и `link`), колко члена, несигурните места и дали документът е пълен
