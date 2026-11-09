@@ -71,6 +71,12 @@ def _in_parcel(p, parcels):
     return any(_inside(p, u["kontur"]) for u in parcels)
 
 
+def _in_building(p, buildings):
+    return any(_inside(p, b.get("kontur") or [(b["x"], b["y"]), (b["x"] + b["w"], b["y"]),
+                                              (b["x"] + b["w"], b["y"] + b["h"]), (b["x"], b["y"] + b["h"])])
+               for b in buildings)
+
+
 def _in_grass(p, grass):
     return any(_inside(p, g) for g in grass)
 
@@ -237,6 +243,9 @@ def popravi(data, box=None):
                 break
         if side is None:
             continue
+        if any(_in_building((s0[0] + side[0] * d_, s0[1] + side[1] * d_), data["sgradi"])
+               for s0 in cuts for d_ in (1.0, length / 2, length)):
+            continue                                   # a facade on the street edge: the arms would run into the building
         for s0 in cuts:
             data["ulitsi_rab"].append([s0, (s0[0] + side[0] * length, s0[1] + side[1] * length)])
         arms += 1

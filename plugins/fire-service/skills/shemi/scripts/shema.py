@@ -184,6 +184,7 @@ import sys
 import textwrap
 
 from matplotlib.patches import Circle, Polygon, Rectangle
+from matplotlib.path import Path as MplPath
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from znatsi import (FENCES, INK, LEGEND_ORDER, LINE_KINDS, NETWORKS, NOZZLES, PLACES, SPLITTERS, TRUCKS,  # noqa: E402,F401
@@ -1049,6 +1050,33 @@ def floors_text(e):
             break
     return " ".join(parts) if ok and parts else e
 
+def clear_of_walls(ax, text, t, data, s):
+    """A label with a white box across a building's outline would erase the wall: without the box, and moved up or
+    down – the nearest place clear of the walls and the dimension lines."""
+    walls = [b.get("kontur") or [(b["x"], b["y"]), (b["x"] + b["w"], b["y"]), (b["x"] + b["w"], b["y"] + b["h"]),
+                                 (b["x"], b["y"] + b["h"])] for b in data["sgradi"]]
+    lines = [MplPath(ax.transData.transform(list(k) + [k[0]])) for k in walls]
+    if not any(p.intersects_bbox(text.get_window_extent(ax.figure.canvas.get_renderer()), filled=False) for p in lines):
+        return
+    text.set_bbox(None)
+    box = text.get_window_extent(ax.figure.canvas.get_renderer())
+    for b in data["sgradi"]:
+        if b["razmeri"]:
+            lines += [MplPath(ax.transData.transform([(a_[0] + o[0], a_[1] + o[1]), (b_[0] + o[0], b_[1] + o[1])]))
+                      for a_, b_, _, o in wall_dimensions(b, 0.75 * s)]
+    lines += [MplPath(ax.transData.transform([r["ot"], r["do"]])) for r in data["razstoyaniya"]]
+    step = box.height / 3
+    for n in range(1, 31):
+        for sgn in (1, -1):
+            trial = box.translated(0, sgn * n * step)
+            if not any(p.intersects_bbox(trial, filled=False) for p in lines):
+                inv = ax.transData.inverted()
+                (x0, y0), (x1, y1) = inv.transform([(0, 0), (0, sgn * n * step)])
+                t["x"], t["y"] = t["x"] + x1 - x0, t["y"] + y1 - y0
+                text.set_position((t["x"], t["y"]))
+                return
+
+
 def building_label(b):
     """The building's name, and on the next line the floors, the fire-hazard category and the fire resistance
     (чл. 7, ал. 3, т. 1, б. „б“ и чл. 8 от Указанията): „Склад\n-1 +2 · Ф5Б · II ст.“."""
@@ -1270,10 +1298,12 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
     for x, y in data["pbt"]:
         draw_ring(ax, x, y, 0.6 * s, "ПБТ", fs - 1, pal.truck)
     for t in data["tekst"]:
-        ax.text(t["x"], t["y"], t["tekst"], ha={"desen": "right", "sreda": "center"}.get(t["kray"], "left"), va="center",
+        lbl = ax.text(t["x"], t["y"], t["tekst"], ha={"desen": "right", "sreda": "center"}.get(t["kray"], "left"), va="center",
                 fontsize=fs * t["razmer"], color=pal.truck if t["cvyat"] == "cherven" else INK, linespacing=1.15,
                 style="italic" if t["kursiv"] else "normal", rotation=t["ugal"], rotation_mode="anchor", zorder=9,
                 bbox=dict(fc="white", ec="none", pad=0.6) if t["fon"] else None)
+        if t["fon"]:
+            clear_of_walls(ax, lbl, t, data, s)
     # the north–south sign of the library – in the upper left corner (чл. 9, ал. 5 от Указанията Iз-2749);
     # the wind – in the legend, when there is one
     if d.get("sever", True):
