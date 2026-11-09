@@ -1446,7 +1446,7 @@ def draw_sheet(fig, lst, scale, fs):
         else:
             fax.text(bx + a + 1, y + h - 1.6, cap, ha="left", va="center", fontsize=small, zorder=3)
             if val:                                    # TITLE_PT; only a long value (the file name) – smaller, to fit
-                size = min(TITLE_PT, (b - a - 2) / (len(val) * 0.55 * 0.3528))
+                size = min(TITLE_PT, (b - a - 3) / (len(val) * 0.68 * 0.3528))
                 fax.text(bx + (a + b) / 2, y + 2.6, val, ha="center", va="center", fontsize=size, zorder=3)
     y, h = rows[2]
     fax.plot([bx + 63, bx + 63], [y, y + h], color=INK, lw=0.5, zorder=2)

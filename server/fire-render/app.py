@@ -552,7 +552,7 @@ def a_chertai(b):
     _, path = session(b.get("sesiya"))
     data = load(path)
     lst = data.setdefault("list", {})
-    if b.get("klient") and not lst.get("izgotvil"):
+    if b.get("klient") and lst.get("izgotvil") != b["klient"]:   # the holder of the key, also when correcting a draft by someone else
         lst["izgotvil"] = b["klient"]
         save(path, data)
     if not lst.get("obekt"):
@@ -567,7 +567,7 @@ def a_chertai(b):
     shutil.rmtree(out, ignore_errors=True)
     os.makedirs(out)
     res = json.loads(run([os.path.join(SHEMI, "scripts", "situacionna.py"), "shema.json", "-o",
-                          os.path.join(out, VID + ".docx")], cwd=path))
+                          os.path.join(out, VID + ".docx"), "--izgotvil", str(b.get("klient") or lst.get("izgotvil") or "")], cwd=path))
     res["prieto"], res["ne_e_popalneno"] = dop.get("prieto") or [], dop.get("ne_e_popalneno") or []
     for k in ("output", "grafichna", "dxf"):
         res.pop(k, None)

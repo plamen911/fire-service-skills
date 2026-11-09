@@ -7,7 +7,7 @@ import sys
 
 SKILL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(SKILL, "scripts"))
-from dopalni import dopalni  # noqa: E402
+from dopalni import dopalni, owner_text  # noqa: E402
 
 errors = []
 
@@ -40,7 +40,9 @@ ok(s.get("ogneustoychivost") == "II", "Ф2.1, 3 ет., 1900 m² → II ст. (II
 ok(d.get("obekt_gps", "").count(",") == 1, "obekt_gps от центъра на имота")
 ok(len(d.get("prohodi") or []) == 1 and d["prohodi"][0]["y"] in (10, 10.0), "имотът опира в улицата → вход на ръба ѝ")
 ok(any(o.get("etiket") == "Ел." for o in d.get("obekti") or []), "главното ел. табло")
-ok(d["list"].get("sobstvenik") == "общинска публична собственост (КАИС)", "собственикът – видът по КАИС")
+ok(d["list"].get("sobstvenik") == "Публична общинска собственост", "собственикът – видът по КАИС")
+ok(owner_text("Държавна публична") == "Публична държавна собственост", "собственикът - редът по КАИС се обръща")
+ok(owner_text("Частна") == "Частна собственост", "собственикът - една дума")
 row = d["tablitsa"]["redove"][0]
 ok(row.get("natovarvane_kg_m2") == "≈ 17" and row.get("gazove_vid") == "няма" and row.get("pgi_vid") == "няма",
    "таблицата – натоварване, газ и ПГИ по формуляра")

@@ -144,7 +144,7 @@ def route_to(target, ot=None, kadastar=None):
         return None
 
 
-def build(d, out):
+def build(d, out, izgotvil=None):
     if not isinstance(d, dict):
         bad("очаква се JSON обект")
     if not isinstance(d.get("list"), dict):
@@ -154,12 +154,11 @@ def build(d, out):
         bad("tablitsa: очаква се обект")
     lst = d["list"]
     gaps = []
-    if not str(lst.get("izgotvil") or "").strip():         # „Изготвил“ – потребителят по ключа
-        name = own_name()
-        if name:
-            lst["izgotvil"] = name
-        else:
-            gaps.append("„Изготвил“ е празно – подай \"list.izgotvil\" (името от whoami на конектора)")
+    name = izgotvil or own_name()                          # always the current user, also when correcting a draft by someone else
+    if name:
+        lst["izgotvil"] = name
+    elif not str(lst.get("izgotvil") or "").strip():
+        gaps.append("„Изготвил“ е празно – подай \"list.izgotvil\" (името от whoami на конектора)")
     target = str(d.get("obekt_gps") or "").strip()
     marshrut = None
     if target and (tab.get("razstoyanie_km") in (None, "") or tab.get("vreme_min") in (None, "")):
@@ -236,6 +235,7 @@ def main():
     ap = argparse.ArgumentParser(description="Ситуационна схема на обект (Приложения № 2а и № 2б към Iз-2749)")
     ap.add_argument("data", help="JSON на схемата с \"list\" и \"tablitsa\"")
     ap.add_argument("-o", "--out", required=True, help="изходен .docx")
+    ap.add_argument("--izgotvil", default="", help="иначе – потребителят по личния ключ (сървърът подава името от заявката)")
     a = ap.parse_args()
     try:
         with open(a.data, encoding="utf-8") as f:
@@ -243,7 +243,7 @@ def main():
     except (OSError, json.JSONDecodeError) as e:
         bad(f"не мога да прочета {a.data}: {e}")
     os.makedirs(os.path.dirname(os.path.abspath(a.out)) or ".", exist_ok=True)
-    print(json.dumps(build(d, a.out), ensure_ascii=False, indent=1))
+    print(json.dumps(build(d, a.out, a.izgotvil), ensure_ascii=False, indent=1))
 
 
 if __name__ == "__main__":

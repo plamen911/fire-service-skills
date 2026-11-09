@@ -75,6 +75,9 @@ NATOVARVANE = [
 STEPENI = ["I", "II", "III", "IV", "V"]
 
 
+GENERIC_BUILDING = "сграда със специално предназначение"
+
+
 def low1(s):
     return s[:1].lower() + s[1:] if s else s
 
@@ -364,9 +367,25 @@ def fill_owner(d, kais, prieto):
     vid = ((kais or {}).get("imot") or {}).get("sobstvenost")
     if str(lst.get("sobstvenik") or "").strip() or not vid:
         return
-    lst["sobstvenik"] = f"{low1(vid)} собственост (КАИС)"
-    prieto.append(f"собственик – „{low1(vid)} собственост“ по КАИС; ако намериш точното наименование в интернет, "
+    lst["sobstvenik"] = owner_text(vid)                # the source goes to the chat, not onto the sheet
+    prieto.append(f"собственик – „{lst['sobstvenik']}“ по КАИС; ако намериш точното наименование в интернет, "
                   "смени /list/sobstvenik")
+
+
+def owner_text(vid):
+    """КАИС: „Държавна публична“ → „Публична държавна собственост“, „Частна“ → „Частна собственост“."""
+    words = str(vid).split()
+    if len(words) == 2 and words[1].lower() in ("публична", "частна"):
+        words.reverse()
+    text = " ".join(words).lower()
+    return f"{text[:1].upper()}{text[1:]} собственост"
+
+
+def note_generic_buildings(d, prieto):
+    n = sum(1 for s in d.get("sgradi") or [] if str(s.get("etiket") or "").strip().lower() == GENERIC_BUILDING)
+    if n:
+        prieto.append(f"{n} сгради са само „със специално предназначение“ по КАИС - напиши кои са, с кратко име "
+                      "(„01 РУ“, „РДПБЗН“)")
 
 
 def fill_table(d, prieto):
@@ -410,6 +429,7 @@ def dopalni(d, kais=None):
     fill_tablo(d, vhod, prieto)
     fill_water(d, prieto)
     fill_owner(d, kais, prieto)
+    note_generic_buildings(d, prieto)
     fill_table(d, prieto)
     if not (d.get("formulyar") or {}).get("etazhi"):
         prieto.append("сутерен и тавански етаж – кадастърът дава само надземните; да се уточнят при огледа")

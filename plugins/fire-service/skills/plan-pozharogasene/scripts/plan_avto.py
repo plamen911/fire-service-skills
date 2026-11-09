@@ -35,6 +35,7 @@ SHEMI = os.path.join(SKILLS, "shemi", "scripts")
 sys.path.insert(0, HERE)
 sys.path.insert(0, SHEMI)
 import plan_danni  # noqa: E402
+import situacionna  # noqa: E402
 import uslovni_etazhi as U  # noqa: E402
 from shapely.geometry import Polygon  # noqa: E402
 
@@ -286,7 +287,7 @@ def main():
     t_dv = max(1, round(float(m.get("vreme_min") or 3)))
     tvr = 10 + t_dv + 5
     lst = sit.get("list") or {}
-    izgotvil = res.get("izgotvil") or lst.get("izgotvil") or ""
+    izgotvil = res.get("izgotvil") or situacionna.own_name() or lst.get("izgotvil") or ""
     dat = time.strftime("%d.%m.%Y")
     plan_v = []
     for k, v in enumerate(varianti, 1):

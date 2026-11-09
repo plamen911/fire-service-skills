@@ -643,9 +643,18 @@ def local(ring, x0, y0):
     return pts
 
 
+# КАИС purposes that never go on a scheme as they are (references/pravila.md, „Надписи на сградите“)
+BEZ_NADPIS = ("сграда за енергопроизводство",)    # the building and its floors stay, without a name
+BEZ_MYASTO = ("централна градска част",)          # says nothing on a sheet of a few streets
+
+
 def label(s):
-    """„Промишлена сграда“ – the purpose as КАИС gives it, first letter capital."""
+    """„Промишлена сграда“ – the purpose as КАИС gives it, first letter capital; a dwelling is „Жил. сграда“."""
     p = (s.get("predn") or "Сграда").strip()
+    if p.lower().startswith("жилищна сграда"):
+        return "Жил. сграда"
+    if p.lower() in BEZ_NADPIS:
+        return ""
     return p[:1].upper() + p[1:]
 
 
@@ -1144,7 +1153,7 @@ def cmd_obekt(a):
         for m_ in sorted(res.get("mesta") or [], key=lambda m_: math.dist(m_["tochka"], (cx, cy))):
             px, py = m_["tochka"]
             dist_out = math.hypot(max(bx0 - px, 0, px - bx1), max(by0 - py, 0, py - by1))
-            if dist_out > 400 or len(texts) >= 2:
+            if dist_out > 400 or len(texts) >= 2 or str(m_["ime"]).strip().lower() in BEZ_MYASTO:
                 continue
             m = 12.0
             if dist_out > 0:                           # on the edge of the terrain, on the place's side
