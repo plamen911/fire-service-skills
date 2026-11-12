@@ -13,8 +13,8 @@ scripts/shema.py: стените, белите маски, с които са и
 за посоките, пожарът и надписите за него (Fп, Iн, Qнг), автомобилите, хидрантите и линиите (червено и синьо),
 котите и стрелките им. Посоките са от стрелката „север“. С --kais мащабът и положението са от контура на
 сградата в КАИС – той е с предимство пред котите на стария чертеж: етажът се завърта по главната стена на
-сградата в КАИС и се разпъва до нейните размери по двете оси. Без --kais – мащабът е от котите, в метри по
-листа. Втори етаж на същата сграда – с --kato (същата основа, същата връзка с КАИС).
+сградата в КАИС и се разпъва до нейните размери по двете оси – така и чертеж без коти (стар план от CorelDRAW) се
+внася. Без --kais – мащабът е от котите, в метри по листа. Втори етаж на същата сграда – с --kato (същата основа, същата връзка с КАИС).
 
 Изход – JSON:
 {"podlozhka": [...],                       // за shema.py, полето "podlozhka"
@@ -137,10 +137,14 @@ def main():
                                                         (t["x"], t["y"])), default=None)
             if near and math.dist(*near) > 5:
                 ratios.append(v / math.dist(*near))
+    if not ratios and not ((a.kais and a.sgrada) or a.kato):
+        sys.exit("BAD_INPUT: в чертежа няма коти – мащабът не се определя (дай --kais и --sgrada: мащабът е от КАИС)")
+    # without dimensions the scale comes wholly from КАИС (or from the other floor with --kato): 1 m/mm is only
+    #   the starting point that fit_kais stretches to the outline of the building
+    k = statistics.median(ratios) if ratios else 1.0
     if not ratios:
-        sys.exit("BAD_INPUT: в чертежа няма коти – мащабът не се определя")
-    k = statistics.median(ratios)
-    if max(ratios) - min(ratios) > 0.08 * k:
+        notes.append("в чертежа няма коти – мащабът е само от контура в КАИС")
+    elif max(ratios) - min(ratios) > 0.08 * k:
         notes.append(f"котите дават различен мащаб ({min(ratios):.4f}–{max(ratios):.4f} m/mm) – взета е медианата")
 
     # north: the compass arrow – its tip is the point farthest from its centre
@@ -219,9 +223,9 @@ def main():
         _FIT["k_dims"] = k
         k *= _FIT["scale"]
         sx_, sy_ = (v_ * k / _FIT["scale"] for v_ in _FIT["scales"])
-        notes.append(f"мащабът е от контура в КАИС: по едната страна 1:{round(sx_ * 1000)}, по другата 1:{round(sy_ * 1000)}; "
-                     f"котите на чертежа дават "
-                     f"{min(ratios):.3f}–{max(ratios):.3f} m/mm – одобреният чертеж не е в мащаб")
+        notes.append(f"мащабът е от контура в КАИС: по едната страна 1:{round(sx_ * 1000)}, по другата 1:{round(sy_ * 1000)}"
+                     + (f"; котите на чертежа дават {min(ratios):.3f}–{max(ratios):.3f} m/mm – одобреният чертеж не е "
+                        f"в мащаб" if ratios else ""))
         notes = [n for n in notes if not n.startswith("котите дават")]
         if rms > 1.0:
             notes.append(f"чертежът се разминава с контура от КАИС средно с {rms:.1f} m – провери етажа и сградата")
