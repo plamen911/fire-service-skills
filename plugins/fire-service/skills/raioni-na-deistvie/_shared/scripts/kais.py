@@ -48,6 +48,7 @@ tarsi – какво намира търсачката на картата по 
 """
 import argparse
 import base64
+import concurrent.futures
 import datetime
 import json
 import math
@@ -66,6 +67,7 @@ CONFIG_FIELD = "kais_url"
 EXACT = ("проверена", "вик")       # the water sources whose coordinates are exact (voda.py)
 SMALL_M = 8.0                     # a building narrower than this is drawn without a name and dimensions
 MAX_RAZSTOYANIE_M = 80.0          # the neighbours farther than this get no distance line
+SASEDI_NAVEDNAZH = 4              # how many of them are read at the same time (n8n → КАИС)
 MAX_SASEDI = 12                   # the bordering parcels read for their buildings (one КАИС call each)
 
 
@@ -898,10 +900,20 @@ def cmd_obekt(a):
         if not a.bez_sasedni:
             street_ids = {r.get("id") for r in res.get("ulitsi_kais") or []}
             seen, near, failed = {s["id"] for s in sgradi}, [], 0
-            for pid in [i for i in imot.get("sasedi") or [] if i not in street_ids][:MAX_SASEDI]:
+            pids = [i for i in imot.get("sasedi") or [] if i not in street_ids][:MAX_SASEDI]
+
+            def neighbour(pid):
                 try:
-                    nb = call({"action": "obekt", "id": pid, "fon": False, "radius_m": 30})
+                    return call({"action": "obekt", "id": pid, "fon": False, "radius_m": 30})
                 except SystemExit:
+                    return None
+
+            # the parcels are read side by side, not one after another: a big object (Metro, 12 neighbours) took
+            #   two minutes here alone – past the time the connector on the free plan waits for an answer
+            with concurrent.futures.ThreadPoolExecutor(max_workers=SASEDI_NAVEDNAZH) as pool:
+                found_nb = list(pool.map(neighbour, pids))   # map keeps the order – the drawing stays the same
+            for nb in found_nb:
+                if nb is None:
                     failed += 1
                     continue
                 for s in nb.get("sgradi") or []:

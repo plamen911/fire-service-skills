@@ -117,6 +117,9 @@ def pull():
 
 def _restart():
     time.sleep(3)  # let the answers in progress finish
+    end = time.time() + 900
+    while time.time() < end and any(not j["done"].is_set() for j in list(JOBS.values())):
+        time.sleep(5)   # a long job (see JOBS) would be lost – the caller polls for it
     sys.stderr.write("app.py changed in the repository – restarting\n")
     os.execv(sys.executable, [sys.executable, APP])
 
@@ -155,7 +158,7 @@ def cleanup():
 
 def session(sid, new=False):
     if new:
-        sid = secrets.token_hex(8)
+        sid = sid or secrets.token_hex(8)   # the id handed out before the work started (a long job – see JOBS)
         os.makedirs(os.path.join(DATA, sid, "out"))
         return sid, os.path.join(DATA, sid)
     if not re.fullmatch(r"[0-9a-f]{16}", str(sid or "")):
@@ -449,7 +452,7 @@ def a_nachalo(b):
         raise Problem("BAD_INPUT", "nachalo иска името на обекта: opcii.ime (напр. „Драматично-куклен театър "
                                    "„Иван Радоев““) – по него се взима старият му план от архива и не се питат "
                                    "етажите, таблото, газът и инсталациите")
-    sid, path = session(None, new=True)
+    sid, path = session(b.get("_sid"), new=True)
     if found:
         meta(path, obekt=found["id"])
     if papka:  # an object already in the register: continue from its stored JSON
@@ -476,7 +479,7 @@ def a_nachalo(b):
             continue
         flag, takes = OPCII[k]
         args += [flag] if (takes is False or (takes == "maybe" and v is True)) else [flag, str(v)]
-    out = run(args, cwd=path)
+    out = run(args, cwd=path, timeout=480)   # a big object (Metro, 42 000 m²) – minutes; the caller waits in JOBS
     try:
         rez = json.loads(out)
     except ValueError:
@@ -752,7 +755,7 @@ def a_plan_nachalo(b):
     if VID + ".json" not in names:
         raise Problem("NOT_FOUND", f"{oid} няма запазена ситуационна схема: направи я сега, без да питаш (shema nachalo … zapishi), и пусни отново plan_nachalo", 404)
     papka = found.get("papka_id") or ""
-    sid, path = session(None, new=True)
+    sid, path = session(b.get("_sid"), new=True)
     fetch(papka, VID + ".json", os.path.join(path, "situacionna.json"))
     for name in sorted(n for n in names if n):
         m = re.fullmatch(PODLOZHKA_RE + r"\.json", name)
@@ -1038,6 +1041,91 @@ HANDLERS = {"nachalo": a_nachalo, "pokazhi": a_pokazhi, "promeni": a_promeni, "c
 
 # ------------------------------------------------------------------------------------------- server
 
+# ------------------------------------------------------------------------------------------- long jobs
+#
+# The connector on the free plan waits only so long for an answer – a big object (Metro, 42 000 m², 12 neighbouring
+# parcels) took almost four minutes for nachalo and the caller saw only "failed", then started it again. So every
+# action runs in a thread: what ends within WAIT seconds is answered as before; a longer one answers
+# {"sesiya", "raboti": true} and keeps going, and "pokazhi" with that sesiya (no pat) waits for it again and hands
+# over the very answer the action would have given. One job per session at a time.
+
+WAIT = 35            # seconds an answer may take – kept well below the connector's limit
+JOB_TTL = 3600
+JOBS = {}            # sesiya → {"done": Event, "rez": (status, obj), "action", "start", "predaden"}
+_jobs_lock = threading.Lock()
+
+
+def execute(action, b):
+    """(status, answer) of one action – the errors as the model sees them."""
+    try:
+        if action not in N8N_FREE:
+            n8n_up()
+        return 200, HANDLERS[action](b)
+    except Problem as e:
+        return e.status, {"error": f"{e.code}: {e}"}
+    except subprocess.TimeoutExpired:
+        return 504, {"error": "TIMEOUT: скриптът не отговори навреме"}
+    except Exception as e:  # noqa: BLE001 – the answer goes back to the model, not a stack trace
+        return 500, {"error": f"SERVER_ERROR: {type(e).__name__}: {e}"[:600]}
+
+
+def still_running(sid, job):
+    return 200, {"sesiya": sid, "raboti": True, "action": job["action"], "sekundi": round(time.time() - job["start"]),
+                 "za_claude": "Обектът е голям и сървърът още смята – това НЕ е грешка и сървърът работи. Веднага "
+                              "извикай shema с action \"pokazhi\" и тази sesiya, БЕЗ pat: връща отговора на "
+                              f"{job['action']}, щом е готов. Не пускай {job['action']} отново. На потребителя кажи само, "
+                              "че обектът е голям и изчислението отнема няколко минути."}
+
+
+def wait_job(sid, job):
+    if not job["done"].wait(WAIT):
+        return still_running(sid, job)
+    job["predaden"] = True
+    return job["rez"]
+
+
+def start_job(action, b):
+    with _jobs_lock:
+        for k, j in list(JOBS.items()):          # forget what was handed over long ago
+            if j["done"].is_set() and time.time() - j["start"] > JOB_TTL:
+                JOBS.pop(k, None)
+        sid = str(b.get("sesiya") or "") if action not in ("nachalo", "plan_nachalo") else ""
+        if sid and sid in JOBS and not JOBS[sid]["done"].is_set():
+            return sid, None                       # the session is still busy with the previous action
+        if not sid:
+            sid = secrets.token_hex(8)              # nachalo: the session gets this id when it is made
+            b["_sid"] = sid
+        job = {"done": threading.Event(), "rez": None, "action": action, "start": time.time(), "predaden": False}
+        if re.fullmatch(r"[0-9a-f]{16}", sid):
+            JOBS[sid] = job
+
+    def work():
+        try:
+            job["rez"] = execute(action, b)
+        finally:
+            job["done"].set()
+    threading.Thread(target=work, daemon=True).start()
+    return sid, job
+
+
+def answer(action, b):
+    b.pop("_sid", None)                             # set only here, never by the caller
+    sid = str(b.get("sesiya") or "")
+    job = JOBS.get(sid)
+    if action == "pokazhi" and job and not job["predaden"] and not b.get("pat"):
+        return wait_job(sid, job)                   # the poll for a long job
+    if job and not job["done"].is_set():
+        if action == "pokazhi":
+            return wait_job(sid, job)
+        return still_running(sid, job)
+    if action in N8N_FREE:
+        return execute(action, b)
+    sid, job = start_job(action, b)
+    if job is None:
+        return still_running(sid, JOBS[sid])
+    return wait_job(sid, job)
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "fire-render"
 
@@ -1071,9 +1159,7 @@ class Handler(BaseHTTPRequestHandler):
             action = str(b.get("action", ""))
             if action not in HANDLERS:
                 raise Problem("BAD_INPUT", "action е " + ", ".join(ACTIONS))
-            if action not in N8N_FREE:
-                n8n_up()
-            self.send(200, HANDLERS[action](b))
+            self.send(*answer(action, b))
         except Problem as e:
             self.send(e.status, {"error": f"{e.code}: {e}"})
         except subprocess.TimeoutExpired:

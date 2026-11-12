@@ -193,4 +193,36 @@ del os.environ["FIRE_SERVICE_N8N_BASE"]
 api_config._cache.clear()
 ok(api_config.load()["obekti_url"].startswith("https://n8n."), "public address elsewhere")
 
+# long jobs: an action past WAIT answers "raboti", pokazhi without pat waits for it and hands over its answer
+import threading  # noqa: E402
+import time  # noqa: E402
+
+gate = threading.Event()
+
+
+def slow_nachalo(b):
+    gate.wait(5)
+    sid, _ = app.session(b.get("_sid"), new=True)
+    app.save(os.path.join(app.DATA, sid), {"sgradi": []})
+    return {"sesiya": sid, "gotovo": True}
+
+
+real_up, real_h, real_wait = app.n8n_up, app.HANDLERS["nachalo"], app.WAIT
+app.n8n_up, app.HANDLERS["nachalo"], app.WAIT = (lambda: None), slow_nachalo, 0.2
+st, first = app.answer("nachalo", {"kadastar": "1.2.3", "_sid": "../../etc"})
+ok(st == 200 and first.get("raboti") and len(first["sesiya"]) == 16, "long nachalo: raboti + sesiya")
+st, again = app.answer("promeni", {"sesiya": first["sesiya"], "operacii": []})
+ok(again.get("raboti"), "another action while the job runs: raboti, nothing started")
+st, poll = app.answer("pokazhi", {"sesiya": first["sesiya"]})
+ok(poll.get("raboti"), "poll before the end: still raboti")
+gate.set()
+app.WAIT = 5
+st, poll = app.answer("pokazhi", {"sesiya": first["sesiya"]})
+ok(st == 200 and poll.get("gotovo") and poll["sesiya"] == first["sesiya"], "poll hands over the answer of nachalo")
+st, part = app.answer("pokazhi", {"sesiya": first["sesiya"], "pat": "/sgradi"})
+ok(part.get("stoynost") == [], "after it: pokazhi as before")
+st, fast = app.answer("nachalo", {"kadastar": "1.2.3"})
+ok(fast.get("gotovo") and not fast.get("raboti"), "a short job answers at once, as before")
+app.n8n_up, app.HANDLERS["nachalo"], app.WAIT = real_up, real_h, real_wait
+
 print(f"OK – {checks} проверки")
