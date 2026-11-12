@@ -444,8 +444,8 @@ def test_incident(tmp):
         code, r = js(store, "import", f)
         assert code == 0, r
     rec = {"id": 77001, "num_event": 12, "dat": "2026-10-09 03:30:00", "casulaty": "пожар с преки материални загуби",
-           "unit": "У ПБЗН - Сторгозия", "location": "гр. Плевен", "object": "склад", "orderlyturn": "02 ДС",
-           "forces": "служ 8; 3 ПА; 1 - РС ПБЗН - Плевен; 2 - У ПБЗН - Сторгозия;", "closed": "2026-10-09 05:10:00"}
+           "unit": "У ПБЗН – Сторгозия", "location": "гр. Плевен", "object": "склад", "orderlyturn": "02 ДС",
+           "forces": "служ 8; 3 ПА; 1 – РС ПБЗН – Плевен; 2 – У ПБЗН – Сторгозия;", "closed": "2026-10-09 05:10:00"}
     path = reading(tmp, "rec.json", [rec])
     code, r = js(store, "pri-proizshestvie", "--zapis", path)
     assert code == 0 and r["kam"] == "2026-10-09 03:30" and r["proizshestvie"]["orderlyturn"] == "02 ДС", r
@@ -467,10 +467,10 @@ def test_incident(tmp):
     assert all(p["ot"] == "2026-10-09 08:00" for g in later["grafici"] for p in g["dezhurni"]), later
 
     # a unit with no stored schedule: said, not guessed; the operations centre is still given
-    code, r = js(store, "pri-proizshestvie", "--zapis", reading(tmp, "lv.json", dict(rec, unit="РС ПБЗН - Левски",
-                                                                                    forces="служ 4; 1 ПА; 1 - РС ПБЗН - Левски;")))
+    code, r = js(store, "pri-proizshestvie", "--zapis", reading(tmp, "lv.json", dict(rec, unit="РС ПБЗН – Левски",
+                                                                                    forces="служ 4; 1 ПА; 1 – РС ПБЗН – Левски;")))
     assert r["sluzhbi_bez_grafik"] == ["РСПБЗН – Левски"] and [g["grafik"] for g in r["grafici"]] == ["oc"], r
-    code, r = js(store, "pri-proizshestvie", "--zapis", reading(tmp, "cb.json", dict(rec, unit="РС ПБЗН - Червен бряг", forces="")))
+    code, r = js(store, "pri-proizshestvie", "--zapis", reading(tmp, "cb.json", dict(rec, unit="РС ПБЗН – Червен бряг", forces="")))
     assert r["sluzhbi"] == ["РСПБЗН – Червен бряг"], r
 
     # no record: date, hour and unit; several records in the file need --id; a month with no schedule is said

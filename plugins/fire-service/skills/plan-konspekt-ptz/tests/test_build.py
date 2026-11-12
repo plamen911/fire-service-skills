@@ -66,10 +66,10 @@ def test_full():
     check(res["obshto_minuti"] == 77, f"the total time is the sum of the rows, 45″ rounded up ({res['obshto_minuti']})")
     text, doc = text_of(out)
     for want in ("УТВЪРЖДАВАМ:", "П Л А Н – К О Н С П Е К Т", "за провеждане на пожаро-тактическо занятие",
-                 "със състава на II дежурна смяна при РСПБЗН - Левски",
+                 "със състава на II дежурна смяна при РСПБЗН – Левски",
                  "I. Тема: Гасене на пожар в склад за дървен материал", "Трениране на КЕ за ръководство на екипите",
                  "III. Метод: Практически.", "V. Време: от 09:00 ч. до 10:20 ч. на 28.10.2026 г.",
-                 "VI. Участващи: личният състав на II ДС при РСПБЗН - Левски", "VII. Материално осигуряване: флагчета",
+                 "VI. Участващи: личният състав на II ДС при РСПБЗН – Левски", "VII. Материално осигуряване: флагчета",
                  "ОЧАКВАНИ ДЕЙСТВИЯ", "Общо", "77′", "РАЗРАБОТИЛ:", "СХЕМА",
                  "за разполагане на силите и средствата при провеждане на ПТЗ в склад"):
         check(want in text, f"has „{want}“")
@@ -104,20 +104,20 @@ def test_old_terms_and_missing():
     for want in ("диспечер", "ДБС", "РОД", "отделени", "бо", "без схема", "адрес"):
         check(want.lower() in w.lower(), f"warns about „{want}“")
     text, _ = text_of(out)
-    check("НАЧАЛНИК НА" in text and "РСПБЗН - ЛЕВСКИ:" in text, "the chief of the unit approves (from the staff list)")
+    check("НАЧАЛНИК НА" in text and "РСПБЗН – ЛЕВСКИ:" in text, "the chief of the unit approves (from the staff list)")
 
 
 def test_upbzn():
     print("build_ptz.py - УПБЗН")
     d = fixture()
-    d["zveno"] = "УПБЗН - Сторгозия"
+    d["zveno"] = "УПБЗН – Сторгозия"
     d.pop("approver")
     d.pop("shema")
     r, out = run(d)
     check(r.returncode == 0, "builds for a УПБЗН")
     if r.returncode == 0:
         text, _ = text_of(out)
-        check("УПБЗН - СТОРГОЗИЯ:" in text and "при УПБЗН - Сторгозия" in text, "the УПБЗН is in the approval and the title")
+        check("УПБЗН – СТОРГОЗИЯ:" in text and "при УПБЗН – Сторгозия" in text, "the УПБЗН is in the approval and the title")
 
 
 def test_kais_scheme():
@@ -149,7 +149,7 @@ def test_kais_scheme():
 
 def test_bad_input():
     print("build_ptz.py - bad input")
-    for change, what in (({"zveno": ""}, "no unit"), ({"zveno": "РСПАБ - Левски"}, "an old unit name"),
+    for change, what in (({"zveno": ""}, "no unit"), ({"zveno": "РСПАБ – Левски"}, "an old unit name"),
                          ({"hod": []}, "no rows"), ({"hod": [{"obstanovka": "Пожар"}]}, "a row without actions"),
                          ({"shema": "missing.json"}, "a missing scheme file")):
         d = fixture()

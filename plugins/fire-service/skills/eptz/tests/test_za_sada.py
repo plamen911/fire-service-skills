@@ -43,11 +43,11 @@ with tempfile.TemporaryDirectory() as d:
     out = build(MD, os.path.join(d, "Za_sada_test.docx"))
     ok(os.path.exists(out), "the .docx is written")
     problems = check_document(out, letterhead=False)
-    ok(problems == [], f"common rules hold (no bold, dash „-“, „№ 4“): {problems}")
+    ok(problems == [], f"common rules hold (no bold, dash „–“, „№ 4“): {problems}")
     text = "\n".join(p.text for p in docx.Document(out).paragraphs)
     ok(text.splitlines()[0] == NOTE, "first line says it is an internal note")
     ok("**" not in text, "markdown emphasis is dropped")
-    ok("№ 3-7" in text and "–" not in text, "dashes become „-“")
+    ok("№ 3-7" in text and " - " not in text, "dash between words „–“, ranges „-“")
     ok("небрежност" in text and "Присъствахте ли на огледа?" in text, "the content is kept")
 
 if failures:

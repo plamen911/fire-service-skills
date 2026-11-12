@@ -23,7 +23,7 @@ from docx.shared import Cm, Pt
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_shared", "scripts"))
 from docx_common import report, typo, typo_all  # noqa: E402  (the common typography rules and the final check)
 
-NOTE = "Вътрешна бележка за вещото лице - не се прилага по делото"
+NOTE = "Вътрешна бележка за вещото лице – не се прилага по делото"
 FONT = "Times New Roman"
 
 

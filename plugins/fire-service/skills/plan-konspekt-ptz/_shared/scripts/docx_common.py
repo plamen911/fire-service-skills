@@ -18,13 +18,14 @@ import sys
 import zipfile
 
 NO_RE = re.compile(r"№\s*(?=\S)")          # „№4“ → „№ 4“
-DASH_RE = re.compile(r"[–—]")              # „–“ and „—“ → „-“ (since 04.11.2026)
+DASH_RE = re.compile(r"(?<=\s)-(?=\s)|—")  # a lone „-“ between spaces and „—“ → „–“ (since 09.11.2026)
+RANGE_RE = re.compile(r"(?<=\d)[–—](?=\d)")   # „3–7“ → „3-7“ (ranges keep the hyphen)
 LETTERHEAD_MARK = "ПОЖАРНА БЕЗОПАСНОСТ И ЗАЩИТА НА НАСЕЛЕНИЕТО"   # the letterhead keeps its dash
 SPACED_TITLE_RE = re.compile(r"^\s*(\S )+– (\S ?)+$")   # „П Л А Н – К О Н С П Е К Т“ keeps its dash „–“ (08.11.2026)
 
 
 def keeps_dash(text):
-    """The letterhead lines and a spaced-letter title keep their dash; everything else gets „-“."""
+    """The letterhead lines and a spaced-letter title are left as they are."""
     return LETTERHEAD_MARK in text.upper() or bool(SPACED_TITLE_RE.match(text))
 BOLD_RE = re.compile(r"<w:b(Cs)?[ /]|<b/>|<b val=\"(1|true)\"")
 TAG_RE = re.compile(r"<[^>]+>")
@@ -34,15 +35,16 @@ THIRD_LINE = re.compile(r"(РЕГИОНАЛНА ДИРЕКЦИЯ|РАЙОННА 
 
 
 def typo(text, quotes=False):
-    """„№ 4“; the dash is „-“: „–“ and „—“ become „-“ (the user's rule since 04.11.2026). The letterhead lines
-    („… ПОЖАРНА БЕЗОПАСНОСТ И ЗАЩИТА НА НАСЕЛЕНИЕТО” – ПЛЕВЕН“) keep their dash as in the model.
+    """„№ 4“; the dash between words is „–“: a lone „-“ between spaces and „—“ become „–“ (the user's rule
+    since 09.11.2026); hyphens inside words and numbers („2-3 °C“, „1234р-56789“) stay „-“. The letterhead
+    lines and a spaced-letter title are left as they are.
     With quotes=True the closing quote „”“ becomes „“ “."""
     text = NO_RE.sub("№ ", str(text))
     if quotes:
         text = text.replace("”", "“")
     if keeps_dash(text):
         return text
-    return DASH_RE.sub("-", text)
+    return DASH_RE.sub("–", RANGE_RE.sub("-", text))
 
 
 def typo_all(doc, tag=None, quotes=False):
@@ -83,7 +85,7 @@ def check_document(path, letterhead=True):
         for p in paras:
             m = DASH_RE.search(p)
             if m and not keeps_dash(p):
-                problems.append(f"тире „{m.group(0)}“ вместо „-“: …{p[max(0, m.start() - 20):m.start() + 20]}…")
+                problems.append(f"тире „{m.group(0)}“ вместо „–“: …{p[max(0, m.start() - 20):m.start() + 20]}…")
             if re.search(r"№\S", p):
                 problems.append(f"„№“ без интервал: …{p[max(0, p.find('№') - 15):p.find('№') + 15]}…")
             m = re.search(r"\{\{\w+\}\}", p)
