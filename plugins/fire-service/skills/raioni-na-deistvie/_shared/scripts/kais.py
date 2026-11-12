@@ -794,6 +794,21 @@ def cmd_obekt(a):
 
     imot, sgradi = res["imot"], res.get("sgradi") or []
     notes = list(res.get("zabelezhki") or [])
+    # the bordering parcels start now, side by side, while the terrain, the water and the wider query go on – they
+    #   used to come last, one after another (Metro, 12 neighbours: two minutes)
+    sasedi_pool = concurrent.futures.ThreadPoolExecutor(max_workers=SASEDI_NAVEDNAZH)
+    sasedi_zaqvki = {}
+
+    def neighbour(pid):
+        try:
+            return call({"action": "obekt", "id": pid, "fon": False, "radius_m": 30})
+        except SystemExit:
+            return None
+
+    if not a.bez_sasedni:
+        street0 = {r.get("id") for r in res.get("ulitsi_kais") or []}
+        for pid in [i for i in imot.get("sasedi") or [] if i not in street0][:MAX_SASEDI]:
+            sasedi_zaqvki[pid] = sasedi_pool.submit(neighbour, pid)
     summary = {
         "imot": {k: imot.get(k) for k in ("id", "adres", "ntp", "plosht_m2", "teritoriya", "sobstvenost") if imot.get(k)},
         "sgradi": [], "kais_json": out, "fon": fon_png,
@@ -901,17 +916,10 @@ def cmd_obekt(a):
             street_ids = {r.get("id") for r in res.get("ulitsi_kais") or []}
             seen, near, failed = {s["id"] for s in sgradi}, [], 0
             pids = [i for i in imot.get("sasedi") or [] if i not in street_ids][:MAX_SASEDI]
-
-            def neighbour(pid):
-                try:
-                    return call({"action": "obekt", "id": pid, "fon": False, "radius_m": 30})
-                except SystemExit:
-                    return None
-
-            # the parcels are read side by side, not one after another: a big object (Metro, 12 neighbours) took
-            #   two minutes here alone – past the time the connector on the free plan waits for an answer
-            with concurrent.futures.ThreadPoolExecutor(max_workers=SASEDI_NAVEDNAZH) as pool:
-                found_nb = list(pool.map(neighbour, pids))   # map keeps the order – the drawing stays the same
+            for pid in pids:                           # a street found only by the wider query is not a neighbour
+                if pid not in sasedi_zaqvki:
+                    sasedi_zaqvki[pid] = sasedi_pool.submit(neighbour, pid)
+            found_nb = [sasedi_zaqvki[pid].result() for pid in pids]   # in their order – the drawing stays the same
             for nb in found_nb:
                 if nb is None:
                     failed += 1

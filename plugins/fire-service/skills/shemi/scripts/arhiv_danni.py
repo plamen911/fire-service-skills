@@ -17,10 +17,10 @@ vodna_zavesa (True). Каквото текстът не казва ясно – 
 всяка данна носи годината на плана, а план отпреди 2010 г. е ориентир – „да се провери на място“.
 """
 import argparse
+import concurrent.futures
 import json
 import os
 import re
-import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -38,14 +38,55 @@ GENERIC = {"театър", "магазин", "сграда", "склад", "об
            "ад", "ет.", "център", "детска", "градина", "училище", "на", "и", "за", "в"}
 
 
-def run_obekti(*args):
-    if not OBEKTI:
-        return None
-    try:
-        r = subprocess.run([sys.executable, OBEKTI, *args], capture_output=True, text=True, timeout=180)
-        return json.loads(r.stdout) if r.returncode == 0 else None
-    except (OSError, ValueError, subprocess.TimeoutExpired):
-        return None
+class Arhiv:
+    """The archive read in this process, with one store: the folder ids are looked up once and the texts are read
+    side by side. Before, every step was a separate obekti.py that walked root → archive → group → object again –
+    about 30 n8n calls one after another, two minutes for Metro."""
+
+    def __init__(self):
+        sys.path.insert(0, os.path.dirname(OBEKTI))
+        import obekti  # noqa: E402
+        self.o = obekti
+        self.store = obekti.Remote()
+        self._ids = {}
+
+    def folder(self, papka=""):
+        if papka not in self._ids:
+            if not papka:
+                root = self.store.list("root")
+                cur = next((f["id"] for f in root if f.get("folder") and f["name"] == self.o.ARHIV), None)
+            else:
+                parent, _, last = papka.rpartition("/")
+                cur = next((f["id"] for f in self.store.list(self.folder(parent)) if f.get("folder")
+                            and f["name"] == last.strip()), None)
+            if not cur:
+                raise self.o.Problem(f"NOT_FOUND: {papka or self.o.ARHIV}")
+            self._ids[papka] = cur
+        return self._ids[papka]
+
+    def tarsi(self, tekst):
+        data = self.store.get(self.folder(), self.o.ARHIV_INDEX)
+        rows = self.o.arhiv_rows((data or b"").decode("utf-8"))
+        words = self.o.fold(tekst).split()
+        return [r for r in rows if all(w in self.o.fold(" ".join(r.values())) for w in words)]
+
+    def failove(self, papka):
+        return [f for f in self.store.list(self.folder(papka)) if not f.get("folder")]
+
+    def tekstove(self, papka, names):
+        """{name: text} – read at the same time."""
+        fid = self.folder(papka)
+
+        def one(n):
+            try:
+                d = self.store.get(fid, n)
+                return n, (d or b"").decode("utf-8", errors="replace")[:self.o.ARHIV_MAX_TEXT]
+            except Exception:  # noqa: BLE001 – a text that does not come is simply not used
+                return n, ""
+        if not names:
+            return {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(6, len(names))) as pool:
+            return dict(pool.map(one, names))
 
 
 def clean(text):
@@ -151,30 +192,32 @@ def keywords(name):
 def lookup(name, adres=""):
     """Папката на обекта в архива и данните от характеристиката му; {"namereno": False} – нищо сигурно."""
     # only by the name: an address finds other objects on a street of the same name, and takes minutes
-    for words in (keywords(name),):
-        if not words:
-            continue
-        found = run_obekti("arhiv", " ".join(words))
-        rows = [r for r in (found or {}).get("redove") or [] if r.get("grupa") == "Оперативни планове"]
-        if len(rows) == 1:
-            row = rows[0]
-            break
-    else:
+    words = keywords(name)
+    if not words or not OBEKTI:
         return {"namereno": False}
-    listing = run_obekti("arhiv", "--papka", row["papka"]) or {}
-    texts = [f["name"] for f in listing.get("failove") or [] if f["name"].lower().endswith(".md")]
-    texts.sort(key=lambda n: (0 if "harak" in n.lower() else 1 if "main" in n.lower() or "pz" in n.lower() else 2))
+    try:
+        ar = Arhiv()
+        rows = [r for r in ar.tarsi(" ".join(words)) if r.get("grupa") == "Оперативни планове"]
+        if len(rows) != 1:
+            return {"namereno": False}
+        row = rows[0]
+        files = ar.failove(row["papka"])
+        texts = [f["name"] for f in files if f["name"].lower().endswith(".md")]
+        texts.sort(key=lambda n: (0 if "harak" in n.lower() else 1 if "main" in n.lower() or "pz" in n.lower() else 2))
+        razchet = [n_ for n_ in texts if re.search(r"raz[4c]h?et", n_, re.I)][:3]
+        drugi = [n_ for n_ in texts if not re.search(r"raz[4c]h?et", n_, re.I)][:3]
+        tekst = ar.tekstove(row["papka"], razchet + drugi)
+    except Exception:  # noqa: BLE001 – no key, no n8n, no archive: the scheme goes on without the old plan
+        return {"namereno": False}
     danni, izr = {}, {}
     varianti = []
-    for name_ in [n_ for n_ in texts if re.search(r"raz[4c]h?et", n_, re.I)][:3]:
-        r = run_obekti("arhiv", "--papka", row["papka"], "--chete", name_) or {}
-        for v in variants(r.get("tekst") or ""):
+    for name_ in razchet:
+        for v in variants(tekst.get(name_) or ""):
             if not any(v["ime"].lower() == w["ime"].lower() for w in varianti):
                 varianti.append(v)
-    pdfs = [f["name"] for f in listing.get("failove") or [] if f["name"].lower().endswith(".pdf")]
-    for name_ in [n_ for n_ in texts if not re.search(r"raz[4c]h?et", n_, re.I)][:3]:
-        r = run_obekti("arhiv", "--papka", row["papka"], "--chete", name_) or {}
-        d_, w_ = extract(r.get("tekst") or "")
+    pdfs = [f["name"] for f in files if f["name"].lower().endswith(".pdf")]
+    for name_ in drugi:
+        d_, w_ = extract(tekst.get(name_) or "")
         for k, v in d_.items():
             danni.setdefault(k, v)
         for k, v in w_.items():

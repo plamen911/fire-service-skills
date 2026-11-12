@@ -470,16 +470,20 @@ def a_nachalo(b):
         args += ["--link", str(b["link"])]
     else:
         raise Problem("BAD_INPUT", "nachalo иска \"kadastar\", \"lat\"+\"lon\", \"link\" или \"papka_id\"")
-    plan = old_plan(b, opcii)
-    dn = plan.get("danni") or {}
-    if dn.get("vodoprovod_mm") and not opcii.get("vodoprovod"):   # the water main of the old plan, not 70/80
-        opcii = dict(opcii, vodoprovod=dn["vodoprovod_mm"])
+    # the old plan (the archive, ~30 s) is read while КАИС (~1–2 min) runs – one after the other they took minutes
+    arhiv = {}
+    th = threading.Thread(target=lambda: arhiv.update(old_plan(b, opcii)), daemon=True)
+    th.start()
     for k, v in opcii.items():
         if k not in OPCII or v in (None, False, ""):
             continue
         flag, takes = OPCII[k]
         args += [flag] if (takes is False or (takes == "maybe" and v is True)) else [flag, str(v)]
-    out = run(args, cwd=path, timeout=480)   # a big object (Metro, 42 000 m²) – minutes; the caller waits in JOBS
+    try:
+        out = run(args, cwd=path, timeout=480)   # a big object (Metro, 42 000 m²) – minutes; the caller waits in JOBS
+    finally:
+        th.join(240)
+    plan = dict(arhiv)
     try:
         rez = json.loads(out)
     except ValueError:
@@ -487,6 +491,15 @@ def a_nachalo(b):
     for k in ("kais_json", "fon", "shema", "ortofoto"):
         rez.pop(k, None)
     data = load(path)
+    mm = (plan.get("danni") or {}).get("vodoprovod_mm")
+    if mm and not opcii.get("vodoprovod") and data.get("vodoprovod"):   # the water main of the old plan, not 70/80
+        for v in data["vodoprovod"]:
+            v["diametar"] = mm
+        if isinstance(rez, dict):
+            if rez.get("vodoprovod"):
+                rez["vodoprovod"] = mm
+            rez["zabelezhki"] = [str(z).replace("Ø 70/80", f"Ø {mm} (по стария план)") for z in rez.get("zabelezhki") or []]
+        save(path, data)
     ime = str(b.get("ime") or opcii.get("ime") or "").strip()
     if ime and not (data.get("list") or {}).get("obekt"):
         data.setdefault("list", {})["obekt"] = ime       # the title block – no separate promeni for it
