@@ -31,8 +31,10 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_shared", "scripts"))
 
 import incident_stats as st  # noqa: E402
+from docx_common import stamp  # noqa: E402  (the file's author = the user of the personal key)
 
 try:
     from openpyxl import Workbook
@@ -160,6 +162,7 @@ def main(argv=None):
     list_sheet(wb, rows, a.with_address)
     totals_sheet(wb, stats)
     wb.save(a.output)
+    stamp(a.output)
     print(f"OK: {a.output} ({len(rows)} records)")
 
 

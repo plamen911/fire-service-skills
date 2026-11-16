@@ -59,7 +59,7 @@ from openpyxl.cell.rich_text import CellRichText, TextBlock
 from openpyxl.styles import PatternFill
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "_shared", "scripts"))
-from docx_common import typo  # noqa: E402  (the common typography rules)
+from docx_common import stamp, typo  # noqa: E402  (the common typography rules; the file's author)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, "..", "assets", "smetka_template.xlsx")
@@ -245,6 +245,7 @@ def fill(d, xlsx_out):
                         part.text = typo(part.text)
     fit_one_page(ws)
     wb.save(xlsx_out)
+    stamp(xlsx_out)
     return total
 
 

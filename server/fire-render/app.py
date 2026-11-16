@@ -583,7 +583,8 @@ def a_chertai(b):
     shutil.rmtree(out, ignore_errors=True)
     os.makedirs(out)
     res = json.loads(run([os.path.join(SHEMI, "scripts", "situacionna.py"), "shema.json", "-o",
-                          os.path.join(out, VID + ".docx"), "--izgotvil", str(b.get("klient") or lst.get("izgotvil") or "")], cwd=path))
+                          os.path.join(out, VID + ".docx"), "--izgotvil", str(b.get("klient") or lst.get("izgotvil") or "")], cwd=path,
+                         env={"FIRE_SERVICE_AVTOR": str(b.get("klient") or "")}))
     res["prieto"], res["ne_e_popalneno"] = dop.get("prieto") or [], dop.get("ne_e_popalneno") or []
     for k in ("output", "grafichna", "dxf"):
         res.pop(k, None)
@@ -1000,7 +1001,8 @@ def a_plan_sglobi(b):
     out = os.path.join(path, "out_plan")
     shutil.rmtree(out, ignore_errors=True)
     os.makedirs(out)
-    res = json.loads(run([PLAN, "plan.json", "-d", out], cwd=path, timeout=480))
+    res = json.loads(run([PLAN, "plan.json", "-d", out], cwd=path, timeout=480,
+                         env={"FIRE_SERVICE_AVTOR": str(b.get("klient") or "")}))
     return {"failove": sorted(os.listdir(out)), "preduprezhdeniya": res.get("preduprezhdeniya") or [],
             "za_claude": "Кажи предупрежденията (какво от Указанията липсва); поправка – plan_promeni и пак "
                          "plan_sglobi; готовият план – plan_zapishi."}
