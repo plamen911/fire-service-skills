@@ -1069,11 +1069,11 @@ def draw_ladder(ax, a, b, s, kind):
             seg(ax, (x1, y1), (hx, hy), INK, 0.9)
             seg(ax, (hx, hy), (hx + uy * 0.25 * s, hy - ux * 0.25 * s), INK, 0.9)
 
-def fence_marks(ax, pts, kind, s):
+def fence_marks(ax, pts, kind, s, zatvorena=True, k_=0.1):
     """The marks along a fence of a given kind (Приложение № 6): filled squares, open squares, filled
     circles, comb teeth or crosses at every ~1.5 symbols."""
-    closed = list(pts) + [pts[0]]
-    step, k = 1.3 * s, 0.1 * s
+    closed = list(pts) + ([pts[0]] if zatvorena else [])
+    step, k = 1.3 * s, k_ * s
     for a, b in zip(closed, closed[1:]):
         d = math.dist(a, b)
         if not d:
@@ -1114,6 +1114,17 @@ def draw_fence(ax, pts, gates, s, kind=None):
             k = 0.3 * s
             ax.plot([p[0] - (0 if horiz else k), p[0] + (0 if horiz else k)],
                     [p[1] - (k if horiz else 0), p[1] + (k if horiz else 0)], color=INK, lw=1.2, zorder=2)
+
+def draw_fence_line(ax, pts, s, kind=None, zatvorena=False):
+    """Another fence than the object's own (a neighbour's parcel or parking): the same sign of its kind,
+    with a thinner line and smaller marks, so that the object's own fence stays the main one; open unless closed."""
+    line = list(pts) + ([pts[0]] if zatvorena else [])
+    xs, ys = zip(*line)
+    if kind:
+        ax.plot(xs, ys, color=INK, lw=0.5, zorder=1)
+        fence_marks(ax, pts, kind, s, zatvorena, k_=0.07)
+    else:
+        ax.plot(xs, ys, color=INK, lw=0.6, ls=(0, (1.2, 1.2)), zorder=1)
 
 def draw_label_box(ax, x, y, w, h, text, fs, color=INK):
     ax.add_patch(Rectangle((x, y), w, h, fc="white", ec=color, lw=0.9, zorder=8))

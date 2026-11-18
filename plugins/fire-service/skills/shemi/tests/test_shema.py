@@ -505,7 +505,31 @@ def test_outline_fire_and_protection():
           "a turned drawing turns and moves the outline with the rest")
 
 
+def test_other_fences():
+    print("shema.py – another fence (a neighbour's parking) beside the object's own")
+    import ezdxf
+    data = {"teren": [120, 90], "ograda": [[10, 10], [60, 10], [60, 50], [10, 50]], "ograda_vid": "metalna",
+            "vhodove": [{"x": 60, "y": 30, "shirina": 4}],
+            "ogradi": [{"tochki": [[60, 50], [100, 50], [100, 10], [60, 10]]},
+                       {"tochki": [[70, 60], [90, 60], [90, 80]], "vid": "zhelezobetonna", "zatvorena": True}],
+            "sgradi": [{"kontur": [[20, 20], [50, 20], [50, 40], [20, 40]], "etiket": "Сграда"}]}
+    loaded, _ = shema.load(data)
+    check(len(loaded["ogradi"]) == 2 and loaded["ogradi"][0]["vid"] == "metalna" and not loaded["ogradi"][0]["zatvorena"],
+          "an open fence takes the kind of the object's fence by default")
+    check(loaded["ogradi"][1]["zatvorena"] and loaded["ogradi"][1]["vid"] == "zhelezobetonna", "a closed one of its own kind")
+    r, out = run(data)
+    check(r.returncode == 0, "draws with another fence")
+    doc = ezdxf.readfile(os.path.splitext(out)[0] + ".dxf")
+    pl = list(doc.modelspace().query("LWPOLYLINE[layer=='OGRADA_DRUGA']"))
+    check(len(pl) == 2 and not pl[0].closed and pl[1].closed, "the DXF – layer OGRADA_DRUGA, open and closed as given")
+    r, _ = run({**data, "ogradi": [{"tochki": [[1, 1]]}]})
+    check(r.returncode != 0, "a fence of one point – bad input")
+    rot = shema._zavarti({**data, "zavartane": 30, "pole_m": 2})
+    check(len(rot["ogradi"][0]["tochki"]) == 4, "a turned drawing turns the other fences too")
+
+
 if __name__ == "__main__":
+    test_other_fences()
     test_outline_fire_and_protection()
     test_naves()
     test_street_names_inside()

@@ -28,7 +28,7 @@ LAYERS = {  # name: (ACI colour, true colour or None, linetype)
     "SGRADI": (7, None, "CONTINUOUS"), "RAZMERI": (7, None, "CONTINUOUS"), "IMOT": (7, None, "DASHDOT"),
     "ULITSI": (30, BROWN, "CONTINUOUS"), "VODA": (5, None, "CONTINUOUS"), "GAZ": (2, None, "CONTINUOUS"),
     "BEZ_PARKIRANE": (30, (255, 140, 0), "CONTINUOUS"), "TREVNI": (3, (46, 139, 58), "CONTINUOUS"),
-    "EVAKUATSIYA": (3, (46, 139, 58), "DASHED"), "OGRADA": (7, None, "DASHED"), "POZHAR": (1, None, "CONTINUOUS"),
+    "EVAKUATSIYA": (3, (46, 139, 58), "DASHED"), "OGRADA": (7, None, "DASHED"), "OGRADA_DRUGA": (8, None, "DASHED"), "POZHAR": (1, None, "CONTINUOUS"),
     "TEKST": (7, None, "CONTINUOUS"), "PODLOZHKA": (7, None, "CONTINUOUS"), "LIST": (7, None, "CONTINUOUS"), "SEVER": (7, None, "CONTINUOUS"),
 }
 FONT = "arial.ttf"            # a TrueType font with Cyrillic – AutoCAD and CorelDRAW both have it
@@ -265,6 +265,8 @@ def write(data, d, out, s, sheet=None):
         text(pos[0], pos[1], lab, layer="IMOT", h=th * 0.9)
     if data["ograda"]:
         poly(data["ograda"], "OGRADA", closed=True)
+    for og in data.get("ogradi") or []:                # other fences – a neighbour's parcel or parking
+        poly(og["tochki"], "OGRADA_DRUGA", closed=og["zatvorena"])
     rings_ = list(data.get("trevni") or []) + [h for hs in (data.get("trevni_otvori") or []) for h in hs]
     for k in rings_:                                  # grass areas and their holes – green outlines, cut at the edge
         for a_, b_ in zip(k, k[1:] + k[:1]):

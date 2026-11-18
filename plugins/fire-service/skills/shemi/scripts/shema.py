@@ -35,6 +35,9 @@ shema.py — чертае СХЕМА за разполагане на силит
   "ograda": [[2, 2], [118, 2], [118, 88], [2, 88]],          // затворена ограда, точките по реда
   "ograda_vid": "metalna",                      // zhelezobetonna, kamenna, metalna, darvena, bodliva;
                                                 //   без вид – пунктир „Ограда“
+  "ogradi": [{"tochki": [[118, 88], [140, 88], [140, 60]], "vid": "metalna", "zatvorena": false}],  // други огради –
+                                                //   на съседен имот или паркинг: по-тънка линия със знака на вида;
+                                                //   отворена линия (може да тръгва от оградата на обекта)
   "vhodove": [{"x": 60, "y": 2, "shirina": 8, "etiket": "КПП"}],    // отвор в оградата; „КПП“ – в кръг
   "sgradi": [{"x": 10, "y": 55, "w": 36, "h": 22, "etiket": "Склад\\nет. 1",   // или "kontur": [[x, y], …] –
                                                 //   сграда с друга форма (размерите – общата дължина и ширина)
@@ -188,7 +191,7 @@ from matplotlib.path import Path as MplPath
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from znatsi import (FENCES, INK, LEGEND_ORDER, LINE_KINDS, NETWORKS, NOZZLES, PLACES, SPLITTERS, TRUCKS,  # noqa: E402,F401
-                    LADDERS, WATER, Pal, chaikin, draw_building, draw_dimension, draw_fence, draw_fire, draw_hydrant,
+                    LADDERS, WATER, Pal, chaikin, draw_building, draw_dimension, draw_fence, draw_fence_line, draw_fire, draw_hydrant,
                     draw_gas_line, draw_gas_valve, offset_polyline, draw_main, draw_no_parking, draw_parcel, draw_street, draw_streets, draw_grass, draw_tower, draw_valve_kran,
                     draw_kompas, draw_label_box, draw_river, draw_lake, draw_podstap, draw_most_voda, draw_ladder, draw_line, draw_nozzle, draw_reservoir, draw_ring,
                     draw_seat, draw_smoke, draw_splitter, draw_staff, draw_truck, draw_wind, big_arrow, draw_evacuation, is_el,
@@ -478,6 +481,8 @@ def _zavarti(d, cyali_ulitsi=True):
         d["imot"]["kontur"] = RL(d["imot"]["kontur"])
     if d.get("ograda"):
         d["ograda"] = RL(d["ograda"])
+    for og in items(d, "ogradi"):
+        og["tochki"] = RL(og.get("tochki") or [])
     if isinstance(d.get("vyatar"), dict) and d["vyatar"].get("ugal") is not None:
         d["vyatar"]["ugal"] = num(d["vyatar"]["ugal"], "vyatar.ugal") + ang
 
@@ -554,6 +559,8 @@ def _zavarti(d, cyali_ulitsi=True):
             d["imot"]["kontur"] = [S(p) for p in d["imot"]["kontur"]]
         if d.get("ograda"):
             d["ograda"] = [S(p) for p in d["ograda"]]
+        for og in items(d, "ogradi"):
+            og["tochki"] = [S(p) for p in og["tochki"]]
     shift_all()
     inside = lambda p, m=0.0: m <= p[0] <= tw - m and m <= p[1] <= th - m     # noqa: E731
     d["tekst"] = [t for t in items(d, "tekst") if inside((t["x"], t["y"]), 3)]    # a label cut by the edge – out
@@ -650,6 +657,7 @@ def load(d):
                            "gaz_armatura", "bez_parkirane", "prohodi", "ulitsi_skrij", "ulitsi_rab", "trevni",
                            "reki", "ezera", "podstapi", "mostove", "evakuatsiya")}
     out["ograda"] = None
+    out["ogradi"] = []
     out["vyatar"] = None
     out["ograda_vid"] = d.get("ograda_vid") or None
     if out["ograda_vid"] not in (None, *FENCES):
@@ -861,6 +869,14 @@ def load(d):
         out["ograda"] = [pt(p, "ograda") for p in d["ograda"]]
         if len(out["ograda"]) < 3:
             bad("ograda: трябват поне три точки")
+    for i, og in enumerate(items(d, "ogradi")):          # other fences – a neighbour's parcel or parking
+        tochki = [pt(p, f"ogradi[{i}].tochki") for p in (og.get("tochki") or [])]
+        if len(tochki) < 2:
+            bad(f"ogradi[{i}].tochki: трябват поне две точки")
+        vid = og.get("vid") or out["ograda_vid"] or None
+        if vid not in (None, *FENCES):
+            bad(f"ogradi[{i}].vid: {', '.join(FENCES)}")
+        out["ogradi"].append({"tochki": tochki, "vid": vid, "zatvorena": bool(og.get("zatvorena"))})
     for i, g in enumerate(items(d, "vhodove")):
         out["vhodove"].append({"x": num(g.get("x"), f"vhodove[{i}].x"), "y": num(g.get("y"), f"vhodove[{i}].y"),
                                "shirina": num(g.get("shirina", 6), f"vhodove[{i}].shirina"),
@@ -1115,6 +1131,8 @@ def legend_keys(data, hose_m):
     used = {"sgrada"}
     if data["ograda"]:
         used.add(data["ograda_vid"] or "ograda")
+    for og in data.get("ogradi") or []:
+        used.add(og["vid"] or "ograda")
     used.update("pozhar_otkrito" if f["na_otkrito"] else "pozhar" for f in data["pozhar"])
     for key in ("zadimyavane", "ognishte", "posoka", "napravlenie", "shtab", "pbt"):
         if data[key]:
@@ -1163,6 +1181,8 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
     x0, y0, x1, y1 = data["box"]
     if data["ograda"]:
         draw_fence(ax, data["ograda"], data["vhodove"], s, data["ograda_vid"])
+    for og in data.get("ogradi") or []:
+        draw_fence_line(ax, og["tochki"], s, og["vid"], og["zatvorena"])
     for g in data["vhodove"]:
         if not g["etiket"]:
             continue
@@ -1379,6 +1399,8 @@ def site_points(data, streets=True):
             pts += densify(offset_polyline(u["tochki"], k * u["shirina"] / 2))
     if data["ograda"]:
         pts += densify(data["ograda"] + data["ograda"][:1])
+    for og in data.get("ogradi") or []:
+        pts += densify(og["tochki"] + (og["tochki"][:1] if og["zatvorena"] else []))
     x0, y0, x1, y1 = data["box"]                       # what falls outside the drawing is cut off – it cannot touch
     return [p for p in pts if x0 <= p[0] <= x1 and y0 <= p[1] <= y1]   # a field of the sheet
 
