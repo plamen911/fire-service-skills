@@ -304,16 +304,24 @@ def check(content, meta, vaprosi=None, materiali=""):
         greshki.append("отговорът започва с голо „" + m.group(1) + "“ – започни с пълно изречение, което повтаря "
                        "същността на въпроса (напр. „Пожарът се е разпространил върху …“)")
     # the lead-in of the arson version follows the facts: „се подкрепя“ only when at least one ground is present
-    NEG = re.compile(r"\bняма\b|не са (установени|описани|констатирани)|не е (установен|описан)|не са налице|не е налице", re.I)
+    # a ground whose fact is an absence: „… – в материалите няма данни за такива“, „… – не са установени“
+    ABSENT = re.compile(r"[–-]\s*(?:в материалите\s+(?:по делото\s+)?)?(?:няма\b|не са (?:установени|описани|констатирани|налице)"
+                        r"|не е (?:установен|описан|налице))", re.I)
     for m in re.finditer(r"(?m)^Версията за злонамерено внесен външен огнеизточник (се подкрепя от|е малко вероятна поради) "
                          r"следните обстоятелства:\s*\n((?:\s*\n)?(?:[-–].*\n?)+)", text):
         bullets = [b for b in re.findall(r"(?m)^[-–]\s*(.+)$", m.group(2))]
         if not bullets:
             continue
-        all_neg = all(NEG.search(b) for b in bullets)
+        # judged by the fact after the dash, so „… няма да се ползва“ in a present ground is not an absence
+        all_neg = all(ABSENT.search(b) for b in bullets)
+        absent = [b for b in bullets if ABSENT.search(b)]
         if m.group(1).startswith("се подкрепя") and all_neg:
             greshki.append("версията за злонамерено внесен външен огнеизточник „се подкрепя“, а всички основания са „няма“ – "
                            "пиши „… е малко вероятна поради следните обстоятелства:“")
+        elif m.group(1).startswith("се подкрепя") and absent:
+            for b in absent:
+                greshki.append("под „се подкрепя от следните обстоятелства:“ има основание, което липсва – в списъка остават само "
+                               "наличните основания, а липсата се пише в едно изречение след него (или отпада): „" + b[:60] + "“")
         elif m.group(1).startswith("е малко вероятна") and not all_neg:
             za_proverka.append("при версията за злонамерено внесен външен огнеизточник има налично основание – провери дали "
                                "въвеждането не трябва да е „… се подкрепя от следните обстоятелства:“")
