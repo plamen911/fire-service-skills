@@ -356,6 +356,16 @@ def test_rotation_and_wall_dims():
     check(r.returncode == 0, "draws a band without one edge" + (": " + r.stderr[:200] if r.returncode else ""))
     grass = shema.load({**base, "trevni": [{"kontur": [[0, 0], [10, 0], [10, 5]]}]})[0]
     check(len(grass["trevni"]) == 1, "a grass area is read")
+    # no grass inside a building: the part in the outline is cut away, a patch wholly inside is dropped
+    near = {"sgradi": [{"x": 0, "y": 0, "w": 20, "h": 10}, {"x": 40, "y": 0, "w": 10, "h": 10, "sasedna": True}],
+            "trevni": [{"kontur": [[10, 5], [30, 5], [30, 8], [10, 8]]},      # half in the object's building
+                       {"kontur": [[42, 2], [48, 2], [48, 8], [42, 8]]},      # wholly in the neighbour's
+                       {"kontur": [[0, 20], [10, 20], [10, 25]]}]}           # outside – untouched
+    cut = shema.load(near)[0]
+    check(len(cut["trevni"]) == 2, f"the grass inside the neighbour's building is dropped: {len(cut['trevni'])}")
+    check(all(x >= 20 for x, _ in cut["trevni"][0]), f"the grass is cut at the wall: {cut['trevni'][0]}")
+    check([list(map(float, q)) for q in cut["trevni"][1]] == [[0, 20], [10, 20], [10, 25]],
+          f"grass outside the buildings stays as it is: {cut['trevni'][1]}")
     r, out = run({**base, "trevni": [{"kontur": [[0, 0], [10, 0], [10, 5]]}], "legenda": True,
                   "zavartane": 30})
     check(r.returncode == 0, "draws grass areas" + (": " + r.stderr[:200] if r.returncode else ""))

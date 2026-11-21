@@ -1333,8 +1333,10 @@ def cmd_obekt(a):
                 notes.append("Реките не се взеха от OpenStreetMap: " + err)
         # the sign of a river (Приложение № 6) stands on its own – no grass dots inside it: the water and its banks are
         #   taken out of the grass areas (the photo sees the green banks, OSM's parks run across the river); and grass
-        #   never lies on a street or on the river's parcel in КАИС (the strip between the brown lines)
-        if sh.get("trevni") and (sh.get("reki") or sh.get("ezera") or any(u.get("kontur") for u in sh.get("ulitsi", []))):
+        #   never lies on a street or on the river's parcel in КАИС (the strip between the brown lines); nor inside a
+        #   building – the object's or a neighbour's (green roofs and their shadows read as grass on the photo)
+        if sh.get("trevni") and (sh.get("reki") or sh.get("ezera") or sh.get("sgradi")
+                                 or any(u.get("kontur") for u in sh.get("ulitsi", []))):
             from shapely.geometry import LineString as _L3, Polygon as _P3
             from shapely.ops import unary_union as _u3
             ul_ = _u3([_P3(u["kontur"]).buffer(0) for u in sh.get("ulitsi", []) if len(u.get("kontur") or []) >= 3])
@@ -1347,7 +1349,8 @@ def cmd_obekt(a):
                 return _u3([band] + parts)
             voda_ = _u3([koridor(r) for r in sh.get("reki", []) if len(r["tochki"]) >= 2] +
                         [_P3(e["kontur"]).buffer(1.5) for e in sh.get("ezera", []) if len(e["kontur"]) >= 3] +
-                        [_P3(u["kontur"]).buffer(0) for u in sh.get("ulitsi", []) if len(u.get("kontur") or []) >= 3])
+                        [_P3(u["kontur"]).buffer(0) for u in sh.get("ulitsi", []) if len(u.get("kontur") or []) >= 3] +
+                        [_P3(s["kontur"]).buffer(0.3) for s in sh.get("sgradi", []) if len(s.get("kontur") or []) >= 3])
             dry = []
             for t in sh["trevni"]:
                 g0 = _P3(t["kontur"], [h for h in (t.get("otvori") or []) if len(h) >= 3]).buffer(0)

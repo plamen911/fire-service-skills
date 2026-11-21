@@ -832,6 +832,7 @@ def load(d):
         out["trevni"].append(k)
         out.setdefault("trevni_otvori", []).append([[pt(p, f"trevni[{i}].otvori") for p in h]
                                                     for h in (t.get("otvori") or []) if len(h) >= 3])
+    grass_out_of_buildings(out)
     for i, r in enumerate(items(d, "reki")):             # rivers and canals – Приложение № 6, „Река, канал с бараж“
         pts = [pt(p, f"reki[{i}].tochki") for p in (r.get("tochki") or [])]
         if len(pts) < 2:
@@ -1013,6 +1014,34 @@ def load(d):
                     r["ugal"] = math.degrees(math.atan2(p[1][1] - p[0][1], p[1][0] - p[0][0]))
                     break
     return out, warnings
+
+def grass_out_of_buildings(out):
+    """No grass inside a building – the object's or a neighbour's: whatever part of a grass area lies in a building
+    outline is cut away (green roofs and their shadows read as grass on the orthophoto; OSM parks run under houses).
+    Works on the loaded data, so the picture and the .dxf both get it, whatever wrote the JSON."""
+    if not out.get("trevni") or not out.get("sgradi"):
+        return
+    try:
+        from shapely.geometry import Polygon as _P
+        from shapely.ops import unary_union
+    except ImportError:                                 # without shapely the grass stays as it is
+        return
+    blds = unary_union([_P(k).buffer(0) for k in building_outlines(out) if len(k) >= 3]).buffer(0.3)
+    holes_all = out.get("trevni_otvori") or [[]] * len(out["trevni"])
+    kont, otv = [], []
+    for k, h in zip(out["trevni"], holes_all):
+        g = _P(k, [x for x in h if len(x) >= 3]).buffer(0)
+        if g.is_empty or not g.intersects(blds) or g.intersection(blds).area < 0.05:
+            kont.append(k)
+            otv.append(h)
+            continue
+        rest = g.difference(blds)
+        for q in getattr(rest, "geoms", [rest]):
+            if q.geom_type == "Polygon" and q.area > 2:
+                kont.append([[round(x, 2), round(y, 2)] for x, y in q.exterior.coords][:-1])
+                otv.append([[[round(x, 2), round(y, 2)] for x, y in r.coords][:-1] for r in q.interiors])
+    out["trevni"], out["trevni_otvori"] = kont, otv
+
 
 def building_outlines(data):
     """Every building as an outline – a contour as it is, a rectangle by its corners."""
