@@ -534,20 +534,53 @@ def orto_zeleno(png, x0, y0, x1, y1, inside=None, cell=0.5, minus=None):
     return out
 
 
+# the service roads that are parts of a parking lot, not alleys: a parking lot is one asphalt plaza on the sheet
+PARKING_SERVICE = ("parking_aisle", "drive-through", "drive_through")
+
+
+def osm_parkings(x0, y0, x1, y1):
+    """The parking lots (amenity=parking, closed ways) in the frame, as rings in КС2005 – [] when OpenStreetMap has
+    none or does not answer. Their aisles and driveways are not streets: a parking lot is one asphalt plaza."""
+    root, _err = osm_map(x0, y0, x1, y1)
+    if root is None:
+        return []
+    nodes = {n.get("id"): (float(n.get("lat")), float(n.get("lon"))) for n in root.iter("node")}
+    out = []
+    for w in root.iter("way"):
+        tags = {t.get("k"): t.get("v") for t in w.iter("tag")}
+        refs = [nd.get("ref") for nd in w.iter("nd")]
+        if tags.get("amenity") == "parking" and len(refs) >= 4 and refs[0] == refs[-1] \
+                and all(r_ in nodes for r_ in refs):
+            out.append([list(wgs_to_kc(*nodes[r_])) for r_ in refs[:-1]])
+    return out
+
+
+def in_parking(pts, parkings, share=0.5):
+    """Does at least `share` of the line `pts` (КС2005) lie in a parking lot of osm_parkings()?"""
+    if not parkings or not pts:
+        return False
+    return sum(any(point_in(p_, ring) for ring in parkings) for p_ in pts) / len(pts) >= share
+
+
 def osm_paths(x0, y0, x1, y1):
     """The alleys and paths (highway=footway/path/pedestrian/cycleway/service/living_street) in the frame – the ways
     through the grass and round the buildings that people and the vehicles use; КАИС does not have them. As axes in
-    КС2005 with a width – ([{"tochki", "shirina", "vid"}], "") or ([], error text)."""
+    КС2005 with a width – ([{"tochki", "shirina", "vid"}], "") or ([], error text). The aisles of a parking lot
+    (service=parking_aisle, a road lying in amenity=parking) are left out: the lot is one plaza, not streets."""
     root, err = osm_map(x0, y0, x1, y1)
     if root is None:
         return [], err
     nodes = {n.get("id"): (float(n.get("lat")), float(n.get("lon"))) for n in root.iter("node")}
+    parkings = osm_parkings(x0, y0, x1, y1)
     out = []
     for w in root.iter("way"):
         tags = {t.get("k"): t.get("v") for t in w.iter("tag")}
         hw = tags.get("highway")
         refs = [nd.get("ref") for nd in w.iter("nd")]
         if hw not in PATH_WIDTH or len(refs) < 2 or not all(r_ in nodes for r_ in refs) or tags.get("area") == "yes":
+            continue
+        if tags.get("service") in PARKING_SERVICE or \
+                (hw == "service" and in_parking([wgs_to_kc(*nodes[r_]) for r_ in refs], parkings)):
             continue
         try:
             width = float(str(tags.get("width", "")).replace(",", ".").split()[0])
@@ -1046,17 +1079,18 @@ def cmd_obekt(a):
                 if len(part) > 1:
                     complement.append((u, part))
         inner_dropped = 0
-        if ring and not a.s_vatreshni:                 # unnamed roads inside the parcel – driveways and parking aisles of
-            kept = []                                  #   an asphalt yard, not streets: left out (with a note)
-            for u, part in complement:
-                inside = sum(point_in(p_, ring) for p_ in part) / len(part)
-                if not u.get("ime") and inside >= 0.5:
+        if not a.s_vatreshni:                          # unnamed roads inside the parcel or in a parking lot of OSM –
+            parkings = osm_parkings(bx0, by0, bx1, by1)  #   driveways and parking aisles of an asphalt yard, not
+            kept = []                                  #   streets: left out (with a note); a parking lot shared by
+            for u, part in complement:                 #   several shops lies in other parcels too
+                inside = sum(point_in(p_, ring) for p_ in part) / len(part) if ring else 0.0
+                if not u.get("ime") and (inside >= 0.5 or in_parking(part, parkings)):
                     inner_dropped += 1
                     continue
                 kept.append((u, part))
             complement = kept
         if inner_dropped:
-            notes.append(f"{inner_dropped} пътя без име от OpenStreetMap вътре в имота не са начертани – алеи и паркинг "
+            notes.append(f"{inner_dropped} пътя без име от OpenStreetMap вътре в имота или в паркинг не са начертани – алеи и паркинг "
                          "на асфалтиран плац (`--s-vatreshni` ги връща); надпиши плаца, напр. „асфалтиран плац с паркинг“.")
         for u, part in complement:
             if length(part) > 3:
