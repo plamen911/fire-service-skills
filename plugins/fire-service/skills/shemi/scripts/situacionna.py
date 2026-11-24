@@ -72,10 +72,10 @@ from docx.oxml.ns import qn  # noqa: E402
 from docx.shared import Cm, Pt  # noqa: E402
 
 try:
-    from docx_common import report, typo, typo_all  # noqa: E402
+    from docx_common import report, stamp, typo, typo_all  # noqa: E402
 except ImportError:  # pragma: no cover – the skill without _shared (development tree)
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(HERE))), "shared", "scripts"))
-    from docx_common import report, typo, typo_all  # noqa: E402
+    from docx_common import report, stamp, typo, typo_all  # noqa: E402
 
 from prilozhenia import (FONT, MARGINS, borders, cell_text, fixed_width, fmt, number_box, page,  # noqa: E402,F401
                          para, row_height, table_2b as _table_2b)
@@ -229,6 +229,7 @@ def pad_to_page(png, dpi=300):
     page_ = Image.new("RGB", (im.width + l + r, im.height + t + b), "white")
     page_.paste(im.convert("RGB"), (l, t))
     page_.save(png, dpi=(dpi, dpi))
+    stamp(png)
 
 
 def main():

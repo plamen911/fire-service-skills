@@ -22,6 +22,7 @@ scripts/dxf_import.py връща редакцията в AutoCAD или онла
 (потребителска променлива FIRESVC = FORMAT).
 """
 import math
+import os
 
 try:
     import ezdxf
@@ -547,5 +548,21 @@ def write(data, d, out, s, sheet=None):
     for t_, dy in (("С", L / 2 + L * 0.25), ("Ю", -L / 2 - L * 0.25)):
         ent = msp.add_text(t_, height=L * 0.22, dxfattribs={"layer": "SEVER", "style": "BG"})
         ent.set_placement(K(0, dy), align=ezdxf.enums.TextEntityAlignment.MIDDLE_CENTER)
+    _author(doc)
     doc.saveas(out)
     return out
+
+
+def _author(doc):
+    """The user of the personal key as the author of the .dxf (_shared/scripts/docx_common.dxf_author), not „ezdxf“."""
+    import sys
+    here = os.path.dirname(os.path.abspath(__file__))
+    for d in (os.path.join(os.path.dirname(here), "_shared", "scripts"),
+              os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(here))), "shared", "scripts")):
+        if os.path.isdir(d) and d not in sys.path:
+            sys.path.insert(0, d)
+    try:
+        from docx_common import dxf_author
+    except ImportError:  # pragma: no cover
+        return
+    dxf_author(doc)

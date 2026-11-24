@@ -51,6 +51,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import zipfile
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -1072,7 +1073,7 @@ DXF_ALL_EVERY = 6 * 3600         # how often every object is listed
 DXF_ACTIVE_DAYS = 14             # active: its scheme changed in the last two weeks (an edit is most likely there)
 DXF_HOURS = (6, 23)              # local hours (Europe/Sofia) when the watcher looks
 DXF_STATE = os.path.join(os.path.dirname(DATA.rstrip("/")) or DATA, "dxf_watch.json")
-DXF_AVTOR = "редакция в .dxf"
+DXF_AVTOR = "редакция в .dxf"      # only the note in the object's history – the files keep a person as author
 _dxf_lock = threading.Lock()
 
 
@@ -1107,6 +1108,20 @@ def dxf_seen(oid, md5_):
         dxf_state_save(st)
 
 
+def docx_author(path):
+    """The author (dc:creator) of the scheme's previous .docx – the rebuilt files keep the name of a person
+    (owner's rule: the author of every generated file is a person's name), not „редакция в .dxf“."""
+    if not path or not os.path.isfile(path):
+        return ""
+    try:
+        with zipfile.ZipFile(path) as z:
+            xml = z.read("docProps/core.xml").decode("utf-8", "ignore")
+        m = re.search(r"<dc:creator[^>]*>([^<]*)</dc:creator>", xml)
+        return m.group(1).strip() if m else ""
+    except (OSError, KeyError, ValueError, zipfile.BadZipFile):
+        return ""
+
+
 def dxf_redakciya(oid):
     """Read the edited .dxf of one object back and rebuild its situational scheme in the register."""
     work = os.path.join(DATA, "_dxf", re.sub(r"[^A-Za-z0-9-]", "_", oid))
@@ -1134,12 +1149,13 @@ def dxf_redakciya(oid):
     with open(src, encoding="utf-8") as f:
         izgotvil = str((json.load(f).get("list") or {}).get("izgotvil") or "")
     out = os.path.join(work, "out")
+    avtor = docx_author(next((f for f in got if f.lower().endswith(".docx")), None)) or izgotvil
     run([os.path.join(SHEMI, "scripts", "situacionna.py"), nov, "-o", os.path.join(out, VID + ".docx"),
-         "--izgotvil", izgotvil], cwd=work, env={"FIRE_SERVICE_AVTOR": DXF_AVTOR})
+         "--izgotvil", izgotvil], cwd=work, env={"FIRE_SERVICE_AVTOR": avtor})
     shutil.copy(nov, os.path.join(out, VID + ".json"))
     files = [os.path.join(out, VID + x) for x in (".docx", ".dxf", "_grafichna.png", ".json")]
     obekti("zapishi", oid, "--vid", VID, *files, "--belezhka", rep.get("belezhka") or DXF_AVTOR, cwd=work,
-           env={"FIRE_SERVICE_AVTOR": DXF_AVTOR})
+           env={"FIRE_SERVICE_AVTOR": avtor})
     dxf_seen(oid, file_md5(files[1]))
     res.update(zapisano=True, failove=links(oid),
                za_claude="Схемата е изградена наново от редакцията в .dxf. Кажи на потребителя какво е пренесено, "

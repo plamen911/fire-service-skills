@@ -1156,6 +1156,20 @@ def building_label(b):
     extra = " · ".join(p for p in parts if p)
     return "\n".join(p for p in (name, extra) if p)
 
+def _stamp(path):
+    """The user of the personal key as the author of the picture (_shared/scripts/docx_common.stamp)."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    for d in (os.path.join(os.path.dirname(here), "_shared", "scripts"),
+              os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(here))), "shared", "scripts")):
+        if os.path.isdir(d) and d not in sys.path:
+            sys.path.insert(0, d)
+    try:
+        from docx_common import stamp
+    except ImportError:  # pragma: no cover
+        return
+    stamp(path)
+
+
 def from_kais(lat, lon, x0, y0):
     """Metres east and north of the terrain's origin (x0, y0 in КС2005) – the same projection as the contours from
     КАИС, so a hydrant lands exactly where it is against the buildings."""
@@ -1423,6 +1437,7 @@ def render_legend(d, out_png, width_cm=WIDTH_CM, fs=7.0):
     lax.text(0.15, h - 0.15, "Условни знаци:", fontsize=fs, va="center")
     draw_legend_rows(lax, col_rows, row_lines, h - 0.37, width_in, pal, fs)
     fig.savefig(out_png, dpi=300, facecolor="white")
+    _stamp(out_png)
     plt.close(fig)
     return len(entries)
 
@@ -1692,6 +1707,7 @@ def render(d, out_png, out_svg=None, width_cm=None, height_cm=None, out_dxf=None
 
     warnings += data.get("_hose_warn", [])
     fig.savefig(out_png, dpi=300, facecolor="white")
+    _stamp(out_png)
     if out_dxf:                                        # the same scheme for AutoCAD / CorelDRAW
         import dxf_export
         if dxf_export.available():
