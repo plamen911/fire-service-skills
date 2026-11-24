@@ -1549,8 +1549,24 @@ def draw_sheet(fig, lst, scale, fs):
     fax.text(bx - 3, by + 2, f"М 1:{scale}", ha="right", va="bottom", fontsize=fs)
 
 
+DXF_TAGGED = ("sgradi", "tekst", "vodoiztochnitsi", "razstoyaniya", "vodoprovod", "obekti", "bez_parkirane", "trevni")
+
+
+def with_sources(d):
+    """A copy of d in which every object that the .dxf names (DXF_TAGGED) knows where it came from – "_src":
+    [key, index in the JSON]. Turning and cutting the scheme keep it, so dxf_export.py writes it into the XDATA of
+    the object and dxf_import.py takes an edit in the .dxf back to the right element of the JSON."""
+    import copy
+    d = copy.deepcopy(d)
+    for k in DXF_TAGGED:
+        for i, e in enumerate(d.get(k) or []):
+            if isinstance(e, dict):
+                e["_src"] = [k, i]
+    return d
+
+
 def render(d, out_png, out_svg=None, width_cm=None, height_cm=None, out_dxf=None):
-    d = zavarti(d)
+    d = zavarti(with_sources(d) if out_dxf else d)
     data, warnings = load(d)
     warnings = list(d.get("_preduprezhdeniya") or []) + warnings
     sever = d.get("_sever_ugal", 90)

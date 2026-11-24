@@ -14,6 +14,12 @@ dxf_export.py — схемата като DXF (AutoCAD 2010, R2018 съвмес�
   направления) · TEKST · LIST (рамката и антетката) · SEVER (посоките)
 Знаците са опростени (кръг с кръст за хидрант, правоъгълник за автомобил …) – точните им рисунки са в .png;
 в DXF-а са на правилното място и с надписа си, за да се редактират.
+
+Обратният път: всеки обект от JSON-а (сграда, надпис, водоизточник, разстояние, водопровод, обект, площ без
+паркиране, тревна площ – shema.DXF_TAGGED) носи XDATA "FIRESVC" с ключа и номера си в JSON-а, а водоизточниците са
+блокът FS_HIDRANT с атрибут ETIKET (местят се като едно цяло, надписът се сменя с двоен клик). Така
+scripts/dxf_import.py връща редакцията в AutoCAD или онлайн редактор обратно в JSON-а. Форматът е в заглавието
+(потребителска променлива FIRESVC = FORMAT).
 """
 import math
 
@@ -32,6 +38,8 @@ LAYERS = {  # name: (ACI colour, true colour or None, linetype)
     "TEKST": (7, None, "CONTINUOUS"), "PODLOZHKA": (7, None, "CONTINUOUS"), "LIST": (7, None, "CONTINUOUS"), "SEVER": (7, None, "CONTINUOUS"),
 }
 FONT = "arial.ttf"            # a TrueType font with Cyrillic – AutoCAD and CorelDRAW both have it
+APPID = "FIRESVC"             # the XDATA of the objects of the JSON – for reading an edit back (dxf_import.py)
+FORMAT = "2"                  # 2 – with XDATA and the water sources as the block FS_HIDRANT (1 – before 2.108.0)
 
 
 def _pip_install(paket):
@@ -165,6 +173,25 @@ def write(data, d, out, s, sheet=None):
         if rgb:
             layer.rgb = rgb
     msp = doc.modelspace()
+    # what is what, for reading an edit back (dxf_import.py): every object of the JSON (shema.DXF_TAGGED) carries the
+    # XDATA "FIRESVC" – its key and its index in the JSON (shema.with_sources); the header says the format
+    doc.appids.add(APPID)
+    doc.header.custom_vars.append("FIRESVC", FORMAT)
+    _mark = {"start": 0}
+
+    def src(kind, i):                                 # data[kind][i] → its index in the JSON (before turning)
+        lst_ = d.get(kind) or []
+        if i < len(lst_) and isinstance(lst_[i], dict) and lst_[i].get("_src"):
+            return lst_[i]["_src"][1]
+        return i
+
+    def begin():
+        _mark["start"] = len(msp)
+
+    def end(kind, i):
+        j = src(kind, i)
+        for e in list(msp)[_mark["start"]:]:
+            e.set_xdata(APPID, [(1000, kind), (1071, j)])
     k = d.get("kais") or {}
     ox, oy = float(k.get("x0", 0) or 0), float(k.get("y0", 0) or 0)
     P = lambda p: (p[0] + ox, p[1] + oy)            # noqa: E731
@@ -268,18 +295,25 @@ def write(data, d, out, s, sheet=None):
     for og in data.get("ogradi") or []:                # other fences – a neighbour's parcel or parking
         poly(og["tochki"], "OGRADA_DRUGA", closed=og["zatvorena"])
     rings_ = list(data.get("trevni") or []) + [h for hs in (data.get("trevni_otvori") or []) for h in hs]
-    for k in rings_:                                  # grass areas and their holes – green outlines, cut at the edge
+    n_trevni = len(data.get("trevni") or [])
+    for ti, k in enumerate(rings_):                   # grass areas and their holes – green outlines, cut at the edge
+        begin()
         for a_, b_ in zip(k, k[1:] + k[:1]):
             c_ = _clip(a_, b_, data["box"])
             if c_:
                 msp.add_line(P(c_[0]), P(c_[1]), dxfattribs={"layer": "TREVNI"})
-    for z in data["bez_parkirane"]:
+        if ti < n_trevni:
+            end("trevni", ti)
+    for zi, z in enumerate(data["bez_parkirane"]):
+        begin()
         poly([(z["x"], z["y"]), (z["x"] + z["w"], z["y"]), (z["x"] + z["w"], z["y"] + z["h"]), (z["x"], z["y"] + z["h"])],
              "BEZ_PARKIRANE", closed=True)
+        end("bez_parkirane", zi)
 
     # buildings: the outline, the name and floors, the overall dimensions
     from shema import centroid   # noqa: E402
-    for b in data["sgradi"]:
+    for bi, b in enumerate(data["sgradi"]):
+        begin()
         pts = b["kontur"] or [(b["x"], b["y"]), (b["x"] + b["w"], b["y"]), (b["x"] + b["w"], b["y"] + b["h"]), (b["x"], b["y"] + b["h"])]
         poly(pts, "SGRADI", closed=True, width=None)
         cx, cy = centroid(pts) if b["kontur"] else (b["x"] + b["w"] / 2, b["y"] + b["h"] / 2)
@@ -295,31 +329,47 @@ def write(data, d, out, s, sheet=None):
                                                     "dimdec": 2},
                                           dxfattribs={"layer": "RAZMERI"})
                 dim.render()
-    for o in data["obekti"]:
+        end("sgradi", bi)
+    for oi, o in enumerate(data["obekti"]):
+        begin()
         poly([(o["x"], o["y"]), (o["x"] + o["w"], o["y"]), (o["x"] + o["w"], o["y"] + o["h"]), (o["x"], o["y"] + o["h"])],
              "SGRADI", closed=True)
         text(o["x"] + o["w"] / 2, o["y"] + o["h"] / 2, o["etiket"], layer="SGRADI", h=th * 0.8)
-    for r in data["razstoyaniya"]:
+        end("obekti", oi)
+    for ri, r in enumerate(data["razstoyaniya"]):
+        begin()
         msp.add_line(P(r["ot"]), P(r["do"]), dxfattribs={"layer": "RAZMERI"})
         mx, my = (r["ot"][0] + r["do"][0]) / 2, (r["ot"][1] + r["do"][1]) / 2
         from znatsi import readable
         text(mx, my + 0.7 * th, r["etiket"], layer="RAZMERI",
              rot=readable(math.degrees(math.atan2(r["do"][1] - r["ot"][1], r["do"][0] - r["ot"][0]))))
+        end("razstoyaniya", ri)
 
-    # water: sources, the main, the hose lines
-    for w in data["vodoiztochnitsi"]:
-        r = 0.45 * s
-        msp.add_circle(P((w["x"], w["y"])), r, dxfattribs={"layer": "VODA"})
-        msp.add_line(P((w["x"] - r, w["y"])), P((w["x"] + r, w["y"])), dxfattribs={"layer": "VODA"})
-        msp.add_line(P((w["x"], w["y"] - r)), P((w["x"], w["y"] + r)), dxfattribs={"layer": "VODA"})
-        text(w["x"] + r * 1.3, w["y"], w["etiket"], layer="VODA", align="MIDDLE_LEFT")
-    for v in data["vodoprovod"]:
+    # water: sources (the block FS_HIDRANT – moved as one, the label is its attribute ETIKET), the main, the hose lines
+    r_h = 0.45 * s
+    if data["vodoiztochnitsi"] and "FS_HIDRANT" not in doc.blocks:
+        blk = doc.blocks.new("FS_HIDRANT")
+        blk.add_circle((0, 0), r_h, dxfattribs={"layer": "0"})
+        blk.add_line((-r_h, 0), (r_h, 0), dxfattribs={"layer": "0"})
+        blk.add_line((0, -r_h), (0, r_h), dxfattribs={"layer": "0"})
+        blk.add_attdef("ETIKET", (r_h * 1.3, 0), dxfattribs={"height": th, "style": "BG"})
+    for wi, w in enumerate(data["vodoiztochnitsi"]):
+        begin()
+        ins = msp.add_blockref("FS_HIDRANT", P((w["x"], w["y"])), dxfattribs={"layer": "VODA"})
+        if w["etiket"]:
+            at = ins.add_attrib("ETIKET", w["etiket"], P((w["x"] + r_h * 1.3, w["y"])),
+                                dxfattribs={"height": th, "style": "BG", "layer": "VODA"})
+            at.set_placement(P((w["x"] + r_h * 1.3, w["y"])), align=ezdxf.enums.TextEntityAlignment.MIDDLE_LEFT)
+        end("vodoiztochnitsi", wi)
+    for vi, v in enumerate(data["vodoprovod"]):
+        begin()
         poly(v["tochki"], "VODA")
         if v["etiket"]:
             a, b = max(zip(v["tochki"], v["tochki"][1:]), key=lambda ab: math.dist(*ab))
             from znatsi import readable
             text((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + 0.8 * th, v["etiket"], layer="VODA",
                  rot=readable(math.degrees(math.atan2(b[1] - a[1], b[0] - a[0]))))
+        end("vodoprovod", vi)
     from shema import hose_points   # noqa: E402  – the same rules as the picture
     for i, ln in enumerate(data["linii"]):
         pts_ = ln.get("_pts") or hose_points(ln, data, s, i)
@@ -335,9 +385,28 @@ def write(data, d, out, s, sheet=None):
             text(pts_[-1][0], pts_[-1][1] + 1.4 * s, ln["etiket"], layer="VODA")
     # the water signs of Приложение № 6 – the same lines as on the picture (znatsi), layer VODA
     import znatsi as Z
-    for r in data.get("reki", []):
+    def clipped(line):                                # a line cut at the edge of the drawing, as on the picture
+        pieces, cur = [], []
+        for a_, b_ in zip(line, line[1:]):
+            c_ = _clip(a_, b_, data["box"])
+            if not c_:
+                if len(cur) > 1:
+                    pieces.append(cur)
+                cur = []
+                continue
+            if cur and math.dist(cur[-1], c_[0]) < 1e-6:
+                cur.append(c_[1])
+            else:
+                if len(cur) > 1:
+                    pieces.append(cur)
+                cur = [c_[0], c_[1]]
+        if len(cur) > 1:
+            pieces.append(cur)
+        return pieces
+    for r in data.get("reki", []):                    # the river runs off the drawing – cut at its edge
         for line in Z.river_lines(r["tochki"], r["shirina"], s):
-            poly(line, "VODA")
+            for piece in clipped(line):
+                poly(piece, "VODA")
         for at in r["barazhi"]:
             for arc in Z.barazh_lines(r["tochki"], r["shirina"], at, s):
                 poly(arc, "TEKST")
@@ -397,10 +466,12 @@ def write(data, d, out, s, sheet=None):
                       dxfattribs={"layer": "EVAKUATSIYA", "color": 3})
     for g in data["vhodove"]:
         text(g["x"], g["y"], g["etiket"])
-    for t in data["tekst"]:
+    for ti, t in enumerate(data["tekst"]):
+        begin()
         text(t["x"], t["y"], t["tekst"], rot=t["ugal"],                # the same end as on the picture
              align={"desen": "MIDDLE_RIGHT", "sreda": "MIDDLE_CENTER"}.get(t.get("kray"), "MIDDLE_LEFT"),
              color=1 if t.get("cvyat") == "cherven" else None)
+        end("tekst", ti)
     for e in data.get("podlozhka", []):                # the underlay of the approved drawing – walls, openings, marks
         if e["plaska"]:                                # the white mask that cuts an opening – a white fill on top,
             h_ = msp.add_hatch(dxfattribs={"layer": "PODLOZHKA"})        #   in the drawing's order

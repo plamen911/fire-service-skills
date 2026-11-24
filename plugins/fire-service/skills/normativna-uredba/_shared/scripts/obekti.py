@@ -25,6 +25,7 @@ history.md с промените. Индексът obekti.csv в корена н
     python3 _shared/scripts/obekti.py preimenuvai OB-0001 --ime "Ново име" [--ot 2026]   # старото име остава за търсене
     python3 _shared/scripts/obekti.py promeni OB-0001 adres="…" eik=… belezhka="…"
     python3 _shared/scripts/obekti.py istoriya OB-0001
+    python3 _shared/scripts/obekti.py dxf_stanje [--id OB-0001 …]   # за fire-render: md5 на .dxf и .json на ситуационната схема
 
 Видове документи (--vid) – едно текущо копие на вид, файловете се казват <вид>.<разширение>:
     situacionna_shema (= оперативна картичка – старото име; --vid operativna_kartichka се записва като нея),
@@ -58,6 +59,7 @@ import math
 import os
 import re
 import sys
+import time
 import unicodedata
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -399,6 +401,33 @@ def describe(store, row):
             "papka_link": f"https://drive.google.com/drive/folders/{row['papka_id']}" if row["papka_id"] and not store.plan else None}
 
 
+def dxf_stanje(store, reg, ids=None):
+    """The situational scheme's .dxf and .json in every object folder – md5 and time. fire-render compares the md5 of
+    the .dxf with the one it saw last: a changed .dxf is an edit (AutoCAD, Drive for desktop …) to read back with
+    dxf_import.py. One listing per object."""
+    import concurrent.futures
+    want = {i.strip().upper() for i in ids or []}
+    rows = [r for r in reg.rows if r["papka_id"] and (not want or r["id"].upper() in want)]
+
+    def one(row):
+        for n in range(3):                            # n8n answers 502 now and then under load – try again
+            try:
+                listing = store.list(row["papka_id"])
+                break
+            except Problem as e:
+                if "N8N_ERROR 5" not in str(e) or n == 2:
+                    raise
+                time.sleep(3 * (n + 1))
+        files = {f["name"]: f for f in listing if not f["folder"]}
+        dxf, js = files.get("situacionna_shema.dxf"), files.get("situacionna_shema.json")
+        if dxf and js:
+            return {"id": row["id"], "dxf_md5": dxf.get("md5"), "dxf_promenen": dxf.get("modified_at"),
+                    "json_md5": js.get("md5"), "json_promenen": js.get("modified_at")}
+        return None
+    with concurrent.futures.ThreadPoolExecutor(1 if store.plan else 3) as ex:   # 4–5 s per listing through n8n; more – 502
+        return [r for r in ex.map(one, rows) if r]
+
+
 def cmd_nov(store, reg, a):
     hit = search(reg, ime=a.ime, adres=a.adres, masto=a.masto, lat=a.lat, lon=a.lon, kadastar=a.kadastar or "")
     if hit["nameren"] and not a.vse_pak:
@@ -626,6 +655,8 @@ def main():
         s.add_argument(x, default="")
     s.add_argument("--lat", type=float); s.add_argument("--lon", type=float)
     s = sub.add_parser("spisak")
+    s = sub.add_parser("dxf_stanje", help="за fire-render: .dxf и .json на ситуационната схема на всеки обект (md5, час)")
+    s.add_argument("--id", nargs="*", help="само тези обекти")
     s = sub.add_parser("pokazhi"); s.add_argument("id"); s.add_argument("--svali"); s.add_argument("-o", "--out", default=".")
     s = sub.add_parser("istoriya"); s.add_argument("id")
     s = sub.add_parser("nov")
@@ -656,8 +687,11 @@ def main():
             out = search(reg, a.tekst, a.ime, a.adres, a.masto, a.lat, a.lon, a.kadastar)
             out["obekti_v_registara"] = len(reg.rows)
         elif a.cmd == "spisak":
-            out = {"obekti": [{k: r[k] for k in ("id", "ime", "predishni_imena", "naseleno_masto", "adres", "promenen")}
+            out = {"obekti": [{k: r[k] for k in ("id", "ime", "predishni_imena", "naseleno_masto", "adres", "promenen",
+                                                 "papka_id")}
                               for r in reg.rows]}
+        elif a.cmd == "dxf_stanje":
+            out = {"obekti": dxf_stanje(store, reg, a.id)}
         elif a.cmd == "pokazhi":
             row = reg.find(a.id)
             out = describe(store, row)

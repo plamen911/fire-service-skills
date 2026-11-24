@@ -15,4 +15,12 @@ Service и получава кратки отговори, картинка за
 `plan-pozharogasene`): за .cdr чертежите образът има `libreoffice-draw` – след промяна на `Dockerfile` или
 `requirements.txt` контейнерът се пресъздава (`docker compose up -d --build`); новите действия в `app.py` идват сами.
 
+Редакция в .dxf (`dxf_redakciya` и пазачът `_dxf_watcher`): потребителят поправя `situacionna_shema.dxf` в папката на
+обекта (Google Drive за десктоп, AutoCAD) и записва; работният поток в n8n „Fire Service – редакция в .dxf“ (тригер
+на Google Drive за променен `situacionna_shema.dxf`) вика `dxf_redakciya` с `papka_id` и `md5`, а сървърът изгражда
+схемата наново (`shemi/scripts/dxf_import.py` → `situacionna.py` → `obekti.py zapishi`, отчетът – ред в историята).
+Собственият .dxf (същият md5) се прескача веднага. Резерва – пазачът преглежда всички обекти на 6 часа, от 6 до 23 ч.
+българско време (`DXF_WATCH_EVERY=0` – изключен; `DXF_WATCH_ACTIVE=1` – и активните обекти на `DXF_WATCH_EVERY`
+секунди, ако тригерът липсва); видяното е в `dxf_watch.json` до папката на сесиите.
+
 Действия – виж началото на `app.py`. Тестове без мрежа: `python3 tests/test_app.py`.
