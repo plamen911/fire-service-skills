@@ -30,6 +30,12 @@ found by nachalo and returns the download links itself.
     POST /shema {"action": "plan_nachalo", "obekt": "OB-0010" | "lat", "lon" | "kadastar"}  – ПЛАНЪТ ЗА ПОЖАРОГАСЕНЕ:
                  върху ситуационната схема и етажите от регистъра; plan_podlozhka (етаж от .cdr, base64),
                  plan_variant (разчет + конкретна схема), plan_promeni (данните, решенията), plan_sglobi, plan_zapishi
+    POST /shema {"action": "dxf_redakciya", "obekt": "OB-0001"}  – РЕДАКЦИЯ В .DXF: situacionna_shema.dxf на обекта,
+                 редактиран в AutoCAD или онлайн редактор и записан обратно в папката му (Google Drive за десктоп),
+                 се чете с dxf_import.py и .docx, .png, .dxf и .json се изграждат наново в регистъра, с ред в
+                 историята. Същото прави и пазачът (_dxf_watcher) сам: на DXF_WATCH_EVERY секунди (по подразбиране
+                 300, 0 – изключен) сравнява md5 на .dxf-а на активните обекти (схемата е пипана в последните 14
+                 дни) с последния видян, а на 6 часа – на всички; само от 6 до 23 ч.
     GET  /health
 
 The scripts are the plugin's own (kais.py, situacionna.py, obekti.py) from the public repository, pulled at
@@ -63,7 +69,7 @@ SHEMI = os.path.join(REPO, "plugins", "fire-service", "skills", "shemi")
 SCRIPTS = os.path.join(SHEMI, "_shared", "scripts")
 FORMULYAR = os.path.join(SHEMI, "references", "formulyar.json")
 VID = "situacionna_shema"
-ACTIONS = ("nachalo", "pokazhi", "promeni", "chertai", "zapishi",
+ACTIONS = ("nachalo", "pokazhi", "promeni", "chertai", "zapishi", "dxf_redakciya",
            "plan_nachalo", "plan_podlozhka", "plan_variant", "plan_promeni", "plan_sglobi", "plan_zapishi")
 OPCII = {  # kais.py obekt options the model may set: name → (flag, takes a value)
     "radius": ("--radius", True), "granitsa": ("--granitsa", False), "ograda": ("--ograda", "maybe"),
@@ -248,10 +254,10 @@ def meta(path, **upd):
     return m
 
 
-def obekti(*args, cwd=DATA, env=None):
+def obekti(*args, cwd=DATA, env=None, timeout=240):
     script = os.environ.get("OBEKTI_SCRIPT") or os.path.join(SCRIPTS, "obekti.py")
     os.makedirs(cwd, exist_ok=True)
-    return json.loads(run([script, "--json", *args], cwd=cwd, env=env))
+    return json.loads(run([script, "--json", *args], cwd=cwd, env=env, timeout=timeout))
 
 
 def links(oid):
@@ -626,6 +632,7 @@ def a_zapishi(b):
             return {"zapisano": False, "otgovor": nov,
                     "za_claude": "Обектът не е създаден – виж отговора (вероятно прилича на съществуващ)."}
     res = obekti("zapishi", oid, "--vid", VID, *files, cwd=path, env=env)
+    dxf_seen(oid, file_md5(files[1]))                  # our own .dxf – not an edit for the watcher
     meta(path, obekt=oid)
     return {"zapisano": True, "obekt": oid, "nov_obekt": bool(nov), "otgovor": res, "failove": links(oid),
             "za_claude": "Записано в регистъра. Дай на потребителя линковете от failove – .docx, .dxf и картинката."}
@@ -1049,7 +1056,158 @@ def a_plan_zapishi(b):
             "za_claude": "Записано в регистъра. Дай линковете: планът, конкретните схеми и разчетите."}
 
 
+# ------------------------------------------------------------------------------------------- edits in the .dxf
+#
+# The user opens situacionna_shema.dxf from the object's folder (Google Drive for desktop), edits it in AutoCAD and
+# saves. The watcher sees the new md5 and reads the edit back: dxf_import.py → situacionna.py → obekti.py zapishi,
+# with the report as the line in the object's history. What the watcher saw is kept in DXF_STATE (outside the
+# sessions, which are cleaned up after 3 days).
+
+DXF_EVERY = int(os.environ.get("DXF_WATCH_EVERY", "300") or 0)      # seconds between rounds; 0 – off
+DXF_ALL_EVERY = 6 * 3600         # how often every object is listed – otherwise only the active ones
+DXF_ACTIVE_DAYS = 14             # active: its scheme changed in the last two weeks (an edit is most likely there)
+DXF_HOURS = (6, 23)              # local hours (Europe/Sofia) when the watcher looks
+DXF_STATE = os.path.join(os.path.dirname(DATA.rstrip("/")) or DATA, "dxf_watch.json")
+DXF_AVTOR = "редакция в .dxf"
+_dxf_lock = threading.Lock()
+
+
+def file_md5(path):
+    import hashlib
+    with open(path, "rb") as f:
+        return hashlib.md5(f.read()).hexdigest()
+
+
+def dxf_state():
+    try:
+        with open(DXF_STATE, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {"md5": {}, "aktivni": [], "all_at": 0}
+
+
+def dxf_state_save(st):
+    os.makedirs(os.path.dirname(DXF_STATE), exist_ok=True)
+    tmp = DXF_STATE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(st, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, DXF_STATE)
+
+
+def dxf_seen(oid, md5_):
+    with _dxf_lock:
+        st = dxf_state()
+        st.setdefault("md5", {})[oid] = md5_
+        if oid not in st.setdefault("aktivni", []):
+            st["aktivni"].append(oid)
+        dxf_state_save(st)
+
+
+def dxf_redakciya(oid):
+    """Read the edited .dxf of one object back and rebuild its situational scheme in the register."""
+    work = os.path.join(DATA, "_dxf", re.sub(r"[^A-Za-z0-9-]", "_", oid))
+    shutil.rmtree(work, ignore_errors=True)
+    os.makedirs(os.path.join(work, "out"))
+    got = obekti("pokazhi", oid, "--svali", VID, "-o", work).get("svaleni") or []
+    dxf = next((f for f in got if f.lower().endswith(".dxf")), None)
+    src = next((f for f in got if os.path.basename(f) == VID + ".json"), None)
+    if not dxf or not src:
+        raise Problem("NOT_FOUND", f"{oid} няма ситуационна схема с .dxf и .json", 404)
+    seen_md5 = file_md5(dxf)
+    nov = os.path.join(work, "nov.json")
+    p = subprocess.run([sys.executable, os.path.join(SHEMI, "scripts", "dxf_import.py"), src, dxf, "-o", nov],
+                       cwd=work, capture_output=True, text=True, timeout=300)
+    try:
+        rep = json.loads(p.stdout)
+    except ValueError:
+        raise Problem("SCRIPT_ERROR", (p.stderr or p.stdout).strip()[-900:] or f"код {p.returncode}") from None
+    res = {"obekt": oid, "otchet": rep, "zapisano": False}
+    if not rep.get("prieto") or not rep.get("promeni"):
+        dxf_seen(oid, seen_md5)
+        res["za_claude"] = ("Няма какво да се пренесе." if rep.get("prieto") else
+                            "Редакцията не е приета – кажи на потребителя защо (otchet.belezhka).")
+        return res
+    with open(src, encoding="utf-8") as f:
+        izgotvil = str((json.load(f).get("list") or {}).get("izgotvil") or "")
+    out = os.path.join(work, "out")
+    run([os.path.join(SHEMI, "scripts", "situacionna.py"), nov, "-o", os.path.join(out, VID + ".docx"),
+         "--izgotvil", izgotvil], cwd=work, env={"FIRE_SERVICE_AVTOR": DXF_AVTOR})
+    shutil.copy(nov, os.path.join(out, VID + ".json"))
+    files = [os.path.join(out, VID + x) for x in (".docx", ".dxf", "_grafichna.png", ".json")]
+    obekti("zapishi", oid, "--vid", VID, *files, "--belezhka", rep.get("belezhka") or DXF_AVTOR, cwd=work,
+           env={"FIRE_SERVICE_AVTOR": DXF_AVTOR})
+    dxf_seen(oid, file_md5(files[1]))
+    res.update(zapisano=True, failove=links(oid),
+               za_claude="Схемата е изградена наново от редакцията в .dxf. Кажи на потребителя какво е пренесено, "
+                         "какво е отхвърлено и какво не се пренася (otchet), и дай линковете от failove.")
+    return res
+
+
+def a_dxf_redakciya(b):
+    pull()
+    oid = str(b.get("obekt") or "").strip().upper()
+    if not re.fullmatch(r"OB-\d{4,}", oid):
+        raise Problem("BAD_INPUT", "dxf_redakciya иска \"obekt\" (OB-…)")
+    return dxf_redakciya(oid)
+
+
+def dxf_round():
+    """One round of the watcher: the objects whose .dxf changed since the last round are read back."""
+    try:
+        from zoneinfo import ZoneInfo
+        hour = __import__("datetime").datetime.now(ZoneInfo("Europe/Sofia")).hour
+    except Exception:  # noqa: BLE001 – no tz data: look at any hour
+        hour = DXF_HOURS[0]
+    if not DXF_HOURS[0] <= hour < DXF_HOURS[1]:
+        return []
+    pull()
+    n8n_up()
+    st = dxf_state()
+    full = time.time() - st.get("all_at", 0) > DXF_ALL_EVERY
+    if not full and not st.get("aktivni"):
+        return []
+    # every object once in DXF_ALL_EVERY (4–5 s a listing through n8n), in between – only the active ones
+    args = ["dxf_stanje"] + ([] if full else ["--id", *st["aktivni"]])
+    rows = obekti(*args, timeout=900).get("obekti") or []
+    done = []
+    with _dxf_lock:
+        st = dxf_state()
+        if full and rows:                           # an empty answer (n8n down) is not "no objects"
+            import datetime as _dt
+            limit = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=DXF_ACTIVE_DAYS)).isoformat()
+            st["aktivni"] = [r["id"] for r in rows if max(r.get("dxf_promenen") or "", r.get("json_promenen") or "")
+                             >= limit[:19]]
+            st["all_at"] = time.time()
+        known = st.setdefault("md5", {})
+        changed = [r["id"] for r in rows if known.get(r["id"]) not in (None, r["dxf_md5"])]
+        for r in rows:
+            known.setdefault(r["id"], r["dxf_md5"])     # first sight – what is there now is the starting point
+        dxf_state_save(st)
+    for oid in changed:
+        try:
+            r = dxf_redakciya(oid)
+            done.append({"obekt": oid, "zapisano": r["zapisano"], "belezhka": r["otchet"].get("belezhka")})
+        except Exception as e:  # noqa: BLE001 – one object must not stop the others
+            done.append({"obekt": oid, "greshka": f"{type(e).__name__}: {e}"[:300]})
+    for d_ in done:
+        sys.stderr.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} dxf: {json.dumps(d_, ensure_ascii=False)}\n")
+    return done
+
+
+def _dxf_watcher():
+    if DXF_EVERY <= 0:
+        return
+    time.sleep(90)                                  # let the server start and pull first
+    while True:
+        try:
+            dxf_round()
+        except Exception as e:  # noqa: BLE001 – the next round tries again
+            sys.stderr.write(f"dxf watcher: {type(e).__name__}: {e}\n")
+        time.sleep(DXF_EVERY)
+
+
 HANDLERS = {"nachalo": a_nachalo, "pokazhi": a_pokazhi, "promeni": a_promeni, "chertai": a_chertai, "zapishi": a_zapishi,
+            "dxf_redakciya": a_dxf_redakciya,
             "plan_nachalo": a_plan_nachalo, "plan_podlozhka": a_plan_podlozhka, "plan_variant": a_plan_variant,
             "plan_promeni": a_plan_promeni, "plan_sglobi": a_plan_sglobi, "plan_zapishi": a_plan_zapishi}
 
@@ -1189,4 +1347,5 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     os.makedirs(DATA, exist_ok=True)
     threading.Thread(target=_puller, daemon=True).start()
+    threading.Thread(target=_dxf_watcher, daemon=True).start()
     ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("PORT", "8080"))), Handler).serve_forever()

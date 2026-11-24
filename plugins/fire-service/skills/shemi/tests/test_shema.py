@@ -285,6 +285,9 @@ def test_dxf():
     check(all(431100.0 - 1e-6 <= x <= 431220.0 + 1e-6 for ln in lines for x in (ln[0][0], ln[1][0])),
           "the streets are cut at the drawing's edge")
     texts = [e.dxf.text for e in msp.query("TEXT")]
+    texts += [a.dxf.text for e in msp.query("INSERT") for a in e.attribs]   # the water source – block FS_HIDRANT
+    check(any(e.dxf.name == "FS_HIDRANT" for e in msp.query("INSERT[layer=='VODA']")), "the water source is a block")
+    check(any(e.has_xdata("FIRESVC") for e in msp), "the objects carry their place in the JSON (XDATA)")
     check("бул. „Примерен“" in texts and "ПХ 70/80" in texts and "С-70/80" in texts, "the names and labels as text")
     loaded, _ = shema.load({**data, "vodoprovod": [{"tochki": [[0, 80], [120, 80]], "diametar": "70/80", "natisk": "3–5"}]})
     check(loaded["vodoprovod"][0]["etiket"] == "С-70/80/3–5", "a size and a pressure range as written: С-70/80/3–5")

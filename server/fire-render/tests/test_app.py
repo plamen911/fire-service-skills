@@ -225,4 +225,75 @@ st, fast = app.answer("nachalo", {"kadastar": "1.2.3"})
 ok(fast.get("gotovo") and not fast.get("raboti"), "a short job answers at once, as before")
 app.n8n_up, app.HANDLERS["nachalo"], app.WAIT = real_up, real_h, real_wait
 
+# ---- редакция в .dxf: dxf_redakciya и пазачът (обектът е измисленият от fixtures на shemi; регистърът е подменен)
+import shutil  # noqa: E402
+REAL_SHEMI = os.path.join(os.path.dirname(os.path.dirname(HERE)), "..", "plugins", "fire-service", "skills", "shemi")
+REAL_SHEMI = os.path.abspath(REAL_SHEMI)
+sys.path.insert(0, os.path.join(REAL_SHEMI, "scripts"))
+import ezdxf  # noqa: E402
+import dxf_import  # noqa: E402
+
+app.SHEMI = REAL_SHEMI
+app.DXF_STATE = os.path.join(TMP, "dxf_watch.json")
+d0 = json.load(open(os.path.join(REAL_SHEMI, "tests", "fixtures", "situacionna.json"), encoding="utf-8"))
+d0.pop("obekt_gps", None)
+reg = os.path.join(TMP, "reg")
+os.makedirs(reg)
+json.dump(d0, open(os.path.join(reg, "situacionna_shema.json"), "w", encoding="utf-8"), ensure_ascii=False)
+base = dxf_import.baseline(d0, tempfile.mkdtemp())
+doc = ezdxf.readfile(base)
+for e in doc.modelspace():
+    if dxf_import.tag(e) == ("vodoiztochnitsi", 0):
+        e.translate(3, 4, 0)
+doc.saveas(os.path.join(reg, "situacionna_shema.dxf"))
+calls = []
+
+
+def fake_obekti(*args, cwd=None, env=None, timeout=240):
+    calls.append(args)
+    if args[0] == "pokazhi" and "--svali" in args:
+        dest = os.path.join(args[args.index("-o") + 1], args[1])
+        os.makedirs(dest, exist_ok=True)
+        got = []
+        for n in ("situacionna_shema.json", "situacionna_shema.dxf"):
+            shutil.copy(os.path.join(reg, n), os.path.join(dest, n.replace("situacionna_shema.dxf", "Obekt.dxf")))
+            got.append(os.path.join(dest, n.replace("situacionna_shema.dxf", "Obekt.dxf")))
+        return {"svaleni": got}
+    if args[0] == "dxf_stanje":
+        return {"obekti": [{"id": "OB-0042", "dxf_md5": app.file_md5(os.path.join(reg, "situacionna_shema.dxf")),
+                            "dxf_promenen": "2099-01-01T00:00:00.000Z", "json_promenen": "2099-01-01T00:00:00.000Z"}]}
+    if args[0] == "zapishi":
+        for f in args[3:]:
+            if f.endswith((".json", ".dxf")):
+                shutil.copy(f, os.path.join(reg, "situacionna_shema" + os.path.splitext(f)[1]))
+        return {"zapisani": [os.path.basename(f) for f in args[3:] if not f.startswith("--")]}
+    return {"dokumenti": {}}
+
+
+real_obekti, real_hours = app.obekti, app.DXF_HOURS
+app.obekti, app.n8n_up, app.DXF_HOURS = fake_obekti, (lambda: None), (0, 24)
+r = app.a_dxf_redakciya({"obekt": "ob-0042"})
+ok(r["zapisano"] and r["otchet"]["premesteni"], "dxf_redakciya: преместеният хидрант е пренесен и записан")
+z = next(c for c in calls if c[0] == "zapishi")
+ok("--belezhka" in z and "редакция в .dxf" in z[z.index("--belezhka") + 1], "редът в историята е отчетът")
+h0, h1 = d0["vodoiztochnitsi"][0], json.load(open(os.path.join(reg, "situacionna_shema.json")))["vodoiztochnitsi"][0]
+ok(abs(abs(h1["x"] - h0["x"]) + abs(h1["y"] - h0["y"]) - 7) < 0.05, "в регистъра JSON-ът е с новата точка")
+calls.clear()
+ok(app.dxf_round() == [], "пазачът: нашият .dxf не е редакция")
+ok(not any(c[0] == "zapishi" for c in calls), "… и нищо не се записва")
+doc = ezdxf.readfile(os.path.join(reg, "situacionna_shema.dxf"))
+for e in doc.modelspace():
+    if dxf_import.tag(e) == ("vodoiztochnitsi", 1):
+        e.translate(-2, 0, 0)
+doc.saveas(os.path.join(reg, "situacionna_shema.dxf"))
+done = app.dxf_round()
+ok(len(done) == 1 and done[0]["zapisano"], "пазачът: новият md5 → пренесено и записано")
+ok(app.dxf_round() == [], "следващият кръг – нищо ново")
+try:
+    app.a_dxf_redakciya({"obekt": "Лидл"})
+    ok(False, "лош obekt")
+except app.Problem:
+    ok(True, "dxf_redakciya без OB-… – BAD_INPUT")
+app.obekti, app.DXF_HOURS = real_obekti, real_hours
+
 print(f"OK – {checks} проверки")
