@@ -2,11 +2,13 @@
 # -*- coding: utf-8 -*-
 """
 docx_common.py — the typography rules and the final check shared by every script that builds a document
-(_shared/conventions.md, т. 2): „№ 4“, the dash „-“ (not „–“ or „—“; the letterhead keeps its own), no bold, one letterhead.
+(_shared/conventions.md, т. 2): „№ 4“, the dash „–“ between words (a lone „-“ between spaces and „—“ become „–“;
+the hyphen inside words and numbers stays; the letterhead keeps its own), no bold, one letterhead.
 
     from docx_common import typo, typo_all, check_document, report
 
-    typo("ул. Иван Вазов №4 – Плевен")        →  "ул. Иван Вазов № 4 - Плевен"
+    typo("ул. Иван Вазов №4 - Плевен")        →  "ул. Иван Вазов № 4 – Плевен"
+    typo("№ 3–7, 2-3 °C, ПЛАН-КОНСПЕКТ")      →  "№ 3-7, 2-3 °C, ПЛАН-КОНСПЕКТ"
     typo_all(doc)                              applies typo() to the body, the headers and the footers
     check_document("out.docx")                 →  [] or a list of what breaks the rules
     report("out.docx")                         sets the file's author (stamp) and prints the problems to stderr
