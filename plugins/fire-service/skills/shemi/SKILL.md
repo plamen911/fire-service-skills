@@ -86,8 +86,9 @@ python3 -c "import glob,os;print('\n'.join(glob.glob(os.path.expanduser('~/.clau
 Ситуационната схема се поправя направо в .dxf-а, а .docx, .png и .dxf се изграждат наново от данните:
 
 - **Сама.** Потребителят отваря `situacionna_shema.dxf` от папката на обекта (Google Drive за десктоп), поправя и
-  записва. Сървърът fire-render вижда новия .dxf (активните обекти – на 5 минути, всички – на 6 часа, от 6 до 23 ч.) и
-  записва новите файлове в регистъра с отчета като ред в историята. Нищо не се пуска на ръка.
+  записва. Тригер в n8n („Fire Service – редакция в .dxf“) вижда новия .dxf до минута и вика сървъра fire-render, който
+  записва новите файлове в регистъра с отчета като ред в историята (резерва – сървърът сам преглежда всички обекти
+  на 6 часа). Нищо не се пуска на ръка.
 - **Веднага или .dxf, качен в чата.** С конектора – `shema` с `{"action": "dxf_redakciya", "obekt": "OB-…"}` (сървърът
   чете .dxf-а от папката на обекта). С личен ключ: `obekti.py pokazhi OB-… --svali situacionna_shema` →
   `python3 scripts/dxf_import.py situacionna_shema.json <редактиран>.dxf -o nov.json` → `situacionna.py nov.json …` →

@@ -33,9 +33,9 @@ found by nachalo and returns the download links itself.
     POST /shema {"action": "dxf_redakciya", "obekt": "OB-0001"}  – РЕДАКЦИЯ В .DXF: situacionna_shema.dxf на обекта,
                  редактиран в AutoCAD или онлайн редактор и записан обратно в папката му (Google Drive за десктоп),
                  се чете с dxf_import.py и .docx, .png, .dxf и .json се изграждат наново в регистъра, с ред в
-                 историята. Същото прави и пазачът (_dxf_watcher) сам: на DXF_WATCH_EVERY секунди (по подразбиране
-                 300, 0 – изключен) сравнява md5 на .dxf-а на активните обекти (схемата е пипана в последните 14
-                 дни) с последния видян, а на 6 часа – на всички; само от 6 до 23 ч.
+                 историята. Вика го работният поток в n8n „Fire Service – редакция в .dxf“ (тригер на Google Drive) с
+                 {"papka_id", "md5"}. Пазачът (_dxf_watcher) е резервата: на 6 часа сравнява md5 на .dxf-а на всички
+                 обекти с последния видян (с DXF_WATCH_ACTIVE=1 – и активните на DXF_WATCH_EVERY секунди); 6–23 ч.
     GET  /health
 
 The scripts are the plugin's own (kais.py, situacionna.py, obekti.py) from the public repository, pulled at
@@ -1064,7 +1064,11 @@ def a_plan_zapishi(b):
 # sessions, which are cleaned up after 3 days).
 
 DXF_EVERY = int(os.environ.get("DXF_WATCH_EVERY", "300") or 0)      # seconds between rounds; 0 – off
-DXF_ALL_EVERY = 6 * 3600         # how often every object is listed – otherwise only the active ones
+# The n8n workflow "Fire Service – редакция в .dxf" (a Google Drive trigger) calls dxf_redakciya within a minute of a
+# save, so by default the watcher is only the safety net: every object once in DXF_ALL_EVERY. DXF_WATCH_ACTIVE=1 –
+# also the active objects every DXF_EVERY seconds (without the trigger).
+DXF_ACTIVE = os.environ.get("DXF_WATCH_ACTIVE", "0") == "1"
+DXF_ALL_EVERY = 6 * 3600         # how often every object is listed
 DXF_ACTIVE_DAYS = 14             # active: its scheme changed in the last two weeks (an edit is most likely there)
 DXF_HOURS = (6, 23)              # local hours (Europe/Sofia) when the watcher looks
 DXF_STATE = os.path.join(os.path.dirname(DATA.rstrip("/")) or DATA, "dxf_watch.json")
@@ -1144,10 +1148,21 @@ def dxf_redakciya(oid):
 
 
 def a_dxf_redakciya(b):
+    """{"obekt": "OB-0001"} or {"papka_id": "<the object's Drive folder>"} (the n8n trigger knows only the folder);
+    "md5" – of the .dxf just saved: the one the server wrote itself (or already read) is skipped at once."""
     pull()
     oid = str(b.get("obekt") or "").strip().upper()
+    papka = str(b.get("papka_id") or "").strip()
+    if not oid and papka:
+        row = next((r for r in obekti("spisak").get("obekti") or [] if r.get("papka_id") == papka), None)
+        if not row:
+            return {"obekt": None, "zapisano": False, "za_claude": "Папката не е на обект от регистъра."}
+        oid = row["id"]
     if not re.fullmatch(r"OB-\d{4,}", oid):
-        raise Problem("BAD_INPUT", "dxf_redakciya иска \"obekt\" (OB-…)")
+        raise Problem("BAD_INPUT", "dxf_redakciya иска \"obekt\" (OB-…) или \"papka_id\"")
+    md5_ = str(b.get("md5") or "").strip().lower()
+    if md5_ and (dxf_state().get("md5") or {}).get(oid) == md5_:
+        return {"obekt": oid, "zapisano": False, "bez_promyana": True, "za_claude": "Този .dxf вече е видян."}
     return dxf_redakciya(oid)
 
 
@@ -1164,7 +1179,7 @@ def dxf_round():
     n8n_up()
     st = dxf_state()
     full = time.time() - st.get("all_at", 0) > DXF_ALL_EVERY
-    if not full and not st.get("aktivni"):
+    if not full and not (DXF_ACTIVE and st.get("aktivni")):
         return []
     # every object once in DXF_ALL_EVERY (4–5 s a listing through n8n), in between – only the active ones
     args = ["dxf_stanje"] + ([] if full else ["--id", *st["aktivni"]])

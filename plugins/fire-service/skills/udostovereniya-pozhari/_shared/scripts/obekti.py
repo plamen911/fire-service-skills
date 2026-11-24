@@ -687,7 +687,8 @@ def main():
             out = search(reg, a.tekst, a.ime, a.adres, a.masto, a.lat, a.lon, a.kadastar)
             out["obekti_v_registara"] = len(reg.rows)
         elif a.cmd == "spisak":
-            out = {"obekti": [{k: r[k] for k in ("id", "ime", "predishni_imena", "naseleno_masto", "adres", "promenen")}
+            out = {"obekti": [{k: r[k] for k in ("id", "ime", "predishni_imena", "naseleno_masto", "adres", "promenen",
+                                                 "papka_id")}
                               for r in reg.rows]}
         elif a.cmd == "dxf_stanje":
             out = {"obekti": dxf_stanje(store, reg, a.id)}

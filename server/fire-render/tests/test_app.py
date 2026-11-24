@@ -262,6 +262,8 @@ def fake_obekti(*args, cwd=None, env=None, timeout=240):
     if args[0] == "dxf_stanje":
         return {"obekti": [{"id": "OB-0042", "dxf_md5": app.file_md5(os.path.join(reg, "situacionna_shema.dxf")),
                             "dxf_promenen": "2099-01-01T00:00:00.000Z", "json_promenen": "2099-01-01T00:00:00.000Z"}]}
+    if args[0] == "spisak":
+        return {"obekti": [{"id": "OB-0042", "papka_id": "papka42"}]}
     if args[0] == "zapishi":
         for f in args[3:]:
             if f.endswith((".json", ".dxf")):
@@ -271,7 +273,7 @@ def fake_obekti(*args, cwd=None, env=None, timeout=240):
 
 
 real_obekti, real_hours = app.obekti, app.DXF_HOURS
-app.obekti, app.n8n_up, app.DXF_HOURS = fake_obekti, (lambda: None), (0, 24)
+app.obekti, app.n8n_up, app.DXF_HOURS, app.DXF_ACTIVE = fake_obekti, (lambda: None), (0, 24), True
 r = app.a_dxf_redakciya({"obekt": "ob-0042"})
 ok(r["zapisano"] and r["otchet"]["premesteni"], "dxf_redakciya: преместеният хидрант е пренесен и записан")
 z = next(c for c in calls if c[0] == "zapishi")
@@ -289,6 +291,12 @@ doc.saveas(os.path.join(reg, "situacionna_shema.dxf"))
 done = app.dxf_round()
 ok(len(done) == 1 and done[0]["zapisano"], "пазачът: новият md5 → пренесено и записано")
 ok(app.dxf_round() == [], "следващият кръг – нищо ново")
+calls.clear()
+r = app.a_dxf_redakciya({"papka_id": "papka42", "md5": app.file_md5(os.path.join(reg, "situacionna_shema.dxf"))})
+ok(r.get("bez_promyana") and r["obekt"] == "OB-0042", "тригерът от n8n: папката → обектът; видян md5 – веднага")
+ok(not any(c[0] == "pokazhi" for c in calls), "… без да тегли файловете")
+r = app.a_dxf_redakciya({"papka_id": "chuzhda"})
+ok(r["obekt"] is None and not r["zapisano"], "папка извън регистъра – нищо")
 try:
     app.a_dxf_redakciya({"obekt": "Лидл"})
     ok(False, "лош obekt")
