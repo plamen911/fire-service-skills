@@ -245,6 +245,27 @@ def dist_to_segment(p, a, b):
 def overlap(a0, a1, b0, b1):
     return min(a1, b1) - max(a0, b0) > 0
 
+def draw_building_label(ax, b, lx, ly, fs):
+    """The label of a building on a white box. A building smaller than its label (a transformer, a kiosk of 2 m) would
+    vanish under the box – then the label goes beside it, to the right, and the building stays visible."""
+    t = ax.text(lx, ly, b["etiket"].replace("\\n", "\n"), ha="center", va="center", fontsize=fs + 0.5, zorder=4,
+                linespacing=1.2, bbox=dict(fc="white", ec="none", pad=1.0, alpha=0.9))
+    pts = b["kontur"] or [(b["x"], b["y"]), (b["x"] + b["w"], b["y"] + b["h"])]
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    try:
+        r = ax.figure.canvas.get_renderer()
+        bb = t.get_window_extent(r)                    # the text itself (the white box is laid out only when drawn)
+        (tx0, ty0), (tx1, ty1) = ax.transData.inverted().transform([(bb.x0, bb.y0), (bb.x1, bb.y1)])
+    except Exception:  # noqa: BLE001 – no renderer (svg only): leave it in the middle
+        return t
+    if (max(xs) - min(xs)) > 0.8 * (tx1 - tx0) or (max(ys) - min(ys)) > 0.8 * (ty1 - ty0):
+        return t                                       # the building shows round its label – as before
+    gap = (tx1 - tx0) / max(4, max(len(x) for x in t.get_text().split("\n")))   # about one letter
+    t.set_position((max(xs) + gap, (min(ys) + max(ys)) / 2))
+    t.set_ha("left")
+    return t
+
+
 def label_point(b, fires):
     """The centre of the building's label – in the biggest part of the building that no fire covers,
     so that the hatching does not hide the name."""
@@ -1284,12 +1305,10 @@ def draw_scene(ax, data, d, pal, s, fs, hose_m):
             draw_building(ax, b["x"], b["y"], b["w"], b["h"], b["pokriv"], lw=building_lw(b))
         if b["etiket"] and b["kontur"]:                # an outline: the label at its centroid, on a white box so the
             lx, ly = centroid(b["kontur"])             #   walls and dimension lines under it never cut through the text
-            ax.text(lx, ly, b["etiket"].replace("\\n", "\n"), ha="center", va="center", fontsize=fs + 0.5, zorder=4,
-                    linespacing=1.2, bbox=dict(fc="white", ec="none", pad=1.0, alpha=0.9))
+            draw_building_label(ax, b, lx, ly, fs)
         elif b["etiket"]:
             lx, ly = label_point(b, data["pozhar"] + data["zadimyavane"])
-            ax.text(lx, ly, b["etiket"].replace("\\n", "\n"), ha="center", va="center", fontsize=fs + 0.5, zorder=4,
-                    linespacing=1.2, bbox=dict(fc="white", ec="none", pad=1.0, alpha=0.9))
+            draw_building_label(ax, b, lx, ly, fs)
         if b["razmeri"]:
             for a_, b_, txt, off_ in wall_dimensions(b, 0.75 * s):
                 draw_dimension(ax, a_, b_, txt, off_, fs - 0.5)
