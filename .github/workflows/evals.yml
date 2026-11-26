@@ -3,8 +3,15 @@ name: evals
 # и ги сравнява с evals/baseline.json. Струва пари (~12 USD на пускане: 28 случая по 3 опита, ~5 мин), затова
 # върви САМО РЪЧНО (Actions → evals → Run workflow, или `gh workflow run evals.yml`) – след промени в описанията
 # или в SKILL.md и преди нова версия за потребителите. Без секрета ANTHROPIC_API_KEY работата се пропуска.
+# С `sluchai` (напр. `gh workflow run evals.yml -f sluchai=eptz-zaklyuchenie-nepalni-materiali`) върви само този
+# случай (или шаблон с *), без сравнение с базата – за нов или поправен случай (~1 USD за ЕПТЗ случай).
 on:
   workflow_dispatch:
+    inputs:
+      sluchai:
+        description: "Само тези случаи (име или шаблон с *); празно = регресията"
+        required: false
+        default: ""
 jobs:
   evals:
     runs-on: ubuntu-latest
@@ -33,8 +40,18 @@ jobs:
           sudo apt-get update -q && sudo apt-get install -y -q bubblewrap socat
           pip install -r requirements-dev.txt
           npm install -g @anthropic-ai/claude-code
+      - name: Run the chosen cases
+        if: steps.key.outputs.ok == 'true' && inputs.sluchai != ''
+        working-directory: plugins/fire-service
+        env:
+          SLUCHAI: ${{ inputs.sluchai }}
+        run: |
+          mkdir -p evals/results
+          claude plugin eval . --case "$SLUCHAI" --ablation none --trust-plugin --no-publish \
+            --allow-tools Bash Write Edit -j 2 --max-cost-usd 5 --threshold 0 \
+            --json evals/results/ci.json --report evals/results/report.html
       - name: Run the regression cases
-        if: steps.key.outputs.ok == 'true'
+        if: steps.key.outputs.ok == 'true' && inputs.sluchai == ''
         working-directory: plugins/fire-service
         run: |
           mkdir -p evals/results
@@ -42,7 +59,7 @@ jobs:
             --allow-tools Bash -j 4 --max-cost-usd 12 --threshold 0 \
             --json evals/results/ci.json --report evals/results/report.html
       - name: Compare with the baseline
-        if: steps.key.outputs.ok == 'true'
+        if: steps.key.outputs.ok == 'true' && inputs.sluchai == ''
         working-directory: plugins/fire-service
         run: python3 evals/regresiya.py evals/results/ci.json --bez-istoriya
       - uses: actions/upload-artifact@v7
