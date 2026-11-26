@@ -43,12 +43,16 @@ def doc_text(path):
     return "\n".join(parts)
 
 
-def build(content, meta, out, final=False):
+def build(content, meta, out, final=False, chochev=None, check_ok=True):
     cmd = [sys.executable, os.path.join(SKILL, "scripts", "build_eptz_docx.py"),
            "--content", content, "--meta", meta, "--out", out]
     if final:
         cmd.append("--final")
-    r = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    if chochev:
+        cmd += ["--chochev", chochev]
+    r = subprocess.run(cmd, check=check_ok, capture_output=True, text=True)
+    if not check_ok:
+        return r
     check("DOC_CHECK" not in r.stderr, "the finished ЕПТЗ keeps the common rules (no bold, letterhead, „-“, „№ “)"
           + (": " + r.stderr.strip()[:200] if "DOC_CHECK" in r.stderr else ""))
 
@@ -147,7 +151,12 @@ def check_literatura(tmp, mp):
     md = os.path.join(tmp, "lit.md")
     open(md, "w", encoding="utf-8").write(text)
     out = os.path.join(tmp, "lit.docx")
-    build(md, mp, out)
+    r = build(md, mp, out, check_ok=False)
+    check(r.returncode != 0 and "Чочев – числата не са проверени" in (r.stdout + r.stderr) and not os.path.exists(out),
+          "Чочев without its appendix: the build stops, no .docx")
+    pril = os.path.join(tmp, "chochev_pril7.md")   # the appendix as the connector's regs_read gives it
+    open(pril, "w", encoding="utf-8").write("## Прил. № 7 – Температура на топене – с. 223\n| Алуминий | 600 ÷ 660 |\n")
+    build(md, mp, out, chochev=pril)
     t = doc_text(out)
     check("52 °C (ICSC 1561)" in t, "[[icsc:1561]] → (ICSC 1561)")
     check("(Чочев, 2003, прил. № 7)" in t and "с. 223" not in t, "[[chochev: …]] → (Чочев, 2003, прил. № 7), no page in the text")
@@ -164,7 +173,7 @@ def check_literatura(tmp, mp):
     open(md, "w", encoding="utf-8").write(text.replace("### Изследване на въпрос № 2:\n",
         "### Изследване на въпрос № 2:\n\nДървата са били на по-малко от 0,5 m от печката "
         "[[naredba-8121z-647: чл. 40, ал. 1, т. 10]].\n", 1))
-    build(md, mp, out)
+    build(md, mp, out, chochev=pril)
     t = doc_text(out)
     check("(Наредба № 8121з-647/2014, чл. 40, ал. 1, т. 10)" in t, "[[naredba-8121z-647: …]] → the article in the text")
     check(any("8121з-647 от 1 октомври 2014" in x for x in literatura(out)), "the ordinance in the literature")
@@ -172,20 +181,20 @@ def check_literatura(tmp, mp):
     # an unknown source stops the build instead of listing a book nobody cited
     open(md, "w", encoding="utf-8").write(text.replace("[[icsc:1400]]", "[[babrauskaz]]"))
     r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "build_eptz_docx.py"),
-                        "--content", md, "--meta", mp, "--out", out], capture_output=True, text=True)
+                        "--content", md, "--meta", mp, "--out", out, "--chochev", pril], capture_output=True, text=True)
     check(r.returncode != 0 and "babrauskas" in (r.stderr + r.stdout), "unknown key stops the build and suggests the right one")
 
     # a temperature without a marker is reported (a warning, the document is still built)
     open(md, "w", encoding="utf-8").write(text.replace("### Изследване на въпрос № 2:\n",
                                                        "### Изследване на въпрос № 2:\n\nГорещият газ е около 777 °C.\n", 1))
     r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "build_eptz_docx.py"),
-                        "--content", md, "--meta", mp, "--out", out], capture_output=True, text=True)
+                        "--content", md, "--meta", mp, "--out", out, "--chochev", pril], capture_output=True, text=True)
     check(r.returncode == 0 and "777 °C" in r.stdout and "⚠" in r.stdout, "a number without a source is warned about")
 
     # a number that the cited place does not give stops the build
     open(md, "w", encoding="utf-8").write(text.replace("52 °C", "62 °C", 1))
     r = subprocess.run([sys.executable, os.path.join(SKILL, "scripts", "build_eptz_docx.py"),
-                        "--content", md, "--meta", mp, "--out", out], capture_output=True, text=True)
+                        "--content", md, "--meta", mp, "--out", out, "--chochev", pril], capture_output=True, text=True)
     check(r.returncode != 0 and "62" in (r.stderr + r.stdout), "a wrong number next to [[icsc:1561]] stops the build")
 
     # every [[…]] in the reference files gives a number its source really has
@@ -208,7 +217,7 @@ def check_literatura(tmp, mp):
     mp2 = os.path.join(tmp, "meta2.json")
     json.dump(meta, open(mp2, "w", encoding="utf-8"), ensure_ascii=False)
     open(md, "w", encoding="utf-8").write(text.replace("[[icsc:1400]]", "[[ilb-razreditel: раздел 9]]"))
-    build(md, mp2, out)
+    build(md, mp2, out, chochev=pril)
     check("(ИЛБ на „Разредител 650“, 2024, раздел 9)" in doc_text(out), "per-case source rendered")
     check(any("Разредител 650" in x for x in literatura(out)), "per-case source listed")
 

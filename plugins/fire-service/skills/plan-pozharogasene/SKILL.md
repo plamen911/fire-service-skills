@@ -37,8 +37,9 @@ description: >-
 python3 -c "import glob,os;print('\n'.join(glob.glob(os.path.expanduser('~/.claude/plugins/**/skills/plan-pozharogasene'),recursive=True)+glob.glob('/mnt/skills/**/plan-pozharogasene',recursive=True)))"
 ```
 
-1. Без личен ключ (в разговора са инструментите на конектора Fire Service) – прочети само
-   `references/konektor.md` и работи по него: всичко става на сървъра; останалото тук не ти трябва.
+1. Без личен ключ (в разговора са инструментите на конектора Fire Service) – прочети `references/konektor.md`
+   и работи по него (плана го изгражда сървърът), и `references/struktura.md` – какво изисква всяка разпоредба
+   на Указанията; по него провери готовия план и кажи в чата кое липсва.
 2. С личен ключ: прочети `_shared/conventions.md`, `_shared/terminology.md` и `references/struktura.md` – какво
    иска всяка разпоредба на Указанията и откъде идва.
 3. Схемите – `../shemi/SKILL.md` (конкретната схема: `../shemi/references/sili.md`); разчетът –

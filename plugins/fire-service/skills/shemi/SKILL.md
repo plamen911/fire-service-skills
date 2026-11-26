@@ -55,9 +55,7 @@ description: >-
 python3 -c "import glob,os;print('\n'.join(glob.glob(os.path.expanduser('~/.claude/plugins/**/skills/shemi'),recursive=True)+glob.glob('/mnt/skills/**/shemi',recursive=True)))"
 ```
 
-1. С личен ключ – прочети `_shared/conventions.md` и `_shared/terminology.md`. С конектора – не: каквото важи от
-   тях, е в `references/konektor.md` (всеки прочетен файл се праща наново при всеки ход и изяжда лимита на
-   безплатния план).
+1. Прочети `_shared/conventions.md` и `_shared/terminology.md` – и с личен ключ, и с конектора.
 2. Само с личен ключ (с конектора чертае сървърът): ако липсва matplotlib или ezdxf (без ezdxf .dxf не се записва): `pip install -r requirements.txt`
    (`--break-system-packages`, ако pip го иска).
 3. С личен ключ – прочети началото на `scripts/shema.py`: там е описан целият вход – полета, видове, координати.

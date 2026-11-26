@@ -214,10 +214,12 @@ def build(content, meta, out, final, template):
     # [[ключ]] → „(Кратко, място)“; литературата – задължителните + цитираните (_shared/svoistva/)
     for s_ in bez_iztochnik(re.sub(r"^#+ .*$", "", re.sub(r"<!--.*?-->", "", content, flags=re.S), flags=re.M)):
         print(f"⚠ число без позоваване – ако не е от материалите по делото, сложи [[ключ]]: {s_[:120]}")
-    for p in chochev_neprovereni(content):
-        print(f"⚠ Чочев, прил. № {p} – числата не са проверени: прочети приложението с regs_read "
-              f"(heading „Прил. № {p}“), запиши го във файл със заглавието „## Прил. № {p} …“ и пусни "
-              f"сборката отново с --chochev ФАЙЛ")
+    neprovereni = chochev_neprovereni(content)
+    if neprovereni:  # an unchecked reference value never goes into a signed expertise
+        raise SystemExit("Чочев – числата не са проверени, заключението не се изгражда:\n  " + "\n  ".join(
+            f"прил. № {p}: с конектора прочети приложението с regs_read (heading „Прил. № {p}“), запиши го във файл "
+            f"със заглавието „## Прил. № {p} …“ и пусни сборката отново с --chochev ФАЙЛ; с личен ключ – провери "
+            f"връзката с n8n и пусни отново" for p in neprovereni))
     neverni = proveri_chisla(content, meta.get("dop_iztochnitsi"))
     if neverni:
         raise SystemExit("Източници – числото не е на посоченото място:\n  " + "\n  ".join(neverni))

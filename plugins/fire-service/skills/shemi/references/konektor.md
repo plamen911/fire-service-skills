@@ -2,10 +2,11 @@
 
 Цялата схема живее на сървъра (контейнерът fire-render до n8n), в сесия: кадастърът, JSON-ът на схемата,
 регистърът на обектите и въпросите на формуляра. Ти подаваш малки операции с инструмента `shema` и получаваш
-кратки отговори и картинка. Освен този файл четеш само `references/pravila.md` (какво има на схемата и как
-изглежда) и `references/formulyar.md` (как се задават въпросите) – не `_shared/conventions.md`,
-`_shared/connector.md`, `_shared/connector_obekti.md`, `references/kais.md` и `references/formulyar.json`, и не тегли `kais` `obekt`: всичко
-това е на сървъра. Всеки ход праща отново целия разговор – затова целта е схема за 4–5 извиквания.
+кратки отговори и картинка. Освен този файл четеш `_shared/conventions.md`, `_shared/terminology.md`,
+`references/pravila.md` (какво има на схемата и как изглежда) и `references/formulyar.md` (как се задават
+въпросите) – не `_shared/connector.md`, `_shared/connector_obekti.md`, `references/kais.md` и
+`references/formulyar.json`, и не тегли `kais` `obekt`: това е на сървъра. Стъпките са колкото трябват за
+вярна схема; независимите операции – в едно извикване.
 
 Важат от общите правила: пиши на български; не отваряй Chrome и Google Maps – за нищо; не измисляй
 данни, които никой източник не дава, а кажи в чата кое е прието.
