@@ -12,6 +12,12 @@ Fire Service: инструментите `keys`, `staff_update` и `samples_save
     python3 tools/admin.py key list                         # кой има ключ
     python3 tools/admin.py key revoke "Име Фамилия"         # спира ключовете му
     python3 tools/admin.py key revoke --id 4                # спира един ключ по номера му от key list
+    python3 tools/admin.py key paid "Име Фамилия"           # човекът е на платен план на Claude (Pro или Max)
+    python3 tools/admin.py key paid "Име Фамилия" --off     # вече не е на платен план
+
+ЕПТЗ, ситуационните схеми, плановете за пожарогасене и ПТЗ са само за платен план: с безплатния (Sonnet)
+резултатите не стават. С конектора n8n дава инструментите им (shema, dnevnik, kais ortofoto, образците
+на ЕПТЗ) само на ключ, отбелязан като платен; администраторският ключ е винаги платен.
 
 Списък на служителите (основното копие е в n8n)
     python3 tools/admin.py staff get -o staff.csv           # сваля целия списък
@@ -137,7 +143,10 @@ def main():
     key = sub.add_parser("key").add_subparsers(dest="cmd", required=True)
     p = key.add_parser("add"); p.add_argument("user"); p.add_argument("--replace", action="store_true")
     p.add_argument("--admin", action="store_true", help="ключът е администраторски")
+    p.add_argument("--paid", action="store_true", help="човекът е на платен план на Claude")
     key.add_parser("list")
+    p = key.add_parser("paid"); p.add_argument("user", nargs="?"); p.add_argument("--id", type=int, help="номерът на ключа от key list")
+    p.add_argument("--off", action="store_true", help="вече не е на платен план")
     p = key.add_parser("revoke"); p.add_argument("user", nargs="?"); p.add_argument("--id", type=int, help="номерът на ключа от key list")
 
     staff = sub.add_parser("staff").add_subparsers(dest="cmd", required=True)
@@ -162,9 +171,16 @@ def main():
 
     if a.area == "key":
         if a.cmd == "add":
-            show(call("admin_url", {"action": "key_add", "user": a.user, "replace": a.replace, "admin": a.admin}))
+            show(call("admin_url", {"action": "key_add", "user": a.user, "replace": a.replace, "admin": a.admin,
+                                    "paid": a.paid}))
         elif a.cmd == "list":
             show(call("admin_url", {"action": "key_list"}))
+        elif a.cmd == "paid":
+            if a.id is None and not a.user:
+                sys.exit("дай име или --id НОМЕР (от key list)")
+            body = {"action": "key_paid", "paid": not a.off}
+            body.update({"id": a.id} if a.id is not None else {"user": a.user})
+            show(call("admin_url", body))
         else:
             if a.id is None and not a.user:
                 sys.exit("дай име или --id НОМЕР (от key list)")
