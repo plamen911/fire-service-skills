@@ -38,6 +38,9 @@ jobs:
         if: steps.key.outputs.ok == 'true'
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q bubblewrap socat
+          # Ubuntu 24.04 blocks unprivileged user namespaces (AppArmor) – without this every Bash call of the
+          # eval sandbox stops with "apply-seccomp: write /proc/self/setgroups … Permission denied"
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           pip install -r requirements-dev.txt
           npm install -g @anthropic-ai/claude-code
       - name: Run the chosen cases
