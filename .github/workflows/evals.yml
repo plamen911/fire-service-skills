@@ -48,8 +48,10 @@ jobs:
         run: |
           mkdir -p evals/results
           claude plugin eval . --case "$SLUCHAI" --ablation none --trust-plugin --no-publish \
-            --allow-tools Bash Write Edit -j 2 --max-cost-usd 5 --threshold 0 \
-            --json evals/results/ci.json --report evals/results/report.html
+            --allow-tools Bash Write Edit -j 2 --max-cost-usd 5 --threshold 0 --keep-temp \
+            --json evals/results/ci.json --report evals/results/report.html || true
+          # the transcripts and the files each run wrote – to see why a grader failed
+          for d in /tmp/claude-eval-*; do [ -d "$d" ] && cp -r "$d" evals/results/ ; done
       - name: Run the regression cases
         if: steps.key.outputs.ok == 'true' && inputs.sluchai == ''
         working-directory: plugins/fire-service
